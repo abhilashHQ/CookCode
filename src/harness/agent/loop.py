@@ -17,6 +17,7 @@ from harness.core.events import (
     BudgetExceeded,
     ErrorEvent,
     Event,
+    Interrupted,
     ItemEvent,
     Limits,
     ModelRequestFinished,
@@ -24,6 +25,7 @@ from harness.core.events import (
     RunConfig,
     SessionFinished,
     SessionStarted,
+    SideEffect,
     SteerMessage,
     ToolCallFinished,
     ToolCallStarted,
@@ -37,6 +39,16 @@ from harness.providers.base import ItemDone, ModelRequest, Provider, StreamEnd, 
 from harness.store.base import SessionLog
 
 RunStatus = Literal["done", "error", "budget_exceeded", "interrupted"]
+Phase = Literal["streaming", "tool", "idle"]
+
+WALL_CLOCK = "wall_clock"
+KILLED_READ_ONLY = (
+    "[killed by an interrupt before it finished. It is read-only, so it is safe to retry.]"
+)
+KILLED_MUTATING = (
+    "[killed by an interrupt before it finished. It may have changed state, "
+    "so inspect before retrying.]"
+)
 
 
 class AgentConfig(BaseModel):
@@ -63,8 +75,15 @@ class RunOutcome(BaseModel):
 @dataclass
 class _RunState:
     token: CancelToken
+    caller: CancelToken | None
+    started_at: float
     turns: int = 0
     usage: Usage = field(default_factory=Usage)
+
+    def cancelled(self) -> bool:
+        if self.caller is not None and self.caller.cancelled:
+            self.token.cancel(self.caller.reason or "user")
+        return self.token.cancelled
 
 
 @dataclass(frozen=True)
@@ -94,6 +113,27 @@ def _batches(dispatches: Sequence[_Dispatch]) -> list[list[_Dispatch]]:
     return batches
 
 
+def _tool_result(side_effect: SideEffect, output: ToolOutput) -> tuple[ToolResultStatus, str]:
+    if output.exit_status != "killed":
+        return output.status, output.content
+    if side_effect == "read_only":
+        status: ToolResultStatus = "interrupted"
+        note = KILLED_READ_ONLY
+    else:
+        status, note = "unknown", KILLED_MUTATING
+    return status, f"{output.content}\n{note}" if output.content else note
+
+
+async def _link(source: CancelToken, target: CancelToken) -> None:
+    await source.wait()
+    target.cancel(source.reason or "user")
+
+
+async def _watchdog(seconds: float, target: CancelToken) -> None:
+    await asyncio.sleep(seconds)
+    target.cancel(WALL_CLOCK)
+
+
 def _describe_validation(error: ValidationError) -> str:
     return "; ".join(
         f"{'.'.join(str(part) for part in detail['loc']) or '<root>'}: {detail['msg']}"
@@ -113,6 +153,8 @@ class Agent:
         harness_version: str = __version__,
         repair_planner: Callable[[Sequence[Event]], list[RepairAction]] = plan_repairs,
     ) -> None:
+        if config.limits.max_cost_usd is not None:
+            raise ValueError("cost limits need pricing, which arrives in M3")
         self._log = log
         self._provider = provider
         self._env = env
@@ -132,22 +174,47 @@ class Agent:
         if self._active:
             raise RuntimeError("Agent.run() is already active")
         self._active = True
+        run = _RunState(token=CancelToken(), caller=cancel, started_at=time.monotonic())
+        watchers: list[asyncio.Task[None]] = []
         try:
-            return await self._execute(_RunState(token=CancelToken()), prompt)
+            if cancel is not None:
+                watchers.append(asyncio.create_task(_link(cancel, run.token)))
+            if self._config.limits.max_wall_s is not None:
+                watchers.append(
+                    asyncio.create_task(_watchdog(self._config.limits.max_wall_s, run.token))
+                )
+            return await self._execute(run, prompt)
         finally:
-            self._active = False
+            try:
+                for watcher in watchers:
+                    watcher.cancel()
+                if watchers:
+                    await asyncio.gather(*watchers, return_exceptions=True)
+            finally:
+                self._active = False
 
     async def _execute(self, run: _RunState, prompt: str | None) -> RunOutcome:
         self._prologue(prompt)
-        limits = self._config.limits
         while True:
             self._drain_steering()
-            if limits.max_turns is not None and run.turns >= limits.max_turns:
-                self._log.append(BudgetExceeded(limit="turns", value=run.turns))
+            if run.cancelled():
+                return self._end_cancelled(run, "idle", ())
+            exceeded = self._budget_exceeded(run)
+            if exceeded is not None:
+                self._log.append(exceeded)
                 return self._finish(run, "budget_exceeded")
             outcome = await self._step(run)
             if outcome is not None:
                 return outcome
+
+    def _budget_exceeded(self, run: _RunState) -> BudgetExceeded | None:
+        limits = self._config.limits
+        if limits.max_turns is not None and run.turns >= limits.max_turns:
+            return BudgetExceeded(limit="turns", value=run.turns)
+        spent = run.usage.total_input + run.usage.output
+        if limits.max_tokens is not None and spent >= limits.max_tokens:
+            return BudgetExceeded(limit="tokens", value=spent)
+        return None
 
     def _prologue(self, prompt: str | None) -> None:
         events = self._log.read()
@@ -196,13 +263,18 @@ class Agent:
             )
         )
         run.usage = run.usage + response.usage
+        if response.stop_reason == "aborted" and run.cancelled():
+            self._close_out_not_executed(response.calls)
+            return self._end_cancelled(run, "streaming", ())
         if response.stop_reason in ("error", "aborted"):
             self._close_out_not_executed(response.calls)
             message = response.error or f"stream ended with stop reason {response.stop_reason}"
             self._log.append(ErrorEvent(kind="provider", retryable=False, message=message))
             return self._finish(run, "error")
         if response.calls:
-            await self._dispatch(run, response.calls)
+            killed = await self._dispatch(run, response.calls)
+            if run.cancelled():
+                return self._end_cancelled(run, "tool", killed)
             return None
         if self._steering:
             return None
@@ -261,7 +333,7 @@ class Agent:
             return f"invalid arguments for {tool_call.name}: {_describe_validation(exc)}"
         return _Dispatch(call=tool_call, tool=tool, args=args)
 
-    async def _dispatch(self, run: _RunState, calls: Sequence[ToolCall]) -> None:
+    async def _dispatch(self, run: _RunState, calls: Sequence[ToolCall]) -> tuple[str, ...]:
         runnable: list[_Dispatch] = []
         for tool_call in calls:
             resolved = self._resolve(tool_call)
@@ -269,17 +341,25 @@ class Agent:
                 self._append_result(tool_call.id, "error", resolved)
             else:
                 runnable.append(resolved)
+        killed: set[str] = set()
         slots = asyncio.Semaphore(self._config.max_parallel_tools)
         for batch in _batches(runnable):
+            if run.cancelled():
+                self._close_out_not_executed([dispatch.call for dispatch in batch])
+                continue
             async with asyncio.TaskGroup() as group:
                 for dispatch in batch:
-                    group.create_task(self._run_call(run, dispatch, slots))
+                    group.create_task(self._run_call(run, dispatch, slots, killed))
+        return tuple(tool_call.id for tool_call in calls if tool_call.id in killed)
 
     async def _run_call(
-        self, run: _RunState, dispatch: _Dispatch, slots: asyncio.Semaphore
+        self, run: _RunState, dispatch: _Dispatch, slots: asyncio.Semaphore, killed: set[str]
     ) -> None:
         async with slots:
             tool, tool_call = dispatch.tool, dispatch.call
+            if run.cancelled():
+                self._append_result(tool_call.id, "interrupted", NOT_EXECUTED)
+                return
             self._log.append(
                 ToolCallStarted(
                     call_id=tool_call.id,
@@ -305,6 +385,8 @@ class Agent:
                     exit_status="error",
                 )
             duration_s = time.monotonic() - started
+            if run.cancelled():
+                killed.add(tool_call.id)
             self._log.append(
                 ToolCallFinished(
                     call_id=tool_call.id,
@@ -314,7 +396,15 @@ class Agent:
                     truncated=output.truncated,
                 )
             )
-            self._append_result(tool_call.id, output.status, output.content)
+            self._append_result(tool_call.id, *_tool_result(tool.side_effect, output))
+
+    def _end_cancelled(self, run: _RunState, phase: Phase, killed: tuple[str, ...]) -> RunOutcome:
+        if run.token.reason == WALL_CLOCK:
+            elapsed = time.monotonic() - run.started_at
+            self._log.append(BudgetExceeded(limit="wall_clock", value=elapsed))
+            return self._finish(run, "budget_exceeded")
+        self._log.append(Interrupted(phase=phase, killed=killed))
+        return self._finish(run, "interrupted")
 
     def _finish(self, run: _RunState, status: RunStatus) -> RunOutcome:
         event = self._log.append(SessionFinished(status=status, turns=run.turns, usage=run.usage))
