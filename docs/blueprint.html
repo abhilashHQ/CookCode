@@ -1,0 +1,553 @@
+<title>Flagship 1 Blueprint</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Layout: one reading column (~68ch) with diagrams and tables allowed to run wider; a plain contents strip up top. */
+:root {
+  --bg: #f5f6f4;
+  --surface: #ffffff;
+  --ink: #1b2228;
+  --muted: #5a6670;
+  --rule: #d9ded9;
+  --accent: #1d5c7a;
+  --accent-soft: #e3eef3;
+  --warn: #8a5a12;
+  --warn-soft: #f6ecd9;
+  --code-bg: #eceeea;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12171b; --surface: #182026; --ink: #e3e8eb; --muted: #95a3ad; --rule: #2b353d;
+    --accent: #6fb3d6; --accent-soft: #1b2d38; --warn: #e0b46a; --warn-soft: #2e2618; --code-bg: #1d262d;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12171b; --surface: #182026; --ink: #e3e8eb; --muted: #95a3ad; --rule: #2b353d;
+  --accent: #6fb3d6; --accent-soft: #1b2d38; --warn: #e0b46a; --warn-soft: #2e2618; --code-bg: #1d262d;
+  color-scheme: dark;
+}
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 16px; line-height: 1.6;
+}
+.page {
+  max-width: 1040px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 40px 80px;
+  display: flex; flex-direction: column; gap: 56px;
+}
+.col { max-width: 68ch; }
+h1, h2, h3 { font-family: var(--font-display); font-weight: 600; text-wrap: balance; line-height: 1.15; margin: 0; }
+h1 { font-size: clamp(2rem, 5vw, 2.9rem); letter-spacing: -0.01em; }
+h2 { font-size: 1.65rem; }
+h3 { font-size: 1.15rem; font-weight: 500; }
+p { margin: 0; }
+section { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.eyebrow {
+  font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--accent);
+}
+.lede { font-size: 1.12rem; color: var(--ink); }
+.muted { color: var(--muted); }
+header { display: flex; flex-direction: column; gap: 14px; }
+.status {
+  display: inline-flex; gap: 8px; align-items: center; align-self: flex-start;
+  font-family: var(--font-mono); font-size: 0.8rem; color: var(--warn);
+  background: var(--warn-soft); padding: 4px 10px; border-radius: 4px;
+}
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.9rem; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); padding-block: 10px; }
+nav.toc a { color: var(--muted); text-decoration: none; }
+nav.toc a:hover, nav.toc a:focus-visible { color: var(--accent); text-decoration: underline; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font-family: var(--font-mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 3px; }
+pre.tree {
+  font-family: var(--font-mono); font-size: 0.85rem; line-height: 1.55;
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 6px;
+  padding: 16px 18px; margin: 0; overflow-x: auto;
+}
+.diagram {
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 6px;
+  padding: 18px; overflow-x: auto;
+}
+.diagram pre.mermaid { margin: 0; background: transparent; text-align: center; }
+.caption { font-size: 0.88rem; color: var(--muted); }
+ul.plain { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; min-width: 640px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--rule); }
+th { font-family: var(--font-mono); font-weight: 500; font-size: 0.75rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+tr:last-child td { border-bottom: none; }
+td.was { color: var(--muted); }
+td.m { font-family: var(--font-mono); font-weight: 500; color: var(--accent); white-space: nowrap; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.box { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.box h3 { color: var(--accent); }
+.note { border-left: 3px solid var(--warn); background: var(--warn-soft); padding: 12px 16px; border-radius: 0 6px 6px 0; }
+.pill { font-family: var(--font-mono); font-size: 0.72rem; padding: 1px 7px; border-radius: 3px; background: var(--accent-soft); color: var(--accent); white-space: nowrap; }
+.stage { display: flex; flex-direction: column; gap: 14px; padding-top: 18px; border-top: 1px solid var(--rule); }
+.stage-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.stage-head h3 { color: var(--ink); font-size: 1.3rem; font-weight: 600; }
+.pill.later { background: var(--code-bg); color: var(--muted); }
+footer { font-size: 0.85rem; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 16px; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+</style>
+
+<div class="page">
+
+<header>
+  <span class="eyebrow">Flagship 1 · coding agent harness · design before M0</span>
+  <h1>Flagship 1 Blueprint</h1>
+  <p class="lede col">This is the whole agent on one page: the parts, how a turn moves through them, what I changed after the research, the four build stages with the decisions each one locks, the memory design, and what an interviewer ends up seeing. No code exists yet. Everything here is a proposal for you to pull apart.</p>
+  <span class="status">STATUS · design only · nothing locked</span>
+  <nav class="toc" aria-label="Contents">
+    <a href="#map">The map</a>
+    <a href="#turn">One turn</a>
+    <a href="#log">The log</a>
+    <a href="#items">Items</a>
+    <a href="#env">Environment</a>
+    <a href="#cancel">Cancellation</a>
+    <a href="#context">Context</a>
+    <a href="#tree">Code layout</a>
+    <a href="#changed">What changed</a>
+    <a href="#order">Stages</a>
+    <a href="#memory">Memory</a>
+    <a href="#outcome">What interviewers see</a>
+    <a href="#unknowns">Unknowns</a>
+  </nav>
+</header>
+
+<section id="map">
+  <span class="eyebrow">1 · The map</span>
+  <h2>Three layers, and the core never touches the outside world directly</h2>
+  <p class="col">The core is a Python library. It runs the loop, builds what the model sees, and gates tool calls. Everything it talks to sits behind one of three interfaces: a <strong>Provider</strong> (the model), an <strong>Environment</strong> (the machine tools run on), and the <strong>Session log</strong> (where every event lands). Clients on top only consume events and send input back. The CLI, the TUI, headless mode and the Harbor benchmark adapter are all clients of the same library.</p>
+  <div class="diagram">
+<pre class="mermaid">
+flowchart TB
+  subgraph CL["Clients"]
+    CLI["Plain CLI renderer"]
+    HL["Headless JSONL"]
+    HB["Harbor adapter"]
+    TUI["TUI (M8)"]
+  end
+  subgraph CORE["Core library"]
+    LOOP["Agent loop"]
+    CTX["Context builder"]
+    GATE["Permission gate"]
+    REG["Tool registry"]
+  end
+  subgraph PORTS["Interfaces"]
+    PROV["Provider"]
+    ENV["Environment"]
+    LOG[("Session log")]
+  end
+  CLI & HL & HB & TUI <-->|"events out, input + approvals in"| LOOP
+  LOOP --> CTX
+  CTX -->|reads| LOG
+  LOOP -->|appends| LOG
+  LOOP -->|"stream(request, abort)"| PROV
+  LOOP --> GATE --> REG --> ENV
+  PROV -.-> FAKE["FakeProvider (M0)"]
+  PROV -.-> REAL1["Adapter A (M3)"]
+  PROV -.-> MORE["Adapter B (M5)"]
+  ENV -.-> LOCAL["Local machine"]
+  ENV -.-> HCON["Harbor task container"]
+  ENV -.-> F2["Flagship 2 sandbox"]
+</pre>
+  </div>
+  <p class="caption">Dotted lines are implementations that plug in behind an interface. Providers are the last door we paint: the interface exists from day one, the FakeProvider runs every test, two real adapters land by M5 to prove the abstraction, and the rest come later.</p>
+</section>
+
+<section id="turn">
+  <span class="eyebrow">2 · One turn</span>
+  <h2>What happens between your prompt and the answer</h2>
+  <p class="col">The loop is short. It builds a request from the log, streams the model's reply, appends the finished items, runs any tool calls through the gate and the environment, appends the results, and repeats until the model stops calling tools. Partial text goes to the client for display but never into the log. Only finished items get written.</p>
+  <div class="diagram">
+<pre class="mermaid">
+sequenceDiagram
+  participant U as Client
+  participant L as Loop
+  participant G as Log
+  participant C as Context builder
+  participant P as Provider
+  participant T as Gate + tools
+  participant E as Environment
+  U->>L: prompt
+  L->>G: append user message
+  loop until the model makes no tool calls
+    L->>C: build request
+    C->>G: read events
+    C-->>L: request (tools, system, history view)
+    L->>P: stream(request, abort)
+    P-->>U: partial deltas (display only)
+    P-->>L: finished items
+    L->>G: append items
+    L->>T: tool calls
+    T->>E: exec / read / write
+    E-->>T: output, capped
+    T-->>L: results
+    L->>G: append results
+  end
+  L-->>U: result event
+</pre>
+  </div>
+</section>
+
+<section id="log">
+  <span class="eyebrow">3 · The log</span>
+  <h2>The session is an append-only log, and everything else is a view of it</h2>
+  <p class="col">This is the decision the rest depends on. Every event gets written once to a JSONL file with a sequence number and is never edited. What the model sees is computed from the log each turn. That one rule gives us five features for the price of one:</p>
+  <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+  LOG[("Session log<br/>append-only JSONL")]
+  LOG --> MC["Model context<br/>full · masked · summarized"]
+  LOG --> UI["Client stream<br/>CLI, TUI, headless"]
+  LOG --> RES["Resume and fork<br/>replay a prefix"]
+  LOG --> TR["Eval traces<br/>export per run"]
+  LOG --> CK["Flagship 2<br/>checkpoints"]
+</pre>
+  </div>
+  <div class="grid2">
+    <div class="box">
+      <h3>Model-visible events</h3>
+      <p>User message, assistant message, reasoning, tool call, tool result. These are what the context builder turns into a request.</p>
+    </div>
+    <div class="box">
+      <h3>Internal events</h3>
+      <p>Approval asked and answered, compaction marker, interruption, repair, usage, errors. The model never sees these, but replay, evals and the UI all do.</p>
+    </div>
+  </div>
+  <ul class="plain col">
+    <li>Compaction becomes a different view of the same log. Turning it on or off replays an identical session, which is how we get honest ablation numbers.</li>
+    <li>Each event keeps the raw provider payload next to our neutral form, so an adapter bug can be replayed offline without paying for another call.</li>
+    <li>There's an <code>Other</code> catch-all event type so old sessions still load after the schema changes. Codex does the same thing.</li>
+    <li>The closest published design is the OpenHands Software Agent SDK. It's the main reference for this layer.</li>
+  </ul>
+</section>
+
+<section id="items">
+  <span class="eyebrow">4 · Items</span>
+  <h2>Our own message model, built from items</h2>
+  <p class="col">Providers disagree on shape, so the core speaks its own format and adapters translate at the edge. The research changed the unit from "messages with content blocks" to a flat list of <strong>items</strong>, because that's how Codex and OpenAI's Responses API represent reasoning and tool calls, and it fits Anthropic's blocks without loss.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Item</th><th>What it holds</th><th>Why it's shaped this way</th></tr></thead>
+      <tbody>
+        <tr><td><code>message</code></td><td>Role plus text (and later images)</td><td>The plain case every provider agrees on.</td></tr>
+        <tr><td><code>reasoning</code></td><td>Provider, model family, opaque payload stored verbatim, optional readable summary</td><td>Anthropic signs it and OpenAI encrypts it. It can only go back to the same model family. Switching models degrades it to labeled text.</td></tr>
+        <tr><td><code>tool_call</code></td><td>Our ID, the provider's call ID, optional provider item ID, tool name, JSON arguments</td><td>OpenAI uses two IDs (<code>id</code> and <code>call_id</code>), Anthropic one. Parallel calls are just several items in a row.</td></tr>
+        <tr><td><code>tool_result</code></td><td>The call ID it answers, output, status (ok, error, interrupted)</td><td>Both APIs reject a tool call with no matching result, so the status field is what makes cancellation repair possible.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="col muted">Usage gets its own record split into new input, cache read, cache write, output and reasoning, plus the raw provider numbers, because each provider counts differently.</p>
+</section>
+
+<section id="env">
+  <span class="eyebrow">5 · Environment</span>
+  <h2>Tools never touch the OS directly</h2>
+  <p class="col">This one is new since the first plan. Every tool goes through an Environment interface with three operations: run a command, read a file, write a file. The point is that the same tools then work in three places without a rewrite:</p>
+  <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+  T["read · edit · write<br/>grep · glob · bash"] --> ENV["Environment<br/>exec / read / write"]
+  ENV --> L["Local<br/>your repo, WSL2"]
+  ENV --> H["Harbor container<br/>Terminal-Bench tasks"]
+  ENV --> S["Flagship 2 sandbox<br/>later"]
+</pre>
+  </div>
+  <p class="col">Harbor's documented way to plug in a custom agent with its own loop is <code>BaseAgent</code>. The loop runs on the host and acts on the task container through <code>environment.exec(...)</code>. Our Environment interface lines up with that one-to-one. Flagship 2 then supplies a sandboxed Environment, and the agent doesn't change.</p>
+  <p class="note col">This also sets the platform. Benchmark tasks are Linux containers, killing a command's whole process tree is a POSIX thing, and Harbor doesn't document Windows support. So the target is Linux, and you'd develop in WSL2.</p>
+</section>
+
+<section id="cancel">
+  <span class="eyebrow">6 · Cancellation</span>
+  <h2>Ctrl-C at any point leaves a log we can resume</h2>
+  <p class="col">Interrupting is a logged state change. If you interrupt during a tool run, we kill the process group. Every tool call passes through three logged states: the model asked for it, we started it (written to disk <em>before</em> the command runs), and it finished. On resume, the repair pass gives each call left without a result a synthetic one, based on how far it got:</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Last logged state</th><th>Tool kind</th><th>Synthetic result</th></tr></thead>
+      <tbody>
+        <tr><td>Asked for, never started</td><td>any</td><td><code>interrupted</code>: not executed, safe to re-issue</td></tr>
+        <tr><td>Started, never finished</td><td>read-only</td><td><code>interrupted</code>: outcome unknown, safe to retry</td></tr>
+        <tr><td>Started, never finished</td><td>mutating</td><td><code>unknown</code>: may have run, inspect before retrying. Never re-run automatically.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="col">Durable runtimes like DBOS and Cloudflare Workflows simply re-run the step that was cut off, and Inngest's docs admit a side effect can commit before its result is saved. None of the agents we checked document an "outcome unknown" state. This is what lets Flagship 2 kill a worker mid-run without running a command twice, and it's the part to explain in interviews.</p>
+  <div class="diagram">
+<pre class="mermaid">
+stateDiagram-v2
+  [*] --> Idle
+  Idle --> Streaming: prompt
+  Streaming --> Tools: tool calls
+  Tools --> Streaming: results appended
+  Streaming --> Idle: no tool calls
+  Streaming --> Interrupted: Ctrl-C
+  Tools --> Interrupted: Ctrl-C, kill process group
+  Interrupted --> Repaired: synthetic results for dangling calls
+  Repaired --> Idle
+</pre>
+  </div>
+</section>
+
+<section id="context">
+  <span class="eyebrow">7 · Context management</span>
+  <h2>Masking first, summarizing as an experiment, and measuring everything</h2>
+  <p class="col">There's one controlled study that compares these, the Complexity Trap paper (SWE-agent, 500 SWE-bench Verified tasks). Masking old tool outputs matched LLM summarization on solve rate at about half the cost of keeping raw history. Qwen3-Coder 480B: raw 53.4% at $1.29 per task, masking 54.8% at $0.61, summary 53.8% at $0.64. On one thinking model both methods hurt (40.4% raw, 36.4% masking, 31.4% summary). So there's no free lunch here, and we have to measure it ourselves.</p>
+  <div class="grid2">
+    <div class="box">
+      <h3>What we build</h3>
+      <ul class="plain">
+        <li>A token ledger per turn, split into tool output, reasoning and user text</li>
+        <li>Masking of old tool outputs, written to the log as an event</li>
+        <li>Summarization and a hybrid as switchable variants</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h3>What we measure</h3>
+      <ul class="plain">
+        <li>Solve rate, cost per task, turn count</li>
+        <li>Cache-read share. Rewriting old history breaks the prompt cache from that point on, so masking in batches might keep most of the savings. Nobody has published that number yet.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="tree">
+  <span class="eyebrow">8 · Code layout</span>
+  <h2>Proposed package layout</h2>
+  <p class="col">The package name is a placeholder until the naming gate. Each folder maps to one box in the map above.</p>
+<pre class="tree">&lt;codename&gt;/
+  core/        events.py   items.py   loop.py   context.py   cancel.py
+  log/         store.py            append, replay, fork
+  providers/   base.py             stream interface
+               fake.py             scripted, used by every loop test
+  env/         base.py             exec / read / write
+               local.py   harbor.py
+  tools/       read.py  edit.py  write.py  grep.py  glob.py  bash.py
+               registry.py   permissions.py
+  clients/     plain.py   headless.py   tui/        (TUI at M8)
+  evals/       harbor_agent.py   trace export   run configs
+tests/         loop on FakeProvider, cancel and repair, tools on a temp Environment</pre>
+  <p class="col muted">The stack: Python 3.12+, uv, asyncio with TaskGroup, pydantic v2 for everything that gets serialized, ruff, pyright strict, pytest.</p>
+</section>
+
+<section id="changed">
+  <span class="eyebrow">9 · What changed</span>
+  <h2>First plan vs. now</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Area</th><th>First plan</th><th>Now</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Message model</td><td class="was">Messages made of content blocks</td><td>Flat list of items</td><td>Codex and OpenAI treat reasoning and tool calls as top-level items</td></tr>
+        <tr><td>Reasoning</td><td class="was">Not addressed</td><td>Opaque payload tagged by provider and model family</td><td>Signed or encrypted, so it can't be translated across providers</td></tr>
+        <tr><td>Tool execution</td><td class="was">Tools call the OS</td><td>Tools go through the Environment interface</td><td>The Harbor adapter and the Flagship 2 sandbox reuse the same tools</td></tr>
+        <tr><td>Platform</td><td class="was">Unstated</td><td>Linux target, WSL2 for development</td><td>Linux benchmark containers, POSIX process groups, Harbor on Windows undocumented</td></tr>
+        <tr><td>Event log</td><td class="was">Append-only JSONL</td><td>Same, plus sequence numbers, two event layers, a catch-all type, raw payloads</td><td>OpenHands SDK design, Codex schema evolution</td></tr>
+        <tr><td>Cancellation repair</td><td class="was">Synthetic "cancelled" results</td><td>Same idea, which we now know we're inventing, so it gets its own tests</td><td>No harness documents it</td></tr>
+        <tr><td>Benchmark plumbing</td><td class="was">Headless at M5, evals at M6</td><td>Headless and Harbor adapter at M4 with an oracle smoke test</td><td>The measuring setup has to exist before the features we want to measure</td></tr>
+        <tr><td>Compaction</td><td class="was">Strategy picked by ablation</td><td>Masking first, summarization as an ablation, cache measured</td><td>Complexity Trap results</td></tr>
+        <tr><td>Memory, sub-agents, plan mode</td><td class="was">Features at M9</td><td>Experiments at M9 that can come back with zero gain</td><td>No measured benefit on coding tasks found anywhere</td></tr>
+        <tr><td>Tool call logging</td><td class="was">Call, then result</td><td>Write-ahead: "started" is flushed to disk before the command runs, with three-state repair</td><td>Flagship 2 needs kill-and-resume with no repeated side effects</td></tr>
+        <tr><td>Secrets</td><td class="was">Not addressed</td><td>Redacted before anything is written to the log</td><td>Logs become published traces, and no agent documents transcript redaction</td></tr>
+        <tr><td>Undo</td><td class="was">Not planned</td><td>File snapshots per turn at M2; <code>undo</code> restores files, <code>fork</code> rewinds the conversation</td><td>Table stakes; Claude Code splits rewind the same way</td></tr>
+        <tr><td>Steering</td><td class="was">Prompt only at turn start</td><td>Input typed during a turn is queued and injected at the next step</td><td>The loop needs an input queue from day one</td></tr>
+        <tr><td>Replay</td><td class="was">Implicit</td><td><code>replay &lt;id&gt; --strategy</code> rebuilds requests under another compaction strategy</td><td>Makes the log useful to users, and it's the core of the pitch</td></tr>
+        <tr><td>Testing</td><td class="was">FakeProvider only</td><td>Plus recorded real streams (cassettes) and a kill -9 crash test</td><td>Catches adapter regressions offline and proves the log is crash-safe</td></tr>
+        <tr><td>Late plugs (M10)</td><td class="was">More providers</td><td>Providers, MCP client, skills, hooks, AGENTS.md (moved to M3)</td><td>Competitor survey: these show up in 4 or more agents</td></tr>
+        <tr><td>Purpose</td><td class="was">Daily-driver product with outside users</td><td>Interview showcase: 13 concepts, 4 headline experiments, a decision record for every gate</td><td>Interviewers cross-question concepts and decisions</td></tr>
+        <tr><td>Models</td><td class="was">One real provider at M3</td><td>Free tiers for development, two adapters by M5, Azure credits for the runs that count</td><td>No credits right now. Two adapters prove the abstraction.</td></tr>
+        <tr><td>Memory</td><td class="was">Repo memory feature at M9</td><td>Supermemory-style facts with code provenance and staleness, kept separate from in-session masking</td><td>Memory doesn't touch the 84% of tokens that are tool output, and per-turn injection breaks the cache</td></tr>
+        <tr><td>Durability proof</td><td class="was">Lives in Flagship 2</td><td>Chaos test in Flagship 1 at the end of Stage 1</td><td>Flagship 1 proves its own crash safety, for free</td></tr>
+        <tr><td>Benchmark version</td><td class="was">Terminal-Bench 2.0</td><td>Version picked at the gate (2.0, 2.1 and 4.0 all exist), at least 5 repeats, Terminus 2 as baseline</td><td>Five runs of one setup ranged from 80.9% to 89.9%</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="order">
+  <span class="eyebrow">10 · Stages</span>
+  <h2>Four stages, each with its own architecture and its own locks</h2>
+  <p class="col">The order follows dependencies. Context engineering can't be measured until a real agent runs and an eval suite exists, and memory can't be judged until context engineering has a baseline. Each stage has decisions locked before it starts and decisions made at its end gate, using what the stage taught us. Thick borders mark what's new in that stage. Dashed borders mark harnesses that test the system without being part of it.</p>
+
+  <div class="stage">
+    <div class="stage-head"><h3>Stage 1 · Harness core</h3><span class="pill">M0 to M2</span><span class="pill later">no model needed</span></div>
+    <p>The loop, the log, cancellation and repair, the tools and the gate, all running on the FakeProvider. It ends with the first headline number, which costs nothing: the chaos test.</p>
+    <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+  FAKE["FakeProvider"] --> LOOP["Loop<br/>cancel + repair"]
+  LOOP --> LOG[("Event log")]
+  LOOP --> GATE["Gate + approver"] --> TOOLS["read edit write<br/>grep glob bash<br/>+ undo"] --> ENV["Local Environment"]
+  CHAOS["Chaos test<br/>kill -9 at random points"] -.-> LOOP
+  classDef new stroke-width:3px
+  classDef harness stroke-dasharray:5 4
+  class FAKE,LOOP,LOG,GATE,TOOLS,ENV new
+  class CHAOS harness
+</pre>
+    </div>
+    <div class="grid2">
+      <div class="box"><h3>Locked before</h3><ul class="plain"><li>The 8 foundation locks (Python, the log, items, the stream interface, core as a library, Environment, write-ahead repair, redaction)</li><li>Bash: a fresh process per call, with the working directory tracked in the log</li><li>Unknown-outcome policy: interactive mode asks you, unattended runs ask the model</li></ul></div>
+      <div class="box"><h3>Decided at the gate</h3><ul class="plain"><li>Parallel tool policy and turn cap</li><li>Stuck-loop rule</li><li>Edit format details</li><li>Whether grep and glob are Environment primitives or built on <code>exec</code></li><li>Snapshot method for undo (file copies vs. a shadow git repo)</li><li>Chaos test result published: duplicated side effects, ours vs. a naive re-run</li></ul></div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="stage-head"><h3>Stage 2 · Working agent</h3><span class="pill">M3 to M5</span><span class="pill later">free models</span></div>
+    <p>Real models, through two adapters for protocols that genuinely differ. The plain CLI and headless mode come in, plus the Harbor adapter, resume, fork and replay. From here you can point it at a repo and it does work.</p>
+    <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+  A["Adapter A<br/>OpenAI-compatible"] --> LOOP["Loop"]
+  B["Adapter B<br/>native, reasoning kept"] --> LOOP
+  LOOP --> LOG[("Event log")]
+  LOG --> CLI["Plain CLI"]
+  LOG --> HL["Headless JSONL"] --> HB["Harbor BaseAgent"] --> HENV["Harbor Environment"]
+  LOG --> RES["resume · fork · replay"]
+  CAS["Recorded streams<br/>replayed in CI"] -.-> A
+  classDef new stroke-width:3px
+  classDef harness stroke-dasharray:5 4
+  class A,B,CLI,HL,HB,HENV,RES new
+  class CAS harness
+</pre>
+    </div>
+    <div class="grid2">
+      <div class="box"><h3>Locked before</h3><ul class="plain"><li>Free tiers for development (OpenRouter, Gemini). Nothing private goes through them, since free tiers may keep or train on your data.</li><li>Two adapters by M5 as proof of the abstraction</li><li>Docker Engine inside WSL Ubuntu, with WSL memory raised to 10 to 12 GB</li></ul></div>
+      <div class="box"><h3>Decided at the gate</h3><ul class="plain"><li>Which two protocols. OpenRouter speaks the OpenAI chat format, which loses reasoning items, so the second adapter should be a native one (Gemini with thought signatures, or Anthropic).</li><li>Reasoning replay rules per adapter</li><li>Event schema v1 frozen, plus the versioning policy</li><li>Terminal-Bench version</li><li>ATIF export fields</li></ul></div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="stage-head"><h3>Stage 3 · Measurement and context engineering</h3><span class="pill">M6 to M7</span><span class="pill later">Azure credits for real runs</span></div>
+    <p>First we build the measuring stick: our own task suite, a fixed Terminal-Bench slice, run configs and the variance study. Then the context strategies run against it. Masked tool outputs aren't thrown away. They stay in the log, and the model can pull one back by ID.</p>
+    <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+  LOG[("Event log")] --> CTX["Context builder<br/>raw · mask · mask batched<br/>summarize · hybrid"]
+  CTX --> REQ["Request<br/>stable cache prefix"]
+  CTX --> LED["Token ledger"]
+  REC["recall tool<br/>masked output by ID"] --> LOG
+  SUITE["Task suite + TB slice"] -.-> RUNS["Run configs × 5"] -.-> TAB["Ablation and<br/>variance tables"]
+  classDef new stroke-width:3px
+  classDef harness stroke-dasharray:5 4
+  class CTX,REQ,LED,REC new
+  class SUITE,RUNS,TAB harness
+</pre>
+    </div>
+    <div class="grid2">
+      <div class="box"><h3>Locked before</h3><ul class="plain"><li>Headline experiments: chaos, context, variance, verify-first</li><li>Tasks: our own suite of 30 to 40 plus a published Terminal-Bench slice</li><li>Ablations run on a cheap open-weight model, with one frontier headline run</li></ul></div>
+      <div class="box"><h3>Decided at the gate</h3><ul class="plain"><li>Suite composition: long-session tasks for context, real bugs for verification</li><li>Repeat count, from the variance study</li><li>Default compaction strategy and masking window</li><li>Summarizer model</li><li>Whether <code>recall</code> earns its place (does the model actually use it?)</li></ul></div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="stage-head"><h3>Stage 4 · Memory and extensions</h3><span class="pill">M8 to M10</span></div>
+    <p>Long-term memory (the Supermemory-style layer, see the next section), verify-first, sub-agents, then skills, hooks, MCP and the TUI. Every item here is mapped to a concept, and the ones with a measurable effect get an ablation.</p>
+    <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+  LOG[("Event log")] --> CONS["Consolidate<br/>at session end"] --> MEM[("Memory store<br/>facts + provenance")]
+  MEM --> PROF["Small profile<br/>at session start"]
+  MEM --> RQ["recall query"]
+  LOOP["Loop"] --> VF["Verify-first"]
+  LOOP --> SUB["Sub-agents<br/>read-only, summary back"]
+  REG["Tool registry"] --> SK["Skills"]
+  REG --> HK["Hooks via gate"]
+  REG --> MCP["MCP tools"]
+  LOG --> TUI["TUI"]
+  classDef new stroke-width:3px
+  class CONS,MEM,PROF,RQ,VF,SUB,SK,HK,MCP,TUI new
+</pre>
+    </div>
+    <div class="grid2">
+      <div class="box"><h3>Locked before</h3><ul class="plain"><li>Memory sits beside in-session context management. It doesn't replace it.</li><li>Concept mapping: skills extend context engineering, hooks extend the gate, MCP extends the tool registry, the TUI is just a client</li><li>Milestone done means walkthrough, decision records and cross-questions are written</li></ul></div>
+      <div class="box"><h3>Decided at the gate</h3><ul class="plain"><li>Memory store: SQLite with full-text search, plus vector search only if retrieval needs it</li><li>Fact schema and staleness rule</li><li>Where memory enters the request without breaking the cache</li><li>Sub-agent return contract</li><li>Hook API</li><li>Deferred loading for MCP tools</li><li>TUI library</li></ul></div>
+    </div>
+  </div>
+</section>
+
+<section id="memory">
+  <span class="eyebrow">11 · Memory</span>
+  <h2>Supermemory-style, adapted to code</h2>
+  <p class="col">Supermemory stores atomic facts in a temporal graph. A new fact can <em>update</em> an old one (the old one is kept for history but marked not-latest), <em>extend</em> it, or be <em>derived</em> from several. A background "dreaming" pass consolidates raw input into facts, episodes decay, preferences strengthen, and a small profile gives always-on context. It's built for remembering people across conversations.</p>
+  <p class="col">My take: use it for <strong>cross-session repo memory</strong>, and keep it out of in-session context management. Two reasons:</p>
+  <ul class="plain col">
+    <li>Inside one session, about 84% of tokens are tool output. Fact extraction does nothing for that. Masking does.</li>
+    <li>Injecting retrieved memories into every request changes the prompt prefix each turn and breaks the cache. Memory enters as a fixed profile at session start, plus a <code>recall</code> tool.</li>
+  </ul>
+  <p class="col">The adaptation that makes it interesting for code: repo facts go stale when the code changes, which a chat memory never has to deal with. So every fact carries <strong>provenance</strong> (file paths, commit, content hash). A changed file marks its facts stale, the same way Supermemory's <em>updates</em> relation marks old facts not-latest.</p>
+  <div class="diagram">
+<pre class="mermaid">
+flowchart TB
+  subgraph IN["Inside one session"]
+    LOG[("Log<br/>everything, lossless")] --> VIEW["Model context<br/>recent turns full, old tool output masked"]
+    VIEW -->|"recall by ID"| LOG
+  end
+  subgraph ACROSS["Across sessions"]
+    FACTS[("Facts<br/>path · commit · hash<br/>updates · extends · derives")]
+  end
+  LOG -->|"consolidate at session end"| FACTS
+  FACTS -->|"file changed, mark stale"| FACTS
+  FACTS -->|"small profile at start"| VIEW
+  FACTS -->|"recall query"| VIEW
+</pre>
+  </div>
+  <p class="note col">The interview angle: "how do you keep agent memory from lying after a refactor?" No source we found measures memory's effect on coding tasks, so this gets an ablation (no memory, AGENTS.md-style notes, fact memory) and we publish whatever comes out, including zero.</p>
+</section>
+
+<section id="outcome">
+  <span class="eyebrow">12 · How it turns out</span>
+  <h2>What an interviewer sees</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Concept</th><th>Stage</th><th>Evidence</th></tr></thead>
+      <tbody>
+        <tr><td>Event-sourced log, schema evolution</td><td>1</td><td>Decision record, replay command</td></tr>
+        <tr><td>Write-ahead intent, crash recovery, outcome unknown</td><td>1</td><td><span class="pill">Headline</span> Chaos test vs. naive re-run</td></tr>
+        <tr><td>Cancellation, structured concurrency</td><td>1</td><td>Decision record, interrupt tests</td></tr>
+        <tr><td>Tool-call concurrency control</td><td>1</td><td>Decision record</td></tr>
+        <tr><td>Tool and agent-computer interface design</td><td>1</td><td>Decision record, failed-edit recovery stats</td></tr>
+        <tr><td>Adapters over divergent protocols</td><td>2</td><td>Two adapters, reasoning replay rules</td></tr>
+        <tr><td>Environment abstraction</td><td>2</td><td>Same tools locally and in Harbor, later in Flagship 2</td></tr>
+        <tr><td>Eval methodology, variance</td><td>3</td><td><span class="pill">Headline</span> Variance study, repeats needed</td></tr>
+        <tr><td>Context engineering</td><td>3</td><td><span class="pill">Headline</span> Five-strategy ablation</td></tr>
+        <tr><td>Cache-aware request building</td><td>3</td><td>Cache-read share per strategy</td></tr>
+        <tr><td>Verification loops</td><td>4</td><td><span class="pill">Headline</span> Verify-first on vs. off, failed-for-right-reason rate</td></tr>
+        <tr><td>Long-term memory with provenance</td><td>4</td><td>Memory ablation</td></tr>
+        <tr><td>Sub-agents as context isolation</td><td>4</td><td>Decision record, token comparison</td></tr>
+        <tr><td>Failure analysis from traces</td><td>3 and 4</td><td>Write-up</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note col">
+    <p><strong>Risks to know about now.</strong> Reproduction tests are hard: the best agent on SWT-bench Lite reached 18.5% with older models, and a test can go from red to green for the wrong reason. Memory might add nothing. Free tiers come with rate limits and model churn, so no number counts until it's rerun on a pinned model with Azure credits.</p>
+  </div>
+</section>
+
+<section id="unknowns">
+  <span class="eyebrow">13 · Unknowns</span>
+  <h2>Things we test early instead of assuming</h2>
+  <ul class="plain col">
+    <li>Which dangling-tool-call repair each provider API actually accepts on resume (M1, then M3)</li>
+    <li>What Anthropic's exact-match edit does on zero or multiple matches, if we copy its format (M2)</li>
+    <li>Whether the chosen provider endpoint returns reasoning payloads we can replay unchanged (M3)</li>
+    <li>What Harbor's trajectory format (ATIF) requires, before the event schema freezes (M4)</li>
+    <li>Whether Harbor runs cleanly under WSL2 with Docker Desktop (M4 smoke test)</li>
+    <li>How much masking and summarization cost us in cache reads (M7)</li>
+  </ul>
+</section>
+
+<footer>
+  Full spec: <code>docs/specs/2026-10-22-flagship1-design.md</code>. Sources and evidence: <code>reports/Coding agent architecture 2026.md</code> and <code>research_notes/Coding agent gaps 2026/</code> in the project folder. Key references: OpenHands Software Agent SDK paper (arXiv 2511.03690), Complexity Trap (arXiv 2508.21433), Harbor custom-agent docs, the Claude Code headless docs, Codex <code>protocol</code> crate, SWT-bench (arXiv 2406.12952).
+</footer>
+
+</div>
