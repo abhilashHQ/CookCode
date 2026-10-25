@@ -1,6 +1,8 @@
 import ast
 from pathlib import Path
 
+import pytest
+
 CORE = Path(__file__).parents[1] / "src" / "harness" / "core"
 FORBIDDEN_MODULES = {"subprocess", "socket", "http", "urllib", "sys", "httpx", "requests"}
 FORBIDDEN_CALLS = {"print", "input", "open"}
@@ -48,3 +50,91 @@ def test_core_never_calls_print_input_open_or_reads_environ() -> None:
                 assert node.func.id not in FORBIDDEN_CALLS, f"{path.name} calls {node.func.id}"
             if isinstance(node, ast.Attribute):
                 assert node.attr != "environ", f"{path.name} reads os.environ"
+
+
+AGENT = Path(__file__).parents[1] / "src" / "harness" / "agent"
+AGENT_ALLOWED_HARNESS = (
+    "harness.core",
+    "harness.agent",
+    "harness.store.base",
+    "harness.providers.base",
+    "harness.env.base",
+)
+
+
+def _agent_import_violation(module: str) -> bool:
+    root = module.split(".")[0]
+    if root in FORBIDDEN_MODULES:
+        return True
+    if root != "harness" or module == "harness":
+        return False
+    return not any(
+        module == allowed or module.startswith(allowed + ".") for allowed in AGENT_ALLOWED_HARNESS
+    )
+
+
+def scan_agent_source(source: str) -> list[str]:
+    violations: list[str] = []
+    for node in ast.walk(ast.parse(source)):
+        imported: list[str] = []
+        if isinstance(node, ast.Import):
+            imported = [alias.name for alias in node.names]
+        elif isinstance(node, ast.ImportFrom) and node.module == "harness":
+            imported = [
+                "harness" if alias.name == "__version__" else f"harness.{alias.name}"
+                for alias in node.names
+            ]
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported = [node.module]
+        violations.extend(f"imports {m}" for m in imported if _agent_import_violation(m))
+        if isinstance(node, ast.Call):
+            func = node.func
+            name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
+            if name in FORBIDDEN_CALLS:
+                violations.append(f"calls {name}")
+    return violations
+
+
+def test_agent_scan_accepts_allowed_imports() -> None:
+    source = (
+        "from harness import __version__\n"
+        "from harness.core.events import Event\n"
+        "from harness.agent.tools import Tool\n"
+        "from harness.store.base import SessionLog\n"
+        "from harness.providers.base import Provider\n"
+        "from harness.env.base import Environment\n"
+        "import asyncio\n"
+    )
+    assert scan_agent_source(source) == []
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "from harness.store.jsonl import JsonlSessionStore",
+        "from harness.providers.fake import FakeProvider",
+        "from harness.env.local import LocalEnvironment",
+        "import harness.chaos",
+        "from harness.chaos.scenario import ScenarioProvider",
+        "from harness.store import jsonl",
+        "from harness import chaos",
+        "import subprocess",
+        "import socket",
+        "from http import client",
+        "import urllib.request",
+        "import sys",
+        "print('x')",
+        "input()",
+        "open('f')",
+        "path.open()",
+    ],
+)
+def test_agent_scan_catches_violations(source: str) -> None:
+    assert scan_agent_source(source)
+
+
+def test_agent_package_respects_boundaries() -> None:
+    files = sorted(AGENT.rglob("*.py"))
+    assert files
+    for path in files:
+        assert scan_agent_source(path.read_text()) == [], path.name

@@ -1,0 +1,69 @@
+from collections.abc import Awaitable, Callable, Iterable
+from dataclasses import dataclass
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict
+
+from harness.core.cancel import CancelToken
+from harness.core.events import SideEffect
+from harness.env.base import Environment
+from harness.providers.base import ToolSchema
+
+
+@dataclass(frozen=True)
+class ToolContext:
+    env: Environment
+    cancel: CancelToken
+    cwd: str
+    timeout_s: float
+    max_output_bytes: int
+
+
+class ToolOutput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    content: str
+    status: Literal["ok", "error"] = "ok"
+    exit_status: Literal["ok", "error", "timeout", "killed"] = "ok"
+    output_bytes: int | None = None
+    truncated: bool = False
+
+    @property
+    def size(self) -> int:
+        if self.output_bytes is not None:
+            return self.output_bytes
+        return len(self.content.encode())
+
+
+@dataclass(frozen=True)
+class Tool[A: BaseModel]:
+    name: str
+    description: str
+    args_model: type[A]
+    side_effect: SideEffect
+    handler: Callable[[A, ToolContext], Awaitable[ToolOutput]]
+
+    def schema(self) -> ToolSchema:
+        return ToolSchema(
+            name=self.name,
+            description=self.description,
+            parameters=self.args_model.model_json_schema(),
+        )
+
+
+class ToolRegistry:
+    def __init__(self, tools: Iterable[Tool[Any]]) -> None:
+        self._tools: dict[str, Tool[Any]] = {}
+        for tool in tools:
+            if tool.name in self._tools:
+                raise ValueError(f"duplicate tool name: {tool.name}")
+            self._tools[tool.name] = tool
+
+    def get(self, name: str) -> Tool[Any] | None:
+        return self._tools.get(name)
+
+    def schemas(self) -> tuple[ToolSchema, ...]:
+        return tuple(tool.schema() for tool in self._tools.values())
+
+    def names(self) -> tuple[str, ...]:
+        return tuple(self._tools)
