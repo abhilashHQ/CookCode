@@ -12,7 +12,7 @@ The harness is an async program, but `JsonlSessionLog` uses blocking file writes
 - Plain blocking calls: simplest, with a bounded cost.
 
 ## Decision
-`SessionLog` and `SessionStore` (`src/harness/store/base.py`) are synchronous protocols, and `JsonlSessionLog.append` writes and flushes inline.
+`SessionLog` and `SessionStore` (`src/harness/store/base.py`) are synchronous protocols, and `JsonlSessionLog.append` writes inline with `os.write`.
 
 ## Consequences
 - Appends are small single lines written to the page cache. The only slow call is `fsync`, and it runs for `tool_call_started` or an explicit `durable=True`.

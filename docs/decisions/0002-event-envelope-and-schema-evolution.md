@@ -18,7 +18,8 @@ Every line is an `Event` envelope with `seq`, `id`, `ts`, `schema_version`, `lay
 - Old code reads new logs. It sees unknown events as opaque `OtherEvent` objects and can skip or forward them.
 - Only unknown tags fall back. A known tag whose shape changed fails validation. This is why changes inside one `SCHEMA_VERSION` must be additive: new optional fields, new event types.
 - A breaking change bumps `SCHEMA_VERSION` and needs a read-time migration. M0 stores the version on every event but nothing reads it yet and no migration hook exists. That work belongs to the first breaking change.
-- The layer check does not run for `OtherEvent`, so an unknown event keeps whatever layer it was written with.
+- The layer check does not run for `OtherEvent`, so an unknown event keeps the layer it was written with, as long as that layer is one this version knows.
+- The fallback only covers new `type` tags. A new value inside a known type (a new `exit_status`, a new `layer`) fails validation and makes the session raise `SessionCorruptError`. Fields a newer version adds to a known type are dropped in memory, though `fork` copies raw bytes and keeps them on disk.
 - `tests/test_events.py` round-trips one instance of every event type from `tests/sample_events.py`, and a test fails if a new type is missing a sample.
 
 ## What would change it

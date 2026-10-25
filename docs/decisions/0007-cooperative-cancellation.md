@@ -13,9 +13,9 @@ A user interrupt must stop a streaming model call or a running command, leave a 
 ## Decision
 One `CancelToken` (`src/harness/core/cancel.py`) wraps an `asyncio.Event`. `cancel(reason)` sets it, the first reason wins, and `cancelled`, `reason` and `wait()` expose it. It is passed to `Provider.stream(request, cancel)` and `Environment.exec(..., cancel=...)`.
 
-- Providers check it between stream events. `FakeProvider` checks before each item, between text deltas and before each `ItemDone`, then yields `StreamEnd(stop_reason="aborted")`. Items already yielded stay valid. The item in flight is dropped.
+- Providers check it between stream events. `FakeProvider` checks before it consumes a scripted turn, before each item, between text deltas, before each `ItemDone` and before the usage report, then yields `StreamEnd(stop_reason="aborted")`. Items already yielded stay valid. The item in flight is dropped.
 - `exec` returns a cancelled result without spawning if the token is already set. Otherwise it waits on `proc.wait()` against `cancel.wait()` (with the timeout), kills the process group, and returns `ExecResult(cancelled=True, exit_code=None)` with the output so far.
-- The `finally` cleanup in `exec` also handles raw task cancellation, so the token is the normal path and `Task.cancel()` is the fallback.
+- The `finally` cleanup in `exec`, plus the shielded spawn, also handles raw task cancellation at any await point, so the token is the normal path and `Task.cancel()` is the fallback.
 
 ## Consequences
 - Cancellation yields a normal result the loop can log as an interruption, with partial output.

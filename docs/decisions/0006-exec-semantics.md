@@ -16,7 +16,9 @@ The agent's main tool is running shell commands. Commands hang, spawn background
 
 Cleanup runs in `finally`: kill the process group with `SIGKILL`, cancel the cancel-waiter, await `wait()`, drain the pump for at most five seconds, close the transport. This runs after normal exit too, so background children never outlive the call. It also runs when the awaiting task is cancelled, for example by a `TaskGroup` tearing down, so cancellation cannot orphan a process group.
 
-Output goes through `_CappedBuffer`, which keeps the first half and last half of `max_output_bytes` and inserts a marker with the number of dropped bytes.
+Output goes through `_CappedBuffer`, which keeps the first `max_output_bytes // 2` bytes and the remaining budget from the end, and inserts a marker with the number of dropped bytes. When nothing was dropped it decodes both parts in one pass, so a character on the split is never broken. When bytes were dropped it trims a partial character from the end of the head and skips continuation bytes at the start of the tail, and counts them as dropped.
+
+Spawning runs as a shielded task. If the awaiting task is cancelled while `create_subprocess_exec` is in flight, `exec` waits for the pid, kills the group and reaps it before re-raising. Everything after the spawn sits inside the `finally` block.
 
 ## Consequences
 - Memory per call is bounded by `max_output_bytes`.
