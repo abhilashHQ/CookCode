@@ -1,13 +1,16 @@
 import fcntl
 import os
+import re
 from pathlib import Path
 from types import TracebackType
 
 from harness.core.events import Event, EventBody, from_json_line, make_event
+from harness.core.ids import new_id
 from harness.redact import Redactor
 from harness.store.base import SessionLockedError, SessionNotFoundError
 
 DURABLE_TYPES = frozenset({"tool_call_started"})
+_SESSION_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}")
 
 
 def _read_events(path: Path) -> list[Event]:
@@ -94,6 +97,8 @@ class JsonlSessionStore:
         root.mkdir(parents=True, exist_ok=True)
 
     def _path(self, session_id: str) -> Path:
+        if not _SESSION_ID.fullmatch(session_id):
+            raise ValueError(f"invalid session id {session_id!r}")
         return self._root / f"{session_id}.jsonl"
 
     def open(self, session_id: str, *, create: bool = False) -> JsonlSessionLog:
@@ -116,15 +121,24 @@ class JsonlSessionStore:
         if not prefix or prefix[-1].seq != at_seq:
             raise ValueError(f"seq {at_seq} not found in session {session_id}")
         target = self._path(new_session_id)
-        if target.exists():
-            raise FileExistsError(new_session_id)
-        tmp = target.with_name(target.name + ".tmp")
-        with tmp.open("wb") as f:
-            for event in prefix:
-                f.write((event.model_dump_json() + "\n").encode())
-            f.flush()
-            os.fsync(f.fileno())
-        tmp.rename(target)
+        tmp = target.with_name(f"{target.name}.{new_id()}.tmp")
+        try:
+            with tmp.open("wb") as f:
+                for event in prefix:
+                    f.write((event.model_dump_json() + "\n").encode())
+                f.flush()
+                os.fsync(f.fileno())
+            try:
+                os.link(tmp, target)
+            except FileExistsError:
+                raise FileExistsError(new_session_id) from None
+            dir_fd = os.open(self._root, os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+        finally:
+            tmp.unlink(missing_ok=True)
 
     def list_sessions(self) -> list[str]:
         return sorted(path.stem for path in self._root.glob("*.jsonl"))

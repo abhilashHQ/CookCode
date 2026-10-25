@@ -35,6 +35,17 @@ def test_fork_never_overwrites_an_existing_session(tmp_path: Path) -> None:
     store.fork("main", 1, "branch")
     with pytest.raises(FileExistsError):
         store.fork("main", 2, "branch")
+    assert [e.seq for e in store.read("branch")] == [0, 1]
+    assert not list(tmp_path.glob("*.tmp"))
+
+
+@pytest.mark.parametrize("bad", ["../escape", "a/b", "", ".hidden", "x" * 129])
+def test_session_ids_that_could_escape_the_root_are_rejected(tmp_path: Path, bad: str) -> None:
+    store = _store_with_five(tmp_path)
+    with pytest.raises(ValueError):
+        store.open(bad, create=True)
+    with pytest.raises(ValueError):
+        store.fork("main", 1, bad)
 
 
 def test_list_sessions_is_sorted_and_ignores_temp_files(tmp_path: Path) -> None:
