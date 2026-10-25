@@ -1,5 +1,6 @@
 import asyncio
 import time
+import uuid
 from pathlib import Path
 
 import pytest
@@ -141,3 +142,63 @@ async def test_cancelling_the_awaiting_task_kills_the_group(tmp_path: Path) -> N
         await task
     assert time.monotonic() - started < 2
     assert await _wait_dead(int(pid_file.read_text()))
+
+
+def test_capped_buffer_never_splits_a_character_when_nothing_was_dropped() -> None:
+    buf = _CappedBuffer(10)
+    buf.feed("aaaa€bb".encode())
+    assert not buf.truncated
+    assert buf.render() == "aaaa€bb"
+
+
+def test_capped_buffer_trims_partial_characters_at_the_cut() -> None:
+    buf = _CappedBuffer(10)
+    buf.feed("aaaa€".encode() + b"x" * 20 + "€bbb".encode())
+    out = buf.render()
+    assert "�" not in out
+    head, marker, tail = out.split("\n")
+    assert head == "aaaa"
+    assert tail == "bbb"
+    assert marker == f"[... {buf.total - 7} bytes truncated ...]"
+
+
+@pytest.mark.parametrize("cap", [0, 1, 2, 3])
+def test_capped_buffer_respects_tiny_caps(cap: int) -> None:
+    buf = _CappedBuffer(cap)
+    buf.feed(b"abcdef")
+    kept = len(buf._head) + len(buf._tail)  # pyright: ignore[reportPrivateUsage]
+    assert kept <= cap
+
+
+def _live_with_token(token: str) -> list[int]:
+    pids: list[int] = []
+    for entry in Path("/proc").iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            cmdline = (entry / "cmdline").read_bytes()
+            state = (entry / "stat").read_text().rsplit(")", 1)[1].split()[0]
+        except (FileNotFoundError, ProcessLookupError):
+            continue
+        if token.encode() in cmdline and state != "Z":
+            pids.append(int(entry.name))
+    return pids
+
+
+async def test_cancelling_at_any_point_after_start_leaks_no_process(tmp_path: Path) -> None:
+    env = LocalEnvironment(tmp_path)
+    token = f"77.{uuid.uuid4().int % 10**9}"
+    for yields in range(15):
+        task = asyncio.create_task(
+            env.exec(f"sleep {token} & wait", timeout_s=30, max_output_bytes=100,
+                     cancel=CancelToken())
+        )
+        for _ in range(yields):
+            await asyncio.sleep(0)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    deadline = time.monotonic() + 3
+    while _live_with_token(token) and time.monotonic() < deadline:
+        await asyncio.sleep(0.05)
+    assert _live_with_token(token) == []

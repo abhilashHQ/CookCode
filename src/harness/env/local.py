@@ -1,9 +1,11 @@
 import asyncio
+import codecs
 import contextlib
 import os
 import shutil
 import signal
 import time
+from asyncio.subprocess import Process
 from pathlib import Path
 
 from harness.core.cancel import CancelToken
@@ -16,20 +18,21 @@ _PUMP_DRAIN_TIMEOUT_S = 5.0
 
 class _CappedBuffer:
     def __init__(self, max_bytes: int) -> None:
-        self._half = max(max_bytes // 2, 1)
+        self._head_cap = max(max_bytes, 0) // 2
+        self._tail_cap = max(max_bytes, 0) - self._head_cap
         self._head = bytearray()
         self._tail = bytearray()
         self.total = 0
 
     def feed(self, chunk: bytes) -> None:
         self.total += len(chunk)
-        room = self._half - len(self._head)
+        room = self._head_cap - len(self._head)
         if room > 0:
             self._head += chunk[:room]
             chunk = chunk[room:]
         if chunk:
             self._tail += chunk
-            overflow = len(self._tail) - self._half
+            overflow = len(self._tail) - self._tail_cap
             if overflow > 0:
                 del self._tail[:overflow]
 
@@ -38,17 +41,35 @@ class _CappedBuffer:
         return self.total > len(self._head) + len(self._tail)
 
     def render(self) -> str:
-        head = self._head.decode(errors="replace")
-        tail = self._tail.decode(errors="replace")
         if not self.truncated:
-            return head + tail
-        dropped = self.total - len(self._head) - len(self._tail)
+            return bytes(self._head + self._tail).decode(errors="replace")
+        decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+        head = decoder.decode(bytes(self._head))
+        partial_head = len(decoder.getstate()[0])
+        skip = 0
+        while skip < min(3, len(self._tail)) and self._tail[skip] & 0xC0 == 0x80:
+            skip += 1
+        tail = bytes(self._tail[skip:]).decode(errors="replace")
+        dropped = self.total - len(self._head) - len(self._tail) + partial_head + skip
         return f"{head}\n[... {dropped} bytes truncated ...]\n{tail}"
 
 
 def _kill_group(pgid: int) -> None:
     with contextlib.suppress(ProcessLookupError, PermissionError):
         os.killpg(pgid, signal.SIGKILL)
+
+
+async def _kill_and_reap(proc: Process) -> None:
+    _kill_group(proc.pid)
+    await proc.wait()
+
+
+def _fsync_dir(path: Path) -> None:
+    dir_fd = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(dir_fd)
+    finally:
+        os.close(dir_fd)
 
 
 class LocalEnvironment:
@@ -58,6 +79,26 @@ class LocalEnvironment:
     def _resolve(self, path: str) -> Path:
         candidate = Path(path)
         return candidate if candidate.is_absolute() else self._root / candidate
+
+    async def _spawn(self, cmd: str, cwd: str, stdout_fd: int) -> Process:
+        spawn = asyncio.create_task(
+            asyncio.create_subprocess_exec(
+                "bash",
+                "-c",
+                cmd,
+                cwd=self._resolve(cwd),
+                stdin=asyncio.subprocess.DEVNULL,
+                stdout=stdout_fd,
+                stderr=asyncio.subprocess.STDOUT,
+                start_new_session=True,
+            )
+        )
+        try:
+            return await asyncio.shield(spawn)
+        except asyncio.CancelledError:
+            with contextlib.suppress(Exception):
+                await _kill_and_reap(await spawn)
+            raise
 
     async def exec(
         self,
@@ -75,49 +116,47 @@ class LocalEnvironment:
         read_fd, write_fd = os.pipe()
         pipe_reader = os.fdopen(read_fd, "rb", buffering=0)
         try:
-            proc = await asyncio.create_subprocess_exec(
-                "bash",
-                "-c",
-                cmd,
-                cwd=self._resolve(cwd),
-                stdin=asyncio.subprocess.DEVNULL,
-                stdout=write_fd,
-                stderr=asyncio.subprocess.STDOUT,
-                start_new_session=True,
-            )
+            proc = await self._spawn(cmd, cwd, write_fd)
         except BaseException:
             pipe_reader.close()
             raise
         finally:
             os.close(write_fd)
         buffer = _CappedBuffer(max_output_bytes)
-        stdout = asyncio.StreamReader()
-        transport, _ = await asyncio.get_running_loop().connect_read_pipe(
-            lambda: asyncio.StreamReaderProtocol(stdout), pipe_reader
-        )
-
-        async def pump() -> None:
-            while chunk := await stdout.read(_READ_CHUNK):
-                buffer.feed(chunk)
-
-        pump_task = asyncio.create_task(pump())
-        wait_task = asyncio.create_task(proc.wait())
-        cancel_task = asyncio.create_task(cancel.wait())
+        transport: asyncio.ReadTransport | None = None
+        pump_task: asyncio.Task[None] | None = None
+        cancel_task: asyncio.Task[None] | None = None
         try:
+            stdout = asyncio.StreamReader()
+            transport, _ = await asyncio.get_running_loop().connect_read_pipe(
+                lambda: asyncio.StreamReaderProtocol(stdout), pipe_reader
+            )
+
+            async def pump() -> None:
+                while chunk := await stdout.read(_READ_CHUNK):
+                    buffer.feed(chunk)
+
+            pump_task = asyncio.create_task(pump())
+            wait_task = asyncio.create_task(proc.wait())
+            cancel_task = asyncio.create_task(cancel.wait())
             done, _ = await asyncio.wait(
                 {wait_task, cancel_task}, timeout=timeout_s, return_when=asyncio.FIRST_COMPLETED
             )
         finally:
-            _kill_group(proc.pid)
-            cancel_task.cancel()
+            if cancel_task is not None:
+                cancel_task.cancel()
             try:
-                await wait_task
-                try:
-                    await asyncio.wait_for(pump_task, timeout=_PUMP_DRAIN_TIMEOUT_S)
-                except TimeoutError:
-                    pump_task.cancel()
+                await _kill_and_reap(proc)
+                if pump_task is not None:
+                    try:
+                        await asyncio.wait_for(pump_task, timeout=_PUMP_DRAIN_TIMEOUT_S)
+                    except TimeoutError:
+                        pump_task.cancel()
             finally:
-                transport.close()
+                if transport is not None:
+                    transport.close()
+                else:
+                    pipe_reader.close()
         timed_out = not done
         cancelled = cancel_task in done and wait_task not in done
         return ExecResult(
@@ -134,14 +173,23 @@ class LocalEnvironment:
         return await asyncio.to_thread(self._resolve(path).read_bytes)
 
     async def write_file(self, path: str, data: bytes) -> None:
-        target = self._resolve(path)
+        target = Path(os.path.realpath(self._resolve(path)))
 
         def write() -> None:
             target.parent.mkdir(parents=True, exist_ok=True)
-            tmp = target.with_name(f".{target.name}.{new_id()}.tmp")
-            tmp.write_bytes(data)
-            if target.exists():
-                shutil.copymode(target, tmp)
-            os.replace(tmp, target)
+            tmp = target.parent / f".{new_id()}.tmp"
+            try:
+                fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666)
+                with os.fdopen(fd, "wb") as f:
+                    f.write(data)
+                    f.flush()
+                    os.fsync(f.fileno())
+                if target.exists():
+                    shutil.copymode(target, tmp)
+                os.replace(tmp, target)
+            except BaseException:
+                tmp.unlink(missing_ok=True)
+                raise
+            _fsync_dir(target.parent)
 
         await asyncio.to_thread(write)
