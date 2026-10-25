@@ -1,3 +1,5 @@
+import os
+
 import pytest
 
 from harness.redact import Redactor
@@ -62,3 +64,35 @@ def test_ordinary_text_is_untouched() -> None:
 def test_redaction_is_idempotent() -> None:
     once = Redactor().redact_text(f"k={FAKES['anthropic_key']}")
     assert Redactor().redact_text(once) == once
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "src/hooks/use-disk-space-monitoring-hook.ts",
+        "git checkout fix/task-queue-retry-on-timeout",
+        "pip install flask-sqlalchemy-extensions-plus",
+        "risk-ant-assessment-module-for-the-team",
+        "mask-or-v1-" + "f0" * 32,
+    ],
+)
+def test_identifiers_containing_sk_dash_are_untouched(text: str) -> None:
+    assert Redactor().redact_text(text) == text
+
+
+@pytest.mark.parametrize("kind", ["anthropic_key", "openrouter_key", "openai_key"])
+def test_sk_keys_after_punctuation_are_redacted(kind: str) -> None:
+    for prefix in ("KEY=", '"', "(", "\n", "/"):
+        assert f"[REDACTED:{kind}]" in Redactor().redact_text(prefix + FAKES[kind])
+
+
+def test_secrets_in_dict_keys_are_redacted() -> None:
+    key = FAKES["anthropic_key"]
+    assert Redactor().redact({key: "v"}) == {"[REDACTED:anthropic_key]": "v"}
+
+
+def test_lone_surrogates_become_valid_utf8() -> None:
+    name = os.fsdecode(b"file-\xff.txt")
+    redacted = Redactor().redact_text(name)
+    redacted.encode("utf-8")
+    assert redacted.startswith("file-") and redacted.endswith(".txt")
