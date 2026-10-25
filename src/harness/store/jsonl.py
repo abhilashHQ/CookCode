@@ -110,3 +110,21 @@ class JsonlSessionStore:
         if not path.exists():
             raise SessionNotFoundError(session_id)
         return [event for event in _read_events(path) if event.seq >= from_seq]
+
+    def fork(self, session_id: str, at_seq: int, new_session_id: str) -> None:
+        prefix = [event for event in self.read(session_id) if event.seq <= at_seq]
+        if not prefix or prefix[-1].seq != at_seq:
+            raise ValueError(f"seq {at_seq} not found in session {session_id}")
+        target = self._path(new_session_id)
+        if target.exists():
+            raise FileExistsError(new_session_id)
+        tmp = target.with_name(target.name + ".tmp")
+        with tmp.open("wb") as f:
+            for event in prefix:
+                f.write((event.model_dump_json() + "\n").encode())
+            f.flush()
+            os.fsync(f.fileno())
+        tmp.rename(target)
+
+    def list_sessions(self) -> list[str]:
+        return sorted(path.stem for path in self._root.glob("*.jsonl"))
