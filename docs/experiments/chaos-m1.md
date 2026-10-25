@@ -56,3 +56,27 @@ Each point runs the scenario in a subprocess that SIGKILLs itself, either right 
 ## Caveat
 
 SIGKILL ends the process but does not drop the operating system page cache, so every byte written before the kill survives. This experiment therefore does not test fsync behavior under power loss or a kernel crash. It tests the repair rules against process death at every event boundary and after every side effect. The scenario provider is deterministic and goal-driven, so the numbers describe the repair logic, not model behavior.
+
+## Interpretation
+
+Written by hand after the report was generated. Regenerating the report overwrites this section, and the numbers above are untouched.
+
+### What the numbers show
+
+- The three-state repair produced 0 duplicates and 0 missing lines at all 25 crash points. The naive baseline duplicated one line at each of 6 points and lost none.
+- Both arms reached `done` with every call resolved at 25 of 25 points. `resume_ok` therefore does not separate them. Duplicates are the metric that does.
+- All six naive duplicates fall after the side effect and before its result is logged. Three land after `tool_call_finished` (`after_event:7`, `10` and `16`), where the only missing record is the result item. Three land right after the exec that wrote the line (`after_effect:1`, `2` and `3`), where the last logged event is still `tool_call_started`.
+- A crash right after `tool_call_started` caused no duplicate in either arm when the effect had not run yet. `after_event:6`, `9` and `15` are those points, and the file holds only the lines from earlier calls.
+- `after_event:6` and `after_effect:1` end on the same logged event, `tool_call_started`, and differ only in whether the line reached the file. The log cannot tell them apart. That is the reason a started mutating call is `unknown` and not `interrupted`.
+- The shape check passed. The expected duplicate points are computed from the reference log, independently of the repair code, and they equal the observed set.
+
+### The cost
+
+The repair arm made 59 model requests against 54 for the baseline, 5 more across 25 points. Each of those is a verify read: after an `unknown` result the model issues `read_target` to check the file before it appends again. The gap sits at `after_event:6`, `9`, `10` and `15` and at `after_effect:2`. At the other four points where the baseline duplicated (`after_event:7` and `16`, `after_effect:1` and `3`) the counts are equal. Repair does not use the `tool_call_finished` event to skip the read. A finished call whose result was lost is still `unknown`, with the exit status added to the reason. Skipping the read there would be an optimization with a correctness argument to make, and it is not implemented.
+
+### What this does not prove
+
+- **Power loss.** SIGKILL keeps the page cache, so every written byte survives. The fsync policy under power loss or a kernel crash is untested. A real power loss could drop `tool_call_finished` and the result while `tool_call_started` survives, and the repair rules cover that state, but this run never produces it.
+- **A real model.** The scenario provider is a deterministic policy. It reads `unknown`, verifies with a read, and then appends or moves on. The 0 duplicates is a joint result of the repair rules and a policy that follows "inspect before retrying". Whether an LLM follows that instruction is unmeasured. The baseline runs the same policy, so the comparison isolates the repair information, and the absolute numbers say nothing about model behavior.
+- **Other scenarios.** There is one shape: three sequential appends, two per step, each a mutating call that runs alone, with a read tool as the only verifier. No parallel read-only batch, no `external` tool, no side effect that cannot be checked by reading, no crash during a resume, and no graceful interrupt.
+- **Failure modes beyond duplication.** The baseline lost no lines, so duplication is its only failure mode here. Missing effects would need a repair that wrongly reports an unrun effect as done, and neither arm does that.
