@@ -86,3 +86,26 @@ def test_call_helper_builds_distinct_ids() -> None:
     assert a.id != b.id
     assert a.provider_call_id != b.provider_call_id
     assert a.arguments == {"path": "x.py"}
+
+
+@pytest.mark.parametrize(
+    "turn", [FakeTurn(items=()), FakeTurn(items=(), fail_with="boom"), FakeTurn(items=(say("x"),))]
+)
+async def test_precancelled_stream_aborts_without_consuming_the_turn(turn: FakeTurn) -> None:
+    fake = FakeProvider([turn])
+    token = CancelToken()
+    token.cancel("user")
+    assert await collect(fake, token) == [StreamEnd(stop_reason="aborted")]
+    assert (await collect(fake))[-1].stop_reason != "aborted"  # pyright: ignore[reportAttributeAccessIssue]
+
+
+async def test_cancel_after_the_last_item_still_aborts() -> None:
+    fake = FakeProvider([FakeTurn(items=(say("x"),))])
+    token = CancelToken()
+    events: list[StreamEvent] = []
+    async for event in fake.stream(REQUEST, token):
+        events.append(event)
+        if isinstance(event, ItemDone):
+            token.cancel("user")
+    assert isinstance(events[-2], ItemDone)
+    assert events[-1] == StreamEnd(stop_reason="aborted")

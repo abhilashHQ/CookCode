@@ -80,6 +80,9 @@ class FakeProvider:
         self, request: ModelRequest, cancel: CancelToken
     ) -> AsyncIterator[StreamEvent]:
         self.requests.append(request)
+        if cancel.cancelled:
+            yield StreamEnd(stop_reason="aborted")
+            return
         if self._next >= len(self._script):
             raise FakeScriptExhausted(f"no scripted turn for request #{len(self.requests)}")
         turn = self._script[self._next]
@@ -105,5 +108,8 @@ class FakeProvider:
                 yield StreamEnd(stop_reason="aborted")
                 return
             yield ItemDone(index=index, item=item)
+        if cancel.cancelled:
+            yield StreamEnd(stop_reason="aborted")
+            return
         yield UsageReport(usage=turn.usage)
         yield StreamEnd(stop_reason=turn.stop_reason or _default_stop(turn.items))
