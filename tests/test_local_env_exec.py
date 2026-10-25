@@ -2,6 +2,8 @@ import asyncio
 import time
 from pathlib import Path
 
+import pytest
+
 from harness.core.cancel import CancelToken
 from harness.env.base import Environment
 from harness.env.local import LocalEnvironment, _CappedBuffer
@@ -122,3 +124,20 @@ async def test_already_cancelled_never_spawns(tmp_path: Path) -> None:
                          cancel=cancel)
     assert res.cancelled
     assert not (tmp_path / "should-not-exist").exists()
+
+
+async def test_cancelling_the_awaiting_task_kills_the_group(tmp_path: Path) -> None:
+    env = LocalEnvironment(tmp_path)
+    task = asyncio.create_task(
+        env.exec("sleep 30 & echo $! > child.pid; wait", timeout_s=30, max_output_bytes=1000,
+                 cancel=CancelToken())
+    )
+    pid_file = tmp_path / "child.pid"
+    while not pid_file.exists() or not pid_file.read_text().strip():
+        await asyncio.sleep(0.02)
+    task.cancel()
+    started = time.monotonic()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert time.monotonic() - started < 2
+    assert await _wait_dead(int(pid_file.read_text()))

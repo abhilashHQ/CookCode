@@ -103,19 +103,23 @@ class LocalEnvironment:
         pump_task = asyncio.create_task(pump())
         wait_task = asyncio.create_task(proc.wait())
         cancel_task = asyncio.create_task(cancel.wait())
-        done, _ = await asyncio.wait(
-            {wait_task, cancel_task}, timeout=timeout_s, return_when=asyncio.FIRST_COMPLETED
-        )
+        try:
+            done, _ = await asyncio.wait(
+                {wait_task, cancel_task}, timeout=timeout_s, return_when=asyncio.FIRST_COMPLETED
+            )
+        finally:
+            _kill_group(proc.pid)
+            cancel_task.cancel()
+            try:
+                await wait_task
+                try:
+                    await asyncio.wait_for(pump_task, timeout=_PUMP_DRAIN_TIMEOUT_S)
+                except TimeoutError:
+                    pump_task.cancel()
+            finally:
+                transport.close()
         timed_out = not done
         cancelled = cancel_task in done and wait_task not in done
-        _kill_group(proc.pid)
-        await wait_task
-        cancel_task.cancel()
-        try:
-            await asyncio.wait_for(pump_task, timeout=_PUMP_DRAIN_TIMEOUT_S)
-        except TimeoutError:
-            pump_task.cancel()
-        transport.close()
         return ExecResult(
             exit_code=None if timed_out or cancelled else proc.returncode,
             output=buffer.render(),
