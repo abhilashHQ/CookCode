@@ -79,6 +79,12 @@ def scan_agent_source(source: str) -> list[str]:
         imported: list[str] = []
         if isinstance(node, ast.Import):
             imported = [alias.name for alias in node.names]
+        elif isinstance(node, ast.ImportFrom) and node.level > 0:
+            base = ["harness", "agent"][: 2 - (node.level - 1)]
+            if node.module:
+                imported = [".".join([*base, node.module])]
+            else:
+                imported = [".".join([*base, alias.name]) for alias in node.names]
         elif isinstance(node, ast.ImportFrom) and node.module == "harness":
             imported = [
                 "harness" if alias.name == "__version__" else f"harness.{alias.name}"
@@ -103,6 +109,8 @@ def test_agent_scan_accepts_allowed_imports() -> None:
         "from harness.store.base import SessionLog\n"
         "from harness.providers.base import Provider\n"
         "from harness.env.base import Environment\n"
+        "from .tools import Tool\n"
+        "from ..core.events import Event\n"
         "import asyncio\n"
     )
     assert scan_agent_source(source) == []
@@ -118,6 +126,9 @@ def test_agent_scan_accepts_allowed_imports() -> None:
         "from harness.chaos.scenario import ScenarioProvider",
         "from harness.store import jsonl",
         "from harness import chaos",
+        "from ..store.jsonl import JsonlSessionStore",
+        "from .. import chaos",
+        "from ..providers import fake",
         "import subprocess",
         "import socket",
         "from http import client",

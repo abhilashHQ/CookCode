@@ -13,6 +13,7 @@ from harness.core.events import (
 )
 from harness.core.items import Item, ToolCall, ToolResult, text_message
 from harness.providers.base import ToolSchema
+from harness.providers.fake import call, say
 
 TOOLS = (ToolSchema(name="read", description="Read.", parameters={"type": "object"}),)
 
@@ -119,3 +120,18 @@ def test_estimate_tokens_is_positive_and_grows() -> None:
     assert estimate_tokens(small) > 0
     assert estimate_tokens(larger) > estimate_tokens(small)
     assert estimate_tokens(small) == len(small.model_dump_json()) // 4
+
+
+def test_text_between_calls_does_not_split_the_response() -> None:
+    a, b = call("echo", text="a"), call("echo", text="b")
+    events = _events(
+        UserMessage(text="go"),
+        ItemEvent(item=a),
+        ItemEvent(item=say("now the second one")),
+        ItemEvent(item=b),
+        ItemEvent(item=ToolResult(call_id=b.id, status="ok", content="b")),
+        ItemEvent(item=ToolResult(call_id=a.id, status="ok", content="a")),
+    )
+    request = build_request(events, model="m", system="s", tools=())
+    result_ids = [i.call_id for i in request.items if isinstance(i, ToolResult)]
+    assert result_ids == [a.id, b.id]

@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 
 from harness.core.events import Event, ItemEvent, SteerMessage, UserMessage
-from harness.core.items import Item, ToolCall, ToolResult, text_message
+from harness.core.items import Item, Message, ToolCall, ToolResult, text_message
 from harness.providers.base import ModelRequest, ToolSchema
 
 
@@ -19,15 +19,15 @@ def _project(events: Sequence[Event]) -> list[Item]:
 def _reorder_results(items: list[Item]) -> list[Item]:
     ordered: list[Item] = []
     call_block: list[str] = []
-    previous_was_call = False
+    new_response = True
     index = 0
     while index < len(items):
         item = items[index]
         if isinstance(item, ToolCall):
-            if not previous_was_call:
+            if new_response:
                 call_block = []
+                new_response = False
             call_block.append(item.id)
-            previous_was_call = True
             ordered.append(item)
             index += 1
         elif isinstance(item, ToolResult):
@@ -38,10 +38,11 @@ def _reorder_results(items: list[Item]) -> list[Item]:
             position = {call_id: i for i, call_id in reversed(list(enumerate(call_block)))}
             run.sort(key=lambda r: position.get(r.call_id, len(call_block)))
             ordered.extend(run)
-            previous_was_call = False
+            new_response = True
             index = end
         else:
-            previous_was_call = False
+            if isinstance(item, Message) and item.role == "user":
+                new_response = True
             ordered.append(item)
             index += 1
     return ordered

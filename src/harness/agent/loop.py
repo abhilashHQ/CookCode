@@ -6,7 +6,7 @@ from collections.abc import AsyncGenerator, Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from harness import __version__
 from harness.agent.context import build_request, estimate_tokens
@@ -49,6 +49,10 @@ KILLED_MUTATING = (
     "[killed by an interrupt before it finished. It may have changed state, "
     "so inspect before retrying.]"
 )
+TIMEOUT_MUTATING = (
+    "[killed by the harness at the tool timeout. It may have changed state, "
+    "so inspect before retrying.]"
+)
 
 
 class AgentConfig(BaseModel):
@@ -57,9 +61,9 @@ class AgentConfig(BaseModel):
     model: str
     system_prompt: str
     limits: Limits = Limits(max_turns=50)
-    tool_timeout_s: float = 120.0
-    max_tool_output_bytes: int = 30_000
-    max_parallel_tools: int = 8
+    tool_timeout_s: float = Field(default=120.0, gt=0)
+    max_tool_output_bytes: int = Field(default=30_000, ge=1)
+    max_parallel_tools: int = Field(default=8, ge=1)
     cwd: str = "."
 
 
@@ -114,14 +118,22 @@ def _batches(dispatches: Sequence[_Dispatch]) -> list[list[_Dispatch]]:
 
 
 def _tool_result(side_effect: SideEffect, output: ToolOutput) -> tuple[ToolResultStatus, str]:
-    if output.exit_status != "killed":
-        return output.status, output.content
-    if side_effect == "read_only":
-        status: ToolResultStatus = "interrupted"
-        note = KILLED_READ_ONLY
+    status: ToolResultStatus
+    if output.exit_status == "killed":
+        if side_effect == "read_only":
+            status, note = "interrupted", KILLED_READ_ONLY
+        else:
+            status, note = "unknown", KILLED_MUTATING
+    elif output.exit_status == "timeout" and side_effect != "read_only":
+        status, note = "unknown", TIMEOUT_MUTATING
     else:
-        status, note = "unknown", KILLED_MUTATING
+        return output.status, output.content
     return status, f"{output.content}\n{note}" if output.content else note
+
+
+def _hard_cancelled() -> bool:
+    task = asyncio.current_task()
+    return task is not None and task.cancelling() > 0
 
 
 async def _link(source: CancelToken, target: CancelToken) -> None:
@@ -263,7 +275,7 @@ class Agent:
             )
         )
         run.usage = run.usage + response.usage
-        if response.stop_reason == "aborted" and run.cancelled():
+        if response.stop_reason in ("aborted", "error") and run.cancelled():
             self._close_out_not_executed(response.calls)
             return self._end_cancelled(run, "streaming", ())
         if response.stop_reason in ("error", "aborted"):
@@ -293,6 +305,11 @@ class Agent:
                     event = await anext(stream)
                 except StopAsyncIteration:
                     break
+                except asyncio.CancelledError:
+                    if _hard_cancelled():
+                        raise
+                    stop_reason, error = "error", "provider raised CancelledError"
+                    break
                 except Exception as exc:
                     stop_reason, error = "error", f"{type(exc).__name__}: {exc}"
                     break
@@ -304,9 +321,14 @@ class Agent:
                     usage, raw_usage = event.usage, event.raw
                 elif isinstance(event, StreamEnd):
                     stop_reason, error = event.stop_reason, event.error
+                    break
         finally:
             if isinstance(stream, AsyncGenerator):
-                await stream.aclose()
+                try:
+                    await stream.aclose()
+                except Exception as exc:
+                    if stop_reason is None:
+                        stop_reason, error = "error", f"{type(exc).__name__}: {exc}"
         if stop_reason is None:
             stop_reason, error = "error", "stream ended without a stop reason"
         return _Response(
@@ -366,7 +388,8 @@ class Agent:
                     tool=tool.name,
                     arguments=tool_call.arguments,
                     side_effect=tool.side_effect,
-                )
+                ),
+                durable=True,
             )
             ctx = ToolContext(
                 env=self._env,
@@ -378,6 +401,14 @@ class Agent:
             started = time.monotonic()
             try:
                 output = await tool.handler(dispatch.args, ctx)
+            except asyncio.CancelledError:
+                if _hard_cancelled():
+                    raise
+                output = ToolOutput(
+                    content="tool raised CancelledError",
+                    status="error",
+                    exit_status="killed" if run.cancelled() else "error",
+                )
             except Exception as exc:
                 output = ToolOutput(
                     content=f"tool raised {type(exc).__name__}: {exc}",
@@ -407,5 +438,6 @@ class Agent:
         return self._finish(run, "interrupted")
 
     def _finish(self, run: _RunState, status: RunStatus) -> RunOutcome:
+        self._drain_steering()
         event = self._log.append(SessionFinished(status=status, turns=run.turns, usage=run.usage))
         return RunOutcome(status=status, turns=run.turns, usage=run.usage, last_seq=event.seq)
