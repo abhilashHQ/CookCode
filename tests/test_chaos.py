@@ -1,3 +1,5 @@
+import json
+import signal
 from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 
@@ -7,6 +9,7 @@ from agent_helpers import assert_every_call_resolved, tool_calls
 from harness.agent.loop import Agent, AgentConfig
 from harness.agent.repair import NOT_EXECUTED, RepairAction, plan_repairs
 from harness.agent.tools import ToolContext
+from harness.chaos import experiment
 from harness.chaos.scenario import ScenarioProvider, chaos_tools, naive_plan_repairs
 from harness.core.cancel import CancelToken
 from harness.core.events import (
@@ -16,6 +19,7 @@ from harness.core.events import (
     Limits,
     ModelRequestStarted,
     SideEffect,
+    ToolCallFinished,
     ToolCallStarted,
     make_event,
 )
@@ -327,3 +331,163 @@ async def test_scenario_resumes_after_a_crash_between_effect_and_result(
     assert_every_call_resolved(events)
     ids = [c.id for c in tool_calls(events)]
     assert len(ids) == len(set(ids))
+
+
+@pytest.fixture(scope="module")
+def reference(tmp_path_factory: pytest.TempPathFactory) -> experiment.ReferenceRun:
+    return experiment.reference_run(tmp_path_factory.mktemp("reference"))
+
+
+def _first_started_seq(events: Sequence[Event]) -> int:
+    return next(e.seq for e in events if isinstance(e.body, ToolCallStarted))
+
+
+def _session_events(root: Path) -> list[Event]:
+    return JsonlSessionStore(root / "sessions").read("s1")
+
+
+def test_reference_run_counts_events_effects_and_requests(
+    reference: experiment.ReferenceRun,
+) -> None:
+    assert len(reference.events) > 10
+    assert [e.seq for e in reference.events] == list(range(len(reference.events)))
+    assert reference.effects == len(LINES)
+    assert reference.requests == 3
+    points = experiment.enumerate_points(reference)
+    assert len(points) == len(reference.events) + reference.effects
+    assert points[0] == "after_event:0"
+    assert points[-1] == f"after_effect:{reference.effects}"
+
+
+def test_crash_after_first_tool_call_started_dies_by_sigkill_and_log_ends_there(
+    reference: experiment.ReferenceRun, tmp_path: Path
+) -> None:
+    seq = _first_started_seq(reference.events)
+
+    returncode = experiment.run_crash(tmp_path / "crashed", f"after_event:{seq}")
+
+    events = _session_events(tmp_path / "crashed")
+    assert returncode == -signal.SIGKILL
+    assert events[-1].seq == seq
+    assert isinstance(events[-1].body, ToolCallStarted)
+    assert not (tmp_path / "crashed" / "work" / TARGET).exists()
+
+
+def test_crash_after_first_effect_leaves_the_line_once_and_no_finish_event(
+    tmp_path: Path,
+) -> None:
+    returncode = experiment.run_crash(tmp_path / "crashed", "after_effect:1")
+
+    events = _session_events(tmp_path / "crashed")
+    assert returncode == -signal.SIGKILL
+    assert _file_lines(tmp_path / "crashed" / "work") == ["L1"]
+    assert any(isinstance(e.body, ToolCallStarted) for e in events)
+    assert not any(isinstance(e.body, ToolCallFinished) for e in events)
+
+
+def test_a_worker_that_finishes_without_crashing_is_a_driver_error(tmp_path: Path) -> None:
+    with pytest.raises(experiment.ChaosError, match="SIGKILL"):
+        experiment.run_crash(tmp_path / "crashed", "after_event:9999")
+
+
+def test_a_worker_that_dies_any_other_way_is_a_driver_error(tmp_path: Path) -> None:
+    with pytest.raises(experiment.ChaosError, match="SIGKILL"):
+        experiment.run_crash(tmp_path / "crashed", "after_nothing:1")
+
+
+def test_crash_between_effect_and_result_duplicates_only_for_the_naive_baseline(
+    tmp_path: Path,
+) -> None:
+    result = experiment.evaluate_point("after_effect:1", tmp_path)
+
+    assert (result.ours.duplicates, result.ours.missing) == (0, 0)
+    assert (result.naive.duplicates, result.naive.missing) == (1, 0)
+    assert result.ours.resume_ok and result.naive.resume_ok
+    assert result.file_lines_at_crash == 1
+
+
+def test_crash_before_the_effect_runs_costs_nothing_in_either_mode(
+    reference: experiment.ReferenceRun, tmp_path: Path
+) -> None:
+    seq = _first_started_seq(reference.events)
+
+    result = experiment.evaluate_point(f"after_event:{seq}", tmp_path)
+
+    assert (result.ours.duplicates, result.ours.missing) == (0, 0)
+    assert (result.naive.duplicates, result.naive.missing) == (0, 0)
+    assert result.ours.resume_ok and result.naive.resume_ok
+    assert result.ours.extra_requests == result.naive.extra_requests + 1
+
+
+def test_copies_are_byte_identical_to_the_crashed_state(tmp_path: Path) -> None:
+    crashed = tmp_path / "crashed"
+    experiment.run_crash(crashed, "after_effect:2")
+
+    experiment.copy_state(crashed, tmp_path / "ours")
+    experiment.copy_state(crashed, tmp_path / "naive")
+
+    assert experiment.tree_digest(tmp_path / "ours") == experiment.tree_digest(crashed)
+    assert experiment.tree_digest(tmp_path / "naive") == experiment.tree_digest(crashed)
+    (tmp_path / "naive" / "work" / TARGET).write_text("tampered\n")
+    assert experiment.tree_digest(tmp_path / "naive") != experiment.tree_digest(crashed)
+
+
+def test_report_generator_writes_both_files_and_totals_equal_the_row_sums(
+    reference: experiment.ReferenceRun, tmp_path: Path
+) -> None:
+    seq = _first_started_seq(reference.events)
+    points = [f"after_event:{seq}", "after_effect:1", "after_effect:2"]
+    out = tmp_path / "out"
+
+    report = experiment.run_experiment(out, points=points, date="2026-01-02")
+
+    markdown = (out / "chaos-m1.md").read_text()
+    data = json.loads((out / "chaos-m1.json").read_text())
+    assert [row["point"] for row in data["rows"]] == points
+    assert "2026-01-02" in markdown and "page cache" in markdown
+    for mode in ("ours", "naive"):
+        rows = [row[mode] for row in data["rows"]]
+        totals = data["totals"][mode]
+        assert totals["points"] == len(points)
+        assert totals["duplicates"] == sum(r["duplicates"] for r in rows)
+        assert totals["missing"] == sum(r["missing"] for r in rows)
+        assert totals["resume_ok"] == sum(r["resume_ok"] for r in rows)
+        assert totals["extra_requests"] == sum(r["extra_requests"] for r in rows)
+        assert totals == report.totals[mode].model_dump()
+    assert data["totals"]["ours"]["duplicates"] == 0
+    assert data["totals"]["naive"]["duplicates"] == 2
+    assert report.shape.matches
+    assert chr(0x2014) not in markdown and chr(0x2013) not in markdown
+
+
+def test_expected_naive_duplicate_points_cover_the_effect_to_result_window(
+    reference: experiment.ReferenceRun,
+) -> None:
+    points = experiment.enumerate_points(reference)
+
+    expected = experiment.expected_naive_duplicate_points(reference.events, points)
+
+    effects = {p for p in points if p.startswith("after_effect")}
+    assert effects <= expected
+    assert expected < set(points)
+    assert experiment.expected_naive_duplicate_points(reference.events, ["after_event:0"]) == set()
+
+
+def test_resolution_problems_flags_unresolved_duplicate_and_gapped_logs(
+    reference: experiment.ReferenceRun,
+) -> None:
+    events = reference.events
+    assert experiment.resolution_problems(events) == []
+    result_indexes = [
+        i
+        for i, e in enumerate(events)
+        if isinstance(e.body, ItemEvent) and isinstance(e.body.item, ToolResult)
+    ]
+
+    dropped = [e for i, e in enumerate(events) if i != result_indexes[0]]
+    assert any("contiguous" in p for p in experiment.resolution_problems(dropped))
+    unresolved = experiment.resolution_problems(events[: result_indexes[0]])
+    assert any("unresolved" in p for p in unresolved)
+
+    duplicated = [*events, make_event(len(events), events[result_indexes[0]].body)]
+    assert any("2 results" in p for p in experiment.resolution_problems(duplicated))

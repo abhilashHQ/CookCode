@@ -1,0 +1,659 @@
+{
+  "harness_commit": "2f6004ff4c8faca476ee6b9dacb81a406680e8fd",
+  "date": "2026-10-25",
+  "scenario": {
+    "lines": [
+      "L1",
+      "L2",
+      "L3"
+    ],
+    "per_step": 2,
+    "target": "out.txt",
+    "reference_events": 22,
+    "reference_effects": 3,
+    "reference_requests": 3
+  },
+  "rows": [
+    {
+      "point": "after_event:0",
+      "kind": "after_event",
+      "ordinal": 0,
+      "events_at_crash": 1,
+      "last_event": "session_started",
+      "file_lines_at_crash": 0,
+      "ours": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 3,
+        "status": "done",
+        "problems": []
+      },
+      "naive": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 3,
+        "status": "done",
+        "problems": []
+      }
+    },
+    {
+      "point": "after_event:1",
+      "kind": "after_event",
+      "ordinal": 1,
+      "events_at_crash": 2,
+      "last_event": "user_message",
+      "file_lines_at_crash": 0,
+      "ours": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 3,
+        "status": "done",
+        "problems": []
+      },
+      "naive": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 3,
+        "status": "done",
+        "problems": []
+      }
+    },
+    {
+      "point": "after_event:2",
+      "kind": "after_event",
+      "ordinal": 2,
+      "events_at_crash": 3,
+      "last_event": "model_request_started",
+      "file_lines_at_crash": 0,
+      "ours": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 3,
+        "status": "done",
+        "problems": []
+      },
+      "naive": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 3,
+        "status": "done",
+        "problems": []
+      }
+    },
+    {
+      "point": "after_event:3",
+      "kind": "after_event",
+      "ordinal": 3,
+      "events_at_crash": 4,
+      "last_event": "item",
+      "file_lines_at_crash": 0,
+      "ours": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 3,
+        "status": "done",
+        "problems": []
+      },
+      "naive": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 3,
+        "status": "done",
+        "problems": []
+      }
+    },
+    {
+      "point": "after_event:4",
+      "kind": "after_event",
+      "ordinal": 4,
+      "events_at_crash": 5,
+      "last_event": "item",
+      "file_lines_at_crash": 0,
+      "ours": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 3,
+        "status": "done",
+        "problems": []
+      },
+      "naive": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 3,
+        "status": "done",
+        "problems": []
+      }
+    },
+    {
+      "point": "after_event:5",
+      "kind": "after_event",
+      "ordinal": 5,
+      "events_at_crash": 6,
+      "last_event": "model_request_finished",
+      "file_lines_at_crash": 0,
+      "ours": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 3,
+        "status": "done",
+        "problems": []
+      },
+      "naive": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 3,
+        "status": "done",
+        "problems": []
+      }
+    },
+    {
+      "point": "after_event:6",
+      "kind": "after_event",
+      "ordinal": 6,
+      "events_at_crash": 7,
+      "last_event": "tool_call_started",
+      "file_lines_at_crash": 0,
+      "ours": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 4,
+        "status": "done",
+        "problems": []
+      },
+      "naive": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 3,
+        "status": "done",
+        "problems": []
+      }
+    },
+    {
+      "point": "after_event:7",
+      "kind": "after_event",
+      "ordinal": 7,
+      "events_at_crash": 8,
+      "last_event": "tool_call_finished",
+      "file_lines_at_crash": 1,
+      "ours": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 3,
+        "status": "done",
+        "problems": []
+      },
+      "naive": {
+        "duplicates": 1,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 3,
+        "status": "done",
+        "problems": []
+      }
+    },
+    {
+      "point": "after_event:8",
+      "kind": "after_event",
+      "ordinal": 8,
+      "events_at_crash": 9,
+      "last_event": "item",
+      "file_lines_at_crash": 1,
+      "ours": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 2,
+        "status": "done",
+        "problems": []
+      },
+      "naive": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 2,
+        "status": "done",
+        "problems": []
+      }
+    },
+    {
+      "point": "after_event:9",
+      "kind": "after_event",
+      "ordinal": 9,
+      "events_at_crash": 10,
+      "last_event": "tool_call_started",
+      "file_lines_at_crash": 1,
+      "ours": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 3,
+        "status": "done",
+        "problems": []
+      },
+      "naive": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 2,
+        "status": "done",
+        "problems": []
+      }
+    },
+    {
+      "point": "after_event:10",
+      "kind": "after_event",
+      "ordinal": 10,
+      "events_at_crash": 11,
+      "last_event": "tool_call_finished",
+      "file_lines_at_crash": 2,
+      "ours": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 3,
+        "status": "done",
+        "problems": []
+      },
+      "naive": {
+        "duplicates": 1,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 2,
+        "status": "done",
+        "problems": []
+      }
+    },
+    {
+      "point": "after_event:11",
+      "kind": "after_event",
+      "ordinal": 11,
+      "events_at_crash": 12,
+      "last_event": "item",
+      "file_lines_at_crash": 2,
+      "ours": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 2,
+        "status": "done",
+        "problems": []
+      },
+      "naive": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 2,
+        "status": "done",
+        "problems": []
+      }
+    },
+    {
+      "point": "after_event:12",
+      "kind": "after_event",
+      "ordinal": 12,
+      "events_at_crash": 13,
+      "last_event": "model_request_started",
+      "file_lines_at_crash": 2,
+      "ours": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 2,
+        "status": "done",
+        "problems": []
+      },
+      "naive": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 2,
+        "status": "done",
+        "problems": []
+      }
+    },
+    {
+      "point": "after_event:13",
+      "kind": "after_event",
+      "ordinal": 13,
+      "events_at_crash": 14,
+      "last_event": "item",
+      "file_lines_at_crash": 2,
+      "ours": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 2,
+        "status": "done",
+        "problems": []
+      },
+      "naive": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 2,
+        "status": "done",
+        "problems": []
+      }
+    },
+    {
+      "point": "after_event:14",
+      "kind": "after_event",
+      "ordinal": 14,
+      "events_at_crash": 15,
+      "last_event": "model_request_finished",
+      "file_lines_at_crash": 2,
+      "ours": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 2,
+        "status": "done",
+        "problems": []
+      },
+      "naive": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 2,
+        "status": "done",
+        "problems": []
+      }
+    },
+    {
+      "point": "after_event:15",
+      "kind": "after_event",
+      "ordinal": 15,
+      "events_at_crash": 16,
+      "last_event": "tool_call_started",
+      "file_lines_at_crash": 2,
+      "ours": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 3,
+        "status": "done",
+        "problems": []
+      },
+      "naive": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 2,
+        "status": "done",
+        "problems": []
+      }
+    },
+    {
+      "point": "after_event:16",
+      "kind": "after_event",
+      "ordinal": 16,
+      "events_at_crash": 17,
+      "last_event": "tool_call_finished",
+      "file_lines_at_crash": 3,
+      "ours": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 2,
+        "status": "done",
+        "problems": []
+      },
+      "naive": {
+        "duplicates": 1,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 2,
+        "status": "done",
+        "problems": []
+      }
+    },
+    {
+      "point": "after_event:17",
+      "kind": "after_event",
+      "ordinal": 17,
+      "events_at_crash": 18,
+      "last_event": "item",
+      "file_lines_at_crash": 3,
+      "ours": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 1,
+        "status": "done",
+        "problems": []
+      },
+      "naive": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 1,
+        "status": "done",
+        "problems": []
+      }
+    },
+    {
+      "point": "after_event:18",
+      "kind": "after_event",
+      "ordinal": 18,
+      "events_at_crash": 19,
+      "last_event": "model_request_started",
+      "file_lines_at_crash": 3,
+      "ours": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 1,
+        "status": "done",
+        "problems": []
+      },
+      "naive": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 1,
+        "status": "done",
+        "problems": []
+      }
+    },
+    {
+      "point": "after_event:19",
+      "kind": "after_event",
+      "ordinal": 19,
+      "events_at_crash": 20,
+      "last_event": "item",
+      "file_lines_at_crash": 3,
+      "ours": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 1,
+        "status": "done",
+        "problems": []
+      },
+      "naive": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 1,
+        "status": "done",
+        "problems": []
+      }
+    },
+    {
+      "point": "after_event:20",
+      "kind": "after_event",
+      "ordinal": 20,
+      "events_at_crash": 21,
+      "last_event": "model_request_finished",
+      "file_lines_at_crash": 3,
+      "ours": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 1,
+        "status": "done",
+        "problems": []
+      },
+      "naive": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 1,
+        "status": "done",
+        "problems": []
+      }
+    },
+    {
+      "point": "after_event:21",
+      "kind": "after_event",
+      "ordinal": 21,
+      "events_at_crash": 22,
+      "last_event": "session_finished",
+      "file_lines_at_crash": 3,
+      "ours": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 1,
+        "status": "done",
+        "problems": []
+      },
+      "naive": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 1,
+        "status": "done",
+        "problems": []
+      }
+    },
+    {
+      "point": "after_effect:1",
+      "kind": "after_effect",
+      "ordinal": 1,
+      "events_at_crash": 7,
+      "last_event": "tool_call_started",
+      "file_lines_at_crash": 1,
+      "ours": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 3,
+        "status": "done",
+        "problems": []
+      },
+      "naive": {
+        "duplicates": 1,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 3,
+        "status": "done",
+        "problems": []
+      }
+    },
+    {
+      "point": "after_effect:2",
+      "kind": "after_effect",
+      "ordinal": 2,
+      "events_at_crash": 10,
+      "last_event": "tool_call_started",
+      "file_lines_at_crash": 2,
+      "ours": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 3,
+        "status": "done",
+        "problems": []
+      },
+      "naive": {
+        "duplicates": 1,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 2,
+        "status": "done",
+        "problems": []
+      }
+    },
+    {
+      "point": "after_effect:3",
+      "kind": "after_effect",
+      "ordinal": 3,
+      "events_at_crash": 16,
+      "last_event": "tool_call_started",
+      "file_lines_at_crash": 3,
+      "ours": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 2,
+        "status": "done",
+        "problems": []
+      },
+      "naive": {
+        "duplicates": 1,
+        "missing": 0,
+        "resume_ok": true,
+        "extra_requests": 2,
+        "status": "done",
+        "problems": []
+      }
+    }
+  ],
+  "totals": {
+    "ours": {
+      "points": 25,
+      "duplicates": 0,
+      "points_with_duplicates": 0,
+      "missing": 0,
+      "points_with_missing": 0,
+      "resume_ok": 25,
+      "extra_requests": 59
+    },
+    "naive": {
+      "points": 25,
+      "duplicates": 6,
+      "points_with_duplicates": 6,
+      "missing": 0,
+      "points_with_missing": 0,
+      "resume_ok": 25,
+      "extra_requests": 54
+    }
+  },
+  "shape": {
+    "ours_clean": true,
+    "expected_naive_duplicate_points": [
+      "after_effect:1",
+      "after_effect:2",
+      "after_effect:3",
+      "after_event:10",
+      "after_event:16",
+      "after_event:7"
+    ],
+    "observed_naive_duplicate_points": [
+      "after_effect:1",
+      "after_effect:2",
+      "after_effect:3",
+      "after_event:10",
+      "after_event:16",
+      "after_event:7"
+    ],
+    "matches": true
+  },
+  "summary": "Across 25 crash points, the three-state repair produced 0 duplicated and 0 missing side effects, and 25 of 25 resumes finished cleanly. The naive baseline produced 6 duplicated side effects across 6 points and 0 missing, and 25 of 25 resumes finished cleanly. The three-state repair issued 59 model requests in total against 54 for the baseline, where an uninterrupted run takes 3. Shape check: the repair was clean at every point, and the baseline duplicated at exactly the points between a side effect and its result."
+}
