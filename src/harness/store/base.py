@@ -11,6 +11,10 @@ class SessionNotFoundError(Exception):
     pass
 
 
+class SessionCorruptError(Exception):
+    pass
+
+
 class SessionLog(Protocol):
     @property
     def session_id(self) -> str: ...
