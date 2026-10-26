@@ -15,12 +15,21 @@ Probed on 2026-10-26 against every `:free` model that advertises `tools`:
 - `thinkingmachines/inkling-small:free`: 403, gated to listed agent apps.
 
 ## Decision
-`cohere/north-mini-code:free` as the CLI default (`DEFAULT_MODEL`, overridable with `--model` or `HARNESS_MODEL`), with `nvidia/nemotron-3.5-lightning:free` as the fallback. North costs about a sixth of the reasoning tokens per turn, which matters on a 50-request day.
+Revised the same day: **NVIDIA NIM is the default provider** (`--provider nim`, key in `NVIDIA_API_KEY`), with `minimaxai/minimax-m3.1-flash` as the default model. OpenRouter stays available with `--provider openrouter`, defaulting to `cohere/north-mini-code:free`.
+
+Why NIM: the OpenRouter free key allows 50 requests a day, which the first two real runs used up. NIM allows 40 requests a minute. It speaks the same Chat Completions protocol, so it needed only a base URL, a provider name and support for its `reasoning_content` field (0023).
+
+NIM probes on 2026-10-26:
+- `minimaxai/minimax-m3.1-flash`: parallel tool calls in 4.4 s, round trip in 1.1 s, accepted an empty tool result and its own reasoning echoed back. Recorded in a cassette.
+- `nvidia/nemotron-3.5-lightning-30b-a3b`: tool calls in 1.9 s, round trip accepted.
+- `openai/gpt-oss-20b`: works, but 80 s for the first response.
+- `moonshotai/kimi-k2.6`, `z-ai/glm-5.3`, `z-ai/glm-5.3-flash`, `deepseek-ai/deepseek-v4.1-flash`: no response headers within 90 s. Popular models queue.
+- `nvidia/nemotron-3-super-120b-a12b`: 404, same as on OpenRouter.
 
 ## Consequences
-- Free-tier availability changes daily, so the fallback is part of the decision.
-- North fixed both fixture bugs correctly on its first edit (walkthrough section 5). A clean end-to-end run that finishes with `done` is pending the daily quota reset.
-- 50 free requests a day is about three agent tasks. Ten dollars of credit raises it to 1000.
+- **Acceptance run passed.** The fixture task on NIM with MiniMax finished with `done` in 4 turns, 9,042 input and 462 output tokens: it read both files in parallel, made one edit fixing both bugs, ran the tests (3 passed) and summarized.
+- On OpenRouter, north fixed both fixture bugs correctly on its first edit, but that run ended at the turn cap because of a fixture defect, now fixed.
+- A queued NIM model can sit longer than the 180 s read timeout. The adapter then retries, and the run fails after five attempts. Pick a fast model.
 
 ## What would change it
-The real-task runs: if north fails tasks that nemotron completes, swap them. Azure credits for runs that count replace both for measurement.
+MiniMax becoming slow or unavailable on NIM (fallback: Nemotron 3.5 Lightning), or Azure credits for runs that count.
