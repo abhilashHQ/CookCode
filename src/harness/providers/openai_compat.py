@@ -1,15 +1,8 @@
-import asyncio
 import json
-import random
-import time
-from collections.abc import AsyncGenerator, Callable, Mapping
-from contextlib import aclosing
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, cast
+from typing import Any
 
-import httpx
-
-from harness.core.cancel import CancelToken
 from harness.core.ids import new_id
 from harness.core.items import (
     Item,
@@ -29,8 +22,15 @@ from harness.providers.base import (
     ModelRequest,
     StreamEnd,
     StreamEvent,
-    StreamRetry,
     UsageReport,
+)
+from harness.providers.http import (
+    JSON,
+    RETRYABLE_STATUS,
+    StreamFailure,
+    StreamingHttpProvider,
+    as_array,
+    as_object,
 )
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
@@ -38,7 +38,6 @@ NIM_BASE_URL = "https://integrate.api.nvidia.com/v1"
 DEFAULT_CAPS = ModelCaps(
     context_window=128_000, parallel_tool_calls=True, reasoning="opaque", prompt_caching=False
 )
-RETRYABLE_STATUS = frozenset({408, 409, 425, 429, 500, 502, 503, 504, *range(520, 530)})
 EMPTY_RESULT = "(no output)"
 REASONING_TEXT_FIELDS = ("reasoning", "reasoning_content")
 FINISH_REASONS: dict[str, StopReason] = {
@@ -48,33 +47,6 @@ FINISH_REASONS: dict[str, StopReason] = {
     "length": "max_tokens",
     "content_filter": "refusal",
 }
-
-type JSON = dict[str, Any]
-
-
-def _object(value: object) -> JSON | None:
-    return cast(JSON, value) if isinstance(value, dict) else None
-
-
-def _array(value: object) -> list[object]:
-    return cast(list[object], value) if isinstance(value, list) else []
-
-
-class StreamFailure(Exception):
-    def __init__(
-        self,
-        reason: str,
-        *,
-        retryable: bool,
-        status: int | None = None,
-        retry_after_s: float | None = None,
-    ) -> None:
-        super().__init__(reason)
-        self.reason = reason
-        self.retryable = retryable
-        self.status = status
-        self.retry_after_s = retry_after_s
-
 
 def _result_content(result: ToolResult) -> str:
     content = result.content or EMPTY_RESULT
@@ -142,7 +114,7 @@ def to_messages(request: ModelRequest, *, provider: str) -> list[JSON]:
             if not item.replayable_to(provider, request.model):
                 continue
             turn = turn or _Turn()
-            turn.details.extend(_array(item.payload.get("reasoning_details")))
+            turn.details.extend(as_array(item.payload.get("reasoning_details")))
             for name in REASONING_TEXT_FIELDS:
                 text = item.payload.get(name)
                 if isinstance(text, str):
@@ -193,34 +165,12 @@ def build_body(
     return body
 
 
-class SSEDecoder:
-    def __init__(self) -> None:
-        self._data: list[str] = []
-
-    def feed(self, line: str) -> str | None:
-        if line == "":
-            return self.flush()
-        if line.startswith(":"):
-            return None
-        name, _, value = line.partition(":")
-        if name == "data":
-            self._data.append(value.removeprefix(" "))
-        return None
-
-    def flush(self) -> str | None:
-        if not self._data:
-            return None
-        data = "\n".join(self._data)
-        self._data = []
-        return data
-
-
 def _usage(raw: JSON) -> Usage:
     def number(value: Any) -> int:
         return value if isinstance(value, int) else 0
 
-    prompt = _object(raw.get("prompt_tokens_details")) or {}
-    completion = _object(raw.get("completion_tokens_details")) or {}
+    prompt = as_object(raw.get("prompt_tokens_details")) or {}
+    completion = as_object(raw.get("completion_tokens_details")) or {}
     cache_read = number(prompt.get("cached_tokens"))
     cache_write = number(prompt.get("cache_write_tokens"))
     return Usage(
@@ -264,7 +214,7 @@ def _tool_call(parts: _CallParts) -> ToolCall:
             parsed = json.loads(text)
         except json.JSONDecodeError:
             parsed = None
-        parsed_object = _object(parsed)
+        parsed_object = as_object(parsed)
         if parsed_object is not None:
             arguments = parsed_object
         else:
@@ -301,18 +251,18 @@ class ChatStreamAssembler:
         return [ItemStarted(index=self._indexes[key], kind=kind)]
 
     def feed(self, chunk: JSON) -> list[StreamEvent]:
-        error = _object(chunk.get("error"))
+        error = as_object(chunk.get("error"))
         if error is not None:
             raise _chunk_failure(error)
-        usage = _object(chunk.get("usage"))
+        usage = as_object(chunk.get("usage"))
         if usage is not None:
             self._usage = usage
         events: list[StreamEvent] = []
-        for value in _array(chunk.get("choices")):
-            choice = _object(value)
+        for value in as_array(chunk.get("choices")):
+            choice = as_object(value)
             if choice is None or choice.get("index", 0) != 0:
                 continue
-            events.extend(self._feed_delta(_object(choice.get("delta")) or {}))
+            events.extend(self._feed_delta(as_object(choice.get("delta")) or {}))
             finish = choice.get("finish_reason")
             if isinstance(finish, str):
                 self._finish = finish
@@ -326,8 +276,8 @@ class ChatStreamAssembler:
             if isinstance(text, str) and text:
                 self._reasoning.setdefault(name, []).append(text)
                 shown = shown or text
-        for value in _array(delta.get("reasoning_details")):
-            detail = _object(value)
+        for value in as_array(delta.get("reasoning_details")):
+            detail = as_object(value)
             if detail is None:
                 continue
             _merge_detail(self._details, self._detail_order, detail)
@@ -343,8 +293,8 @@ class ChatStreamAssembler:
             events.extend(self._start("message", "message"))
             self._text.append(content)
             events.append(ItemDelta(index=self._indexes["message"], text=content))
-        for value in _array(delta.get("tool_calls")):
-            wire = _object(value)
+        for value in as_array(delta.get("tool_calls")):
+            wire = as_object(value)
             if wire is None:
                 continue
             position = wire.get("index")
@@ -354,7 +304,7 @@ class ChatStreamAssembler:
             call_id = wire.get("id")
             if isinstance(call_id, str) and call_id:
                 parts.id = call_id
-            function = _object(wire.get("function")) or {}
+            function = as_object(wire.get("function")) or {}
             name = function.get("name")
             if isinstance(name, str):
                 parts.name += name
@@ -414,51 +364,14 @@ def _chunk_failure(error: JSON) -> StreamFailure:
     code = error.get("code")
     status = code if isinstance(code, int) else None
     message = str(error.get("message") or error)
-    metadata = _object(error.get("metadata")) or {}
+    metadata = as_object(error.get("metadata")) or {}
     if metadata.get("raw"):
         message = f"{message}: {str(metadata['raw'])[:300]}"
     retryable = status is None or status in RETRYABLE_STATUS
     return StreamFailure(f"stream error {status}: {message}", retryable=retryable, status=status)
 
 
-def _number(value: str | None) -> float | None:
-    if value is None:
-        return None
-    try:
-        return float(value)
-    except ValueError:
-        return None
-
-
-def server_wait(headers: httpx.Headers, now: float) -> float | None:
-    """Seconds the server asks us to wait: Retry-After, or the reset of an exhausted limit."""
-    retry_after = _number(headers.get("retry-after"))
-    if retry_after is not None:
-        return max(retry_after, 0.0)
-    reset_ms = _number(headers.get("x-ratelimit-reset"))
-    if _number(headers.get("x-ratelimit-remaining")) == 0 and reset_ms is not None:
-        return max(reset_ms / 1000 - now, 0.0)
-    return None
-
-
-async def _http_failure(response: httpx.Response, now: float) -> StreamFailure:
-    body = (await response.aread()).decode("utf-8", "replace")
-    try:
-        error = _object((_object(json.loads(body)) or {}).get("error"))
-        if error is not None:
-            body = _chunk_failure(error).reason
-    except json.JSONDecodeError:
-        pass
-    status = response.status_code
-    return StreamFailure(
-        f"HTTP {status}: {body[:500]}",
-        retryable=status in RETRYABLE_STATUS,
-        status=status,
-        retry_after_s=server_wait(response.headers, now),
-    )
-
-
-class OpenAICompatProvider:
+class OpenAICompatProvider(StreamingHttpProvider):
     """Chat Completions over raw HTTP. Covers OpenRouter and any OpenAI-compatible endpoint."""
 
     def __init__(
@@ -468,166 +381,31 @@ class OpenAICompatProvider:
         base_url: str = OPENROUTER_BASE_URL,
         name: str = "openrouter",
         caps: ModelCaps = DEFAULT_CAPS,
-        transport: httpx.AsyncBaseTransport | None = None,
-        max_retries: int = 4,
-        backoff_base_s: float = 1.0,
-        backoff_cap_s: float = 30.0,
-        connect_timeout_s: float = 30.0,
-        read_timeout_s: float = 180.0,
         extra_body: Mapping[str, Any] | None = None,
-        jitter: Callable[[], float] = random.random,
-        clock: Callable[[], float] = time.time,
+        **transport_policy: Any,
     ) -> None:
-        self.name = name
+        super().__init__(name=name, caps=caps, **transport_policy)
         self._api_key = api_key
         self._url = base_url.rstrip("/") + "/chat/completions"
-        self._caps = caps
-        self._transport = transport
-        self._max_retries = max_retries
-        self._backoff_base_s = backoff_base_s
-        self._backoff_cap_s = backoff_cap_s
-        self._timeout = httpx.Timeout(read_timeout_s, connect=connect_timeout_s)
         self._extra_body = dict(extra_body or {})
-        self._jitter = jitter
-        self._clock = clock
-
-    def capabilities(self, model: str) -> ModelCaps:
-        return self._caps
 
     def build_body(self, request: ModelRequest) -> JSON:
         return build_body(request, provider=self.name, extra=self._extra_body)
 
-    def _headers(self) -> dict[str, str]:
+    def url(self, model: str) -> str:
+        return self._url
+
+    def headers(self) -> dict[str, str]:
         headers = {"Content-Type": "application/json", "Accept": "text/event-stream"}
         if self._api_key:
             headers["Authorization"] = f"Bearer {self._api_key}"
         return headers
 
-    def _delay(self, attempt: int, failure: StreamFailure) -> float:
-        backoff = min(self._backoff_cap_s, self._backoff_base_s * 2 ** (attempt - 1))
-        backoff *= 0.5 + self._jitter() / 2
-        if failure.retry_after_s is not None:
-            backoff = max(backoff, failure.retry_after_s)
-        return backoff
+    def assembler(self, model: str) -> ChatStreamAssembler:
+        return ChatStreamAssembler(provider=self.name, model=model)
 
-    async def stream(
-        self, request: ModelRequest, cancel: CancelToken
-    ) -> AsyncGenerator[StreamEvent]:
-        body = self.build_body(request)
-        attempt = 0
-        async with httpx.AsyncClient(transport=self._transport, timeout=self._timeout) as client:
-            while True:
-                attempt += 1
-                if cancel.cancelled:
-                    yield StreamEnd(stop_reason="aborted")
-                    return
-                failure: StreamFailure | None = None
-                async with aclosing(self._attempt(client, body, request.model, cancel)) as events:
-                    async for event in events:
-                        if isinstance(event, StreamFailure):
-                            failure = event
-                            break
-                        yield event
-                        if isinstance(event, StreamEnd):
-                            return
-                assert failure is not None
-                wait = failure.retry_after_s
-                if failure.retryable and wait is not None and wait > self._backoff_cap_s:
-                    yield StreamEnd(
-                        stop_reason="error",
-                        error=f"{failure.reason} (the server asks to wait {wait:.0f}s, "
-                        f"over the {self._backoff_cap_s:.0f}s retry cap)",
-                    )
-                    return
-                if not failure.retryable or attempt > self._max_retries:
-                    tries = f" after {attempt} attempts" if attempt > 1 else ""
-                    yield StreamEnd(stop_reason="error", error=f"{failure.reason}{tries}")
-                    return
-                delay = self._delay(attempt, failure)
-                yield StreamRetry(
-                    attempt=attempt, delay_s=delay, reason=failure.reason, status=failure.status
-                )
-                try:
-                    await asyncio.wait_for(cancel.wait(), timeout=delay)
-                except TimeoutError:
-                    continue
-                yield StreamEnd(stop_reason="aborted")
-                return
+    def error_failure(self, error: JSON) -> StreamFailure:
+        return _chunk_failure(error)
 
-    async def _attempt(
-        self, client: httpx.AsyncClient, body: JSON, model: str, cancel: CancelToken
-    ) -> AsyncGenerator[StreamEvent | StreamFailure]:
-        queue: asyncio.Queue[StreamEvent | StreamFailure | None] = asyncio.Queue()
-        pump = asyncio.create_task(self._pump(client, body, model, queue))
-        stopping = asyncio.ensure_future(cancel.wait())
-        try:
-            while True:
-                getting = asyncio.ensure_future(queue.get())
-                await asyncio.wait({getting, stopping}, return_when=asyncio.FIRST_COMPLETED)
-                if not getting.done():
-                    getting.cancel()
-                    yield StreamEnd(stop_reason="aborted")
-                    return
-                event = getting.result()
-                if event is None:
-                    return
-                yield event
-                if isinstance(event, StreamFailure | StreamEnd):
-                    return
-        finally:
-            stopping.cancel()
-            pump.cancel()
-            await asyncio.gather(pump, stopping, return_exceptions=True)
-
-    async def _pump(
-        self,
-        client: httpx.AsyncClient,
-        body: JSON,
-        model: str,
-        queue: asyncio.Queue[StreamEvent | StreamFailure | None],
-    ) -> None:
-        try:
-            async with client.stream(
-                "POST", self._url, json=body, headers=self._headers()
-            ) as response:
-                if response.status_code != 200:
-                    await queue.put(await _http_failure(response, self._clock()))
-                    return
-                assembler = ChatStreamAssembler(provider=self.name, model=model)
-                decoder = SSEDecoder()
-                async for line in response.aiter_lines():
-                    data = decoder.feed(line)
-                    if data is None:
-                        continue
-                    if data.strip() == "[DONE]":
-                        break
-                    for event in assembler.feed(_parse_chunk(data)):
-                        await queue.put(event)
-                else:
-                    data = decoder.flush()
-                    if data is not None and data.strip() != "[DONE]":
-                        for event in assembler.feed(_parse_chunk(data)):
-                            await queue.put(event)
-                for event in assembler.finish():
-                    await queue.put(event)
-        except StreamFailure as failure:
-            await queue.put(failure)
-        except httpx.TransportError as exc:
-            await queue.put(
-                StreamFailure(f"{type(exc).__name__}: {exc or 'transport error'}", retryable=True)
-            )
-        except Exception as exc:
-            await queue.put(StreamFailure(f"{type(exc).__name__}: {exc}", retryable=False))
-        finally:
-            await queue.put(None)
-
-
-def _parse_chunk(data: str) -> JSON:
-    try:
-        chunk = json.loads(data)
-    except json.JSONDecodeError as exc:
-        raise StreamFailure(f"malformed stream chunk: {data[:200]!r}", retryable=True) from exc
-    parsed = _object(chunk)
-    if parsed is None:
-        raise StreamFailure(f"stream chunk is not an object: {data[:200]!r}", retryable=True)
-    return parsed
+    def is_terminator(self, data: str) -> bool:
+        return data.strip() == "[DONE]"

@@ -23,14 +23,8 @@ from harness.providers.base import (
     ToolSchema,
     UsageReport,
 )
-from harness.providers.openai_compat import (
-    ChatStreamAssembler,
-    SSEDecoder,
-    StreamFailure,
-    build_body,
-    server_wait,
-    to_messages,
-)
+from harness.providers.http import SSEDecoder, StreamFailure, server_wait
+from harness.providers.openai_compat import ChatStreamAssembler, build_body, to_messages
 from openai_helpers import (
     MODEL,
     Script,
