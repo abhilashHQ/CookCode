@@ -218,7 +218,7 @@ async def test_write_ahead_asks_the_log_for_durability(rigs: RigFactory, tmp_pat
         provider=FakeProvider([FakeTurn(items=(call("t"),)), FakeTurn(items=(say("x"),))]),
         env=LocalEnvironment(tmp_path),
         tools=ToolRegistry([_tool("t", "mutating", ok)]),
-        config=AgentConfig(model="m", system_prompt="s"),
+        config=AgentConfig(model="m", system_prompt="s", mode="yolo"),
     )
     await agent.run("go")
     assert log.durable["tool_call_started"] is True

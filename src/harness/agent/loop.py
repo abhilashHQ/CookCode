@@ -9,11 +9,15 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from harness import __version__
+from harness.agent.approval import Approver, Decision, PolicyOnlyApprover, Risk
 from harness.agent.context import build_request, estimate_tokens
+from harness.agent.gate import Mode, Policy, decide, session_rules
 from harness.agent.repair import NOT_EXECUTED, RepairAction, plan_repairs, repair_bodies
 from harness.agent.tools import Tool, ToolContext, ToolOutput, ToolRegistry
 from harness.core.cancel import CancelToken
 from harness.core.events import (
+    ApprovalRequested,
+    ApprovalResolved,
     BudgetExceeded,
     ErrorEvent,
     Event,
@@ -50,6 +54,7 @@ KILLED_MUTATING = (
     "[killed by an interrupt before it finished. It may have changed state, "
     "so inspect before retrying.]"
 )
+NO_REASON = "the approver gave no reason"
 TIMEOUT_MUTATING = (
     "[killed by the harness at the tool timeout. It may have changed state, "
     "so inspect before retrying.]"
@@ -66,6 +71,8 @@ class AgentConfig(BaseModel):
     max_tool_output_bytes: int = Field(default=30_000, ge=1)
     max_parallel_tools: int = Field(default=8, ge=1)
     cwd: str = "."
+    mode: Mode = "ask"
+    policy: Policy = Policy()
 
 
 class RunOutcome(BaseModel):
@@ -147,6 +154,14 @@ async def _watchdog(seconds: float, target: CancelToken) -> None:
     target.cancel(WALL_CLOCK)
 
 
+def _cwd(events: Sequence[Event], default: str) -> str:
+    for event in reversed(events):
+        body = event.body
+        if isinstance(body, ToolCallFinished) and body.cwd is not None:
+            return body.cwd
+    return default
+
+
 def _describe_validation(error: ValidationError) -> str:
     return "; ".join(
         f"{'.'.join(str(part) for part in detail['loc']) or '<root>'}: {detail['msg']}"
@@ -165,6 +180,7 @@ class Agent:
         config: AgentConfig,
         harness_version: str = __version__,
         repair_planner: Callable[[Sequence[Event]], list[RepairAction]] = plan_repairs,
+        approver: Approver | None = None,
     ) -> None:
         if config.limits.max_cost_usd is not None:
             raise ValueError("cost limits need pricing, which arrives in M3")
@@ -175,6 +191,7 @@ class Agent:
         self._config = config
         self._harness_version = harness_version
         self._repair_planner = repair_planner
+        self._approver: Approver = approver or PolicyOnlyApprover()
         self._steering: deque[str] = deque()
         self._active = False
 
@@ -250,11 +267,7 @@ class Agent:
         )
 
     def _current_cwd(self) -> str:
-        for event in reversed(self._log.read()):
-            body = event.body
-            if isinstance(body, ToolCallFinished) and body.cwd is not None:
-                return body.cwd
-        return self._config.cwd
+        return _cwd(self._log.read(), self._config.cwd)
 
     def _drain_steering(self) -> None:
         while self._steering:
@@ -372,9 +385,14 @@ class Agent:
                 self._append_result(tool_call.id, "error", resolved)
             else:
                 runnable.append(resolved)
+        approved, ungated = await self._gate_all(run, runnable)
+        if ungated:
+            pending = {dispatch.call.id for dispatch in (*approved, *ungated)}
+            self._close_out_not_executed([c for c in calls if c.id in pending])
+            return ()
         killed: set[str] = set()
         slots = asyncio.Semaphore(self._config.max_parallel_tools)
-        for batch in _batches(runnable):
+        for batch in _batches(approved):
             if run.cancelled():
                 self._close_out_not_executed([dispatch.call for dispatch in batch])
                 continue
@@ -382,6 +400,84 @@ class Agent:
                 for dispatch in batch:
                     group.create_task(self._run_call(run, dispatch, slots, killed))
         return tuple(tool_call.id for tool_call in calls if tool_call.id in killed)
+
+    async def _gate_all(
+        self, run: _RunState, runnable: Sequence[_Dispatch]
+    ) -> tuple[list[_Dispatch], list[_Dispatch]]:
+        approved: list[_Dispatch] = []
+        for index, dispatch in enumerate(runnable):
+            verdict = None if run.cancelled() else await self._gate(run, dispatch)
+            if verdict is None:
+                return approved, list(runnable[index:])
+            if verdict:
+                approved.append(dispatch)
+        return approved, []
+
+    async def _gate(self, run: _RunState, dispatch: _Dispatch) -> bool | None:
+        tool, tool_call = dispatch.tool, dispatch.call
+        events = self._log.read()
+        decision = decide(
+            tool=tool,
+            arguments=tool_call.arguments,
+            cwd=_cwd(events, self._config.cwd),
+            mode=self._config.mode,
+            policy=self._config.policy,
+            session_allow=session_rules(events),
+        )
+        if decision.action == "allow":
+            by_mode = decision.rule is not None and decision.rule.startswith("mode:")
+            if not by_mode or tool.side_effect != "read_only":
+                self._log.append(
+                    ApprovalResolved(call_id=tool_call.id, decision="allow", rule=decision.rule)
+                )
+            return True
+        if decision.action == "deny":
+            self._log.append(
+                ApprovalResolved(
+                    call_id=tool_call.id,
+                    decision="deny",
+                    reason=decision.reason,
+                    rule=decision.rule,
+                )
+            )
+            self._append_result(tool_call.id, "denied", f"denied: {decision.reason}")
+            return False
+        self._log.append(
+            ApprovalRequested(call_id=tool_call.id, risk=tool.side_effect, rule=decision.rule)
+        )
+        risk = Risk(side_effect=tool.side_effect, rule=decision.rule, reason=decision.reason)
+        answer = await self._ask(run, tool_call, risk)
+        if answer is None:
+            return None
+        self._log.append(
+            ApprovalResolved(
+                call_id=tool_call.id, decision=answer.action, reason=answer.reason, rule=answer.rule
+            )
+        )
+        if answer.action == "deny":
+            self._append_result(tool_call.id, "denied", f"denied: {answer.reason or NO_REASON}")
+            return False
+        return True
+
+    async def _ask(self, run: _RunState, tool_call: ToolCall, risk: Risk) -> Decision | None:
+        asking = asyncio.ensure_future(self._approver.decide(tool_call, risk, run.token))
+        stopping = asyncio.ensure_future(run.token.wait())
+        try:
+            await asyncio.wait({asking, stopping}, return_when=asyncio.FIRST_COMPLETED)
+        finally:
+            asking.cancel()
+            stopping.cancel()
+            await asyncio.gather(asking, stopping, return_exceptions=True)
+        if run.cancelled():
+            return None
+        if asking.cancelled():
+            return Decision(action="deny", reason="approver failed: CancelledError: ")
+        error = asking.exception()
+        if error is None:
+            return asking.result()
+        if not isinstance(error, Exception):
+            raise error
+        return Decision(action="deny", reason=f"approver failed: {type(error).__name__}: {error}")
 
     async def _run_call(
         self, run: _RunState, dispatch: _Dispatch, slots: asyncio.Semaphore, killed: set[str]

@@ -78,7 +78,12 @@ def build_agent(
         provider=provider,
         env=LocalEnvironment(workdir),
         tools=chaos_tools(TARGET, after_effect),
-        config=AgentConfig(model=MODEL, system_prompt=PROMPT, limits=Limits(max_turns=MAX_TURNS)),
+        config=AgentConfig(
+            model=MODEL,
+            system_prompt=PROMPT,
+            limits=Limits(max_turns=MAX_TURNS),
+            mode="yolo",
+        ),
         repair_planner=planner,
     )
     return agent, provider

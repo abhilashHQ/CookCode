@@ -1,3 +1,4 @@
+import posixpath
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -8,6 +9,12 @@ from harness.core.cancel import CancelToken
 from harness.core.events import SideEffect
 from harness.env.base import Environment
 from harness.providers.base import ToolSchema
+
+
+def resolve_path(cwd: str, path: str) -> str:
+    if posixpath.isabs(path):
+        return path
+    return posixpath.normpath(posixpath.join(cwd, path))
 
 
 @dataclass(frozen=True)

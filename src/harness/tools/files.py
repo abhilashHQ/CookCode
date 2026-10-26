@@ -1,18 +1,11 @@
-import posixpath
 import re
 
 from pydantic import BaseModel, Field
 
-from harness.agent.tools import Tool, ToolContext, ToolOutput
+from harness.agent.tools import Tool, ToolContext, ToolOutput, resolve_path
 
 MAX_LINE_CHARS = 2000
 LINE_TRUNCATED = " [... line truncated]"
-
-
-def resolve_path(cwd: str, path: str) -> str:
-    if posixpath.isabs(path):
-        return path
-    return posixpath.normpath(posixpath.join(cwd, path))
 
 
 def _error(message: str) -> ToolOutput:

@@ -79,7 +79,10 @@ def _agent(
         env=LocalEnvironment(workdir),
         tools=chaos_tools(TARGET, after_effect),
         config=AgentConfig(
-            model="scenario-1", system_prompt="append the lines", limits=Limits(max_turns=20)
+            model="scenario-1",
+            system_prompt="append the lines",
+            limits=Limits(max_turns=20),
+            mode="yolo",
         ),
         repair_planner=repair_planner,
     )

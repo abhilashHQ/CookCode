@@ -8,6 +8,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
+from harness.agent.approval import Approver, PolicyOnlyApprover
 from harness.agent.loop import Agent, AgentConfig
 from harness.agent.repair import RepairAction, plan_repairs, unresolved_calls
 from harness.agent.tools import Tool, ToolContext, ToolOutput, ToolRegistry
@@ -282,10 +283,12 @@ class RigFactory:
         limits: Limits | None = None,
         event_delay_s: float = 0.0,
         repair_planner: Callable[[Sequence[Event]], list[RepairAction]] = plan_repairs,
+        approver: Approver | None = None,
         **config: Any,
     ) -> Rig:
         log = log or self.open_log()
         provider = FakeProvider(script, event_delay_s=event_delay_s)
+        config.setdefault("mode", "yolo")
         agent_config = AgentConfig(
             model="fake-1",
             system_prompt="be brief",
@@ -299,6 +302,7 @@ class RigFactory:
             tools=ToolRegistry(tools),
             config=agent_config,
             repair_planner=repair_planner,
+            approver=approver or PolicyOnlyApprover(),
         )
         return Rig(agent=agent, log=log, provider=provider, workdir=self.workdir)
 

@@ -14,7 +14,7 @@ from harness.agent.gate import (
     split_command,
     subject,
 )
-from harness.agent.tools import Tool, ToolContext, ToolOutput
+from harness.agent.tools import Tool, ToolContext, ToolOutput, resolve_path
 from harness.core.events import (
     ApprovalRequested,
     ApprovalResolved,
@@ -24,7 +24,6 @@ from harness.core.events import (
     make_event,
 )
 from harness.tools import default_tools
-from harness.tools.files import resolve_path
 
 TOOLS = {tool.name: tool for tool in default_tools()}
 

@@ -7,7 +7,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from harness.agent.tools import Tool
+from harness.agent.tools import Tool, resolve_path
 from harness.core.events import ApprovalResolved, Event
 
 Mode = Literal["ask", "auto-edit", "yolo"]
@@ -42,12 +42,6 @@ class GateDecision(BaseModel):
     reason: str
 
 
-def _resolve(cwd: str, path: str) -> str:
-    if posixpath.isabs(path):
-        return path
-    return posixpath.normpath(posixpath.join(cwd, path))
-
-
 def _escapes(resolved: str) -> bool:
     return resolved == ".." or resolved.startswith("../")
 
@@ -60,7 +54,7 @@ def _path_forms(resolved: str) -> tuple[str, ...]:
 
 
 def inside_workspace(path: str, cwd: str) -> bool:
-    resolved = _resolve(cwd, path)
+    resolved = resolve_path(cwd, path)
     return not posixpath.isabs(resolved) and not _escapes(resolved)
 
 
@@ -69,7 +63,7 @@ def subject(tool_name: str, arguments: dict[str, Any], cwd: str) -> str:
         command = arguments.get("command")
         return command if isinstance(command, str) else "*"
     path = arguments.get("path")
-    return _resolve(cwd, path) if isinstance(path, str) else "*"
+    return resolve_path(cwd, path) if isinstance(path, str) else "*"
 
 
 class _Unbalanced(Exception):
@@ -716,7 +710,7 @@ def _decide_tool(
     validated = _validate(tool, arguments)
     touched = tool.touches(validated) if tool.touches and validated is not None else None
     if touched:
-        subjects = [_resolve(cwd, path) for path in touched]
+        subjects = [resolve_path(cwd, path) for path in touched]
     else:
         dumped = validated.model_dump() if validated is not None else arguments
         subjects = [subject(tool.name, dumped, cwd)]
