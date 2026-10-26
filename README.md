@@ -19,6 +19,13 @@ Headless: `uv run harness -p "<task>" --json` writes every event as one JSON lin
 `uv run harness schema` prints the event schema, and `uv run harness export <session>` writes
 the session as ATIF.
 
+Sessions: `uv run harness sessions` lists them newest first. `uv run harness resume <id>` (or
+`--resume <id>`) reopens one at the prompt or with `-p`, repairing any tool call a crash left
+open; `--continue` finishes an interrupted turn headless without a new prompt. Provider and
+model default to the session's unless given. `harness fork <id> [--at SEQ]` copies the log into a
+new session, and `harness replay <id>` rebuilds every logged request from the log and checks its
+items hash.
+
 Terminal-Bench through Harbor (Docker required):
 `uv run harbor run -d terminal-bench@2.0 -i <task> -a harness.harbor.agent:HarnessAgent -m nim/minimaxai/minimax-m3.1-flash`.
 

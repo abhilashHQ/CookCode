@@ -10,7 +10,14 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from harness.agent.approval import Approver, Decision, PolicyOnlyApprover, Risk
 from harness.agent.loop import RunOutcome
-from harness.cli.app import EXIT_CODES, Runtime, load_policy
+from harness.cli.app import (
+    EXIT_CODES,
+    SESSION_ERRORS,
+    Runtime,
+    load_policy,
+    load_resumed,
+    session_error,
+)
 from harness.core.cancel import CancelToken
 from harness.core.events import Event, ItemEvent, RunStarted
 from harness.core.items import Message, ToolCall
@@ -98,6 +105,11 @@ async def run_headless(
     stdout: TextIO | None = None,
 ) -> int:
     out = stdout or sys.stdout
+    try:
+        load_resumed(args)
+    except SESSION_ERRORS as exc:
+        print(f"harness: {session_error(args.resume, exc)}", file=sys.stderr)
+        return 1
     if provider is None and not os.environ.get(args.api_key_env):
         print(f"harness: set {args.api_key_env} to an API key for {args.base_url}", file=sys.stderr)
         return 1
@@ -111,7 +123,11 @@ async def run_headless(
         out.write(event.model_dump_json() + "\n")
         out.flush()
 
-    runtime = Runtime(args, emit if args.json else lambda event: None, provider, policy)
+    try:
+        runtime = Runtime(args, emit if args.json else lambda event: None, provider, policy)
+    except SESSION_ERRORS as exc:
+        print(f"harness: {session_error(args.resume, exc)}", file=sys.stderr)
+        return 1
     approver: Approver = (
         StdinApprover(LineReader(stdin or sys.stdin))
         if args.approvals == "stdin"

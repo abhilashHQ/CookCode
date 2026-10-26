@@ -4,7 +4,7 @@ import os
 import signal
 import subprocess
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, ValidationError
@@ -24,7 +24,7 @@ from harness.cli.terminal import (
     TerminalApprover,
 )
 from harness.core.cancel import CancelToken
-from harness.core.events import Event, Limits
+from harness.core.events import Event, Limits, RunConfig, RunStarted, SessionStarted
 from harness.core.ids import new_id
 from harness.env.local import LocalEnvironment
 from harness.providers.base import Provider, StreamEvent
@@ -34,6 +34,11 @@ from harness.providers.openai_compat import (
     OpenAICompatProvider,
 )
 from harness.redact import Redactor
+from harness.store.base import (
+    SessionCorruptError,
+    SessionLockedError,
+    SessionNotFoundError,
+)
 from harness.store.checkpoints import FileCheckpointStore
 from harness.store.jsonl import JsonlSessionStore
 from harness.tools import default_tools
@@ -49,6 +54,8 @@ SECRET_ENV = (
     "GEMINI_API_KEY",
     "ANTHROPIC_API_KEY",
 )
+OVERRIDABLE = ("provider", "model", "base_url", "api_key_env")
+SESSION_ERRORS = (SessionNotFoundError, SessionLockedError, SessionCorruptError, ValueError)
 EXIT_CODES = {"done": 0, "error": 1, "budget_exceeded": 2, "interrupted": 130}
 HELP = "commands: /undo [n] reverts file edits of the last n turns, /exit quits"
 
@@ -120,7 +127,11 @@ def load_policy(path: str | None) -> Policy:
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="harness",
-        description="Coding agent. Other commands: harness schema, harness export <session>.",
+        description=(
+            "Coding agent. Other commands: harness schema, harness export <session>, "
+            "harness sessions, harness resume <session>, harness fork <session>, "
+            "harness replay <session>."
+        ),
     )
     parser.add_argument("prompt", nargs="?", help="first prompt; omit to start at the prompt")
     parser.add_argument(
@@ -136,21 +147,71 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="headless: who answers approvals the policy leaves open",
     )
     parser.add_argument("--policy", help="JSON file with allow and deny rules (tool:pattern)")
-    parser.add_argument(
-        "--provider", choices=tuple(PRESETS), default=os.environ.get("HARNESS_PROVIDER", "nim")
-    )
-    parser.add_argument("--model", default=os.environ.get("HARNESS_MODEL"))
-    parser.add_argument("--base-url", default=os.environ.get("HARNESS_BASE_URL"))
+    parser.add_argument("--provider", choices=tuple(PRESETS))
+    parser.add_argument("--model")
+    parser.add_argument("--base-url")
     parser.add_argument("--api-key-env")
     parser.add_argument("--mode", choices=("ask", "auto-edit", "yolo"), default="ask")
     parser.add_argument("--max-turns", type=int, default=50)
     parser.add_argument("--once", action="store_true", help="exit after the first run")
+    parser.add_argument("--resume", metavar="SESSION", help="continue an existing session")
+    parser.add_argument(
+        "--continue",
+        dest="continue_turn",
+        action="store_true",
+        help="with --resume: finish the interrupted turn headless, without a new prompt",
+    )
     args = parser.parse_args(argv)
-    base_url, key_env, model = PRESETS[args.provider]
-    args.base_url = args.base_url or base_url
-    args.api_key_env = args.api_key_env or key_env
-    args.model = args.model or model
+    if args.continue_turn and args.resume is None:
+        parser.error("--continue needs --resume <session>")
+    if args.continue_turn and args.headless is not None:
+        parser.error("--continue and -p are exclusive")
+    if os.environ.get("HARNESS_PROVIDER", "nim") not in PRESETS:
+        parser.error(f"HARNESS_PROVIDER must be one of {', '.join(PRESETS)}")
+    args.overrides = {
+        key: value for key in OVERRIDABLE if (value := getattr(args, key)) is not None
+    }
+    apply_provider(args)
     return args
+
+
+def apply_provider(args: argparse.Namespace, recorded: RunConfig | None = None) -> None:
+    """Flags win, then the resumed session's config, then the environment, then the preset.
+    The session's model only carries over while its provider does."""
+    given: dict[str, str] = args.overrides
+    session = recorded.provider if recorded is not None and recorded.provider in PRESETS else None
+    args.provider = given.get("provider") or session or os.environ.get("HARNESS_PROVIDER", "nim")
+    base_url, key_env, model = PRESETS[args.provider]
+    args.base_url = given.get("base_url") or os.environ.get("HARNESS_BASE_URL") or base_url
+    args.api_key_env = given.get("api_key_env") or key_env
+    same = recorded is not None and given.get("provider", recorded.provider) == recorded.provider
+    args.model = (
+        given.get("model")
+        or (recorded.model if recorded is not None and same else None)
+        or os.environ.get("HARNESS_MODEL")
+        or model
+    )
+
+
+def session_config(events: Sequence[Event]) -> RunConfig | None:
+    for event in reversed(events):
+        if isinstance(event.body, RunStarted | SessionStarted):
+            return event.body.config
+    return None
+
+
+def session_error(session_id: str, exc: Exception) -> str:
+    if isinstance(exc, SessionNotFoundError):
+        return f"no session {session_id}"
+    if isinstance(exc, SessionLockedError):
+        return f"session {session_id} is open in another process"
+    return str(exc)
+
+
+def load_resumed(args: argparse.Namespace) -> None:
+    if args.resume is not None:
+        events = JsonlSessionStore(data_dir() / "sessions").read(args.resume)
+        apply_provider(args, session_config(events))
 
 
 class Runtime:
@@ -170,9 +231,9 @@ class Runtime:
         root = _workspace(cwd_path)
         self.cwd = os.path.relpath(cwd_path, root)
         data = data_dir()
-        self.session_id = new_id()
+        self.session_id: str = args.resume or new_id()
         store = JsonlSessionStore(data / "sessions", Redactor.from_env(SECRET_ENV, os.environ))
-        self.log = ObservedLog(store.open(self.session_id, create=True), sink)
+        self.log = ObservedLog(store.open(self.session_id, create=args.resume is None), sink)
         self.checkpoints = FileCheckpointStore(data / "checkpoints" / self.session_id)
         self.env = LocalEnvironment(root)
         self.instructions: list[InstructionFile] = []
@@ -293,8 +354,9 @@ class Session:
 
     def banner(self) -> None:
         loaded = ", ".join(file.path for file in self.instructions) or "none"
+        resumed = " (resumed)" if self.args.resume else ""
         self.t.line(
-            f"session {self.session_id} | {self.args.provider} {self.args.model} | "
+            f"session {self.session_id}{resumed} | {self.args.provider} {self.args.model} | "
             f"mode {self.args.mode}\n"
             f"workspace {self.env.root} (cwd {self.cwd}) | instructions: {loaded}\n{HELP}",
             DIM,
@@ -307,6 +369,11 @@ async def run_cli(
     provider: Provider | None = None,
     terminal: Terminal | None = None,
 ) -> int:
+    try:
+        load_resumed(args)
+    except SESSION_ERRORS as exc:
+        print(f"harness: {session_error(args.resume, exc)}", file=sys.stderr)
+        return 1
     if provider is None and not os.environ.get(args.api_key_env):
         print(f"harness: set {args.api_key_env} to an API key for {args.base_url}")
         return 1
@@ -316,8 +383,12 @@ async def run_cli(
         print(f"harness: {exc}")
         return 1
     terminal = terminal or Terminal()
+    try:
+        session = Session(args, terminal, provider, policy)
+    except SESSION_ERRORS as exc:
+        print(f"harness: {session_error(args.resume, exc)}", file=sys.stderr)
+        return 1
     await terminal.start()
-    session = Session(args, terminal, provider, policy)
     loop = asyncio.get_running_loop()
     loop.add_signal_handler(signal.SIGINT, session.on_interrupt)
     status = "done"
@@ -355,9 +426,9 @@ def main(argv: list[str] | None = None) -> int:
     if argv and argv[0] in commands.COMMANDS:
         return commands.COMMANDS[argv[0]](argv[1:])
     args = parse_args(argv)
-    if args.headless is not None:
+    if args.headless is not None or args.continue_turn:
         return asyncio.run(headless.run_headless(args))
     if args.json:
-        print("harness: --json needs -p <prompt>", file=sys.stderr)
+        print("harness: --json needs -p <prompt> or --continue", file=sys.stderr)
         return 1
     return asyncio.run(run_cli(args))
