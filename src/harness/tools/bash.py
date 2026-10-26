@@ -71,6 +71,18 @@ async def _bash(args: BashArgs, ctx: ToolContext) -> ToolOutput:
             cancel=ctx.cancel,
         )
     except Exception as exc:
+        if isinstance(exc, FileNotFoundError | NotADirectoryError) and (
+            posixpath.normpath(ctx.cwd) != "."
+        ):
+            return ToolOutput(
+                content=(
+                    f"the working directory {ctx.cwd} no longer exists, so the command did not "
+                    "run. The working directory is now the workspace root."
+                ),
+                status="error",
+                exit_status="error",
+                cwd=".",
+            )
         return ToolOutput(
             content=f"bash failed to run: {type(exc).__name__}: {exc}",
             status="error",

@@ -173,9 +173,7 @@ async def test_edit_replace_all(tmp_path: Path) -> None:
 
 async def test_edit_preserves_crlf_and_other_bytes(tmp_path: Path) -> None:
     (tmp_path / "f.txt").write_bytes(b"one\r\ntwo\r\nthree\r\n")
-    await run_tool(
-        edit_tool(), make_ctx(tmp_path), path="f.txt", old_string="two", new_string="2"
-    )
+    await run_tool(edit_tool(), make_ctx(tmp_path), path="f.txt", old_string="two", new_string="2")
     assert (tmp_path / "f.txt").read_bytes() == b"one\r\n2\r\nthree\r\n"
 
 
@@ -261,3 +259,21 @@ async def test_edit_resolves_against_the_tracked_cwd(tmp_path: Path) -> None:
         new_string="bye",
     )
     assert (tmp_path / "sub" / "f.txt").read_text() == "bye"
+
+
+async def test_read_stops_at_the_output_cap_with_a_continuation_hint(tmp_path: Path) -> None:
+    (tmp_path / "a.txt").write_text("".join(f"{'x' * 90}\n" for _ in range(100)))
+    out = await run_tool(read_tool(), make_ctx(tmp_path, max_output_bytes=1000), path="a.txt")
+    lines = out.content.splitlines()
+    assert len(lines) == 11
+    assert lines[-1] == "[... 90 more lines. Use offset=11 to continue.]"
+    assert len("\n".join(lines[:-1]).encode()) <= 1000
+
+
+async def test_read_returns_at_least_one_line_under_a_tiny_cap(tmp_path: Path) -> None:
+    (tmp_path / "a.txt").write_text("a long first line\nsecond\n")
+    out = await run_tool(read_tool(), make_ctx(tmp_path, max_output_bytes=5), path="a.txt")
+    assert out.content.splitlines() == [
+        "     1\ta long first line",
+        "[... 1 more lines. Use offset=2 to continue.]",
+    ]

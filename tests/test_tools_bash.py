@@ -211,9 +211,7 @@ async def test_cancel_reports_killed_and_no_cwd(tmp_path: Path) -> None:
 async def test_a_pre_cancelled_token_never_runs_the_command(tmp_path: Path) -> None:
     token = CancelToken()
     token.cancel("user")
-    out = await run_tool(
-        bash_tool(), make_ctx(tmp_path, cancel=token), command="touch ran.txt"
-    )
+    out = await run_tool(bash_tool(), make_ctx(tmp_path, cancel=token), command="touch ran.txt")
     assert out.exit_status == "killed"
     assert not (tmp_path / "ran.txt").exists()
 
@@ -259,7 +257,7 @@ async def test_exported_variables_do_not_persist_between_calls(rigs: RigFactory)
     rig = rigs.make(
         [
             FakeTurn(items=(call("bash", command="export X=1"),)),
-            FakeTurn(items=(call("bash", command="echo \"[$X]\""),)),
+            FakeTurn(items=(call("bash", command='echo "[$X]"'),)),
             FakeTurn(items=(say("done"),)),
         ],
         [bash_tool()],
@@ -311,3 +309,16 @@ async def test_a_timeout_through_the_agent_is_unknown(rigs: RigFactory) -> None:
         await asyncio.sleep(0.05)
     assert _live_with_token(token) == []
     assert_every_call_resolved(events)
+
+
+async def test_a_deleted_working_directory_resets_to_the_root_without_running(
+    tmp_path: Path,
+) -> None:
+    out = await run_tool(bash_tool(), make_ctx(tmp_path, cwd="gone"), command="touch marker")
+    assert out.status == "error"
+    assert out.cwd == "."
+    assert "gone no longer exists" in out.content
+    assert not (tmp_path / "marker").exists()
+    after = await run_tool(bash_tool(), make_ctx(tmp_path, cwd=out.cwd), command="pwd")
+    assert after.status == "ok"
+    assert after.cwd == "."

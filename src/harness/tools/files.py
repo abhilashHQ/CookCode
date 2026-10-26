@@ -44,12 +44,17 @@ class ReadArgs(BaseModel):
     limit: int = Field(default=2000, ge=1, description="Maximum number of lines to return.")
 
 
-def _numbered(lines: list[str], start: int) -> list[str]:
+def _numbered(lines: list[str], start: int, max_bytes: int) -> list[str]:
     numbered: list[str] = []
+    size = 0
     for number, line in enumerate(lines, start=start):
         if len(line) > MAX_LINE_CHARS:
             line = line[:MAX_LINE_CHARS] + LINE_TRUNCATED
-        numbered.append(f"{number:>6}\t{line}")
+        entry = f"{number:>6}\t{line}"
+        size += len(entry.encode()) + 1
+        if numbered and size > max_bytes:
+            break
+        numbered.append(entry)
     return numbered
 
 
@@ -65,11 +70,10 @@ async def _read(args: ReadArgs, ctx: ToolContext) -> ToolOutput:
     first = args.offset - 1
     if first >= len(lines):
         return _error(f"offset {args.offset} is past the end of {args.path} ({len(lines)} lines)")
-    window = lines[first : first + args.limit]
-    out = _numbered(window, args.offset)
-    remaining = len(lines) - (first + len(window))
+    out = _numbered(lines[first : first + args.limit], args.offset, ctx.max_output_bytes)
+    remaining = len(lines) - (first + len(out))
     if remaining > 0:
-        next_offset = args.offset + len(window)
+        next_offset = args.offset + len(out)
         out.append(f"[... {remaining} more lines. Use offset={next_offset} to continue.]")
     return ToolOutput(content="\n".join(out))
 
@@ -79,7 +83,8 @@ def read_tool() -> Tool[ReadArgs]:
         name="read",
         description=(
             "Read a text file with line numbers. Use offset and limit to page through large "
-            "files. Lines over 2000 characters are cut."
+            "files. Lines over 2000 characters are cut, and output stops at the output cap with "
+            "a hint giving the offset to continue from."
         ),
         args_model=ReadArgs,
         side_effect="read_only",
