@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from harness.agent.repair import NOT_EXECUTED, RepairAction, unresolved_calls
+from harness.agent.repair import MUTATING_LOST, NOT_EXECUTED, RepairAction, unresolved_calls
 from harness.agent.tools import Tool, ToolContext, ToolOutput, ToolRegistry
 from harness.core.cancel import CancelToken
 from harness.core.events import Event
@@ -92,6 +92,30 @@ def naive_plan_repairs(events: Sequence[Event]) -> list[RepairAction]:
         RepairAction(call_id=call.id, tool=call.name, status="interrupted", reason=NOT_EXECUTED)
         for call in unresolved_calls(events)
     ]
+
+
+def conservative_plan_repairs(
+    registry: ToolRegistry,
+) -> Callable[[Sequence[Event]], list[RepairAction]]:
+    def plan(events: Sequence[Event]) -> list[RepairAction]:
+        actions: list[RepairAction] = []
+        for call in unresolved_calls(events):
+            tool = registry.get(call.name)
+            if tool is None or tool.side_effect != "read_only":
+                actions.append(
+                    RepairAction(
+                        call_id=call.id, tool=call.name, status="unknown", reason=MUTATING_LOST
+                    )
+                )
+            else:
+                actions.append(
+                    RepairAction(
+                        call_id=call.id, tool=call.name, status="interrupted", reason=NOT_EXECUTED
+                    )
+                )
+        return actions
+
+    return plan
 
 
 LineState = Literal["confirmed", "suspect", "unconfirmed"]

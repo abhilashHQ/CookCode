@@ -7,16 +7,22 @@ import pytest
 
 from agent_helpers import assert_every_call_resolved, tool_calls
 from harness.agent.loop import Agent, AgentConfig
-from harness.agent.repair import NOT_EXECUTED, RepairAction, plan_repairs
-from harness.agent.tools import ToolContext
+from harness.agent.repair import MUTATING_LOST, NOT_EXECUTED, RepairAction, plan_repairs
+from harness.agent.tools import ToolContext, ToolRegistry
 from harness.chaos import experiment
-from harness.chaos.scenario import ScenarioProvider, chaos_tools, naive_plan_repairs
+from harness.chaos.scenario import (
+    ScenarioProvider,
+    chaos_tools,
+    conservative_plan_repairs,
+    naive_plan_repairs,
+)
 from harness.core.cancel import CancelToken
 from harness.core.events import (
     Event,
     EventBody,
     ItemEvent,
     Limits,
+    ModelRequestFinished,
     ModelRequestStarted,
     SideEffect,
     ToolCallFinished,
@@ -266,6 +272,46 @@ def test_naive_repairs_call_every_dangling_call_not_executed() -> None:
     assert plan_repairs(events)[0].status == "unknown"
 
 
+def test_conservative_repairs_use_only_the_registry_and_ignore_write_ahead_records() -> None:
+    calls = (
+        ItemEvent(item=_append("m", "L1")),
+        ItemEvent(item=_read("r")),
+        ItemEvent(item=_append("n", "L2")),
+    )
+    bare = _events(*calls)
+    with_records = _events(
+        *calls,
+        _started("m", "append_line", "mutating"),
+        ToolCallFinished(
+            call_id="m", exit_status="ok", duration_s=0.1, output_bytes=0, truncated=False
+        ),
+        _started("r", "read_target", "read_only"),
+    )
+    plan = conservative_plan_repairs(chaos_tools(TARGET))
+
+    actions = plan(bare)
+
+    assert [(a.call_id, a.status) for a in actions] == [
+        ("m", "unknown"),
+        ("r", "interrupted"),
+        ("n", "unknown"),
+    ]
+    assert {a.status: a.reason for a in actions} == {
+        "unknown": MUTATING_LOST,
+        "interrupted": NOT_EXECUTED,
+    }
+    assert plan(with_records) == actions
+
+
+def test_conservative_repairs_treat_a_tool_missing_from_the_registry_as_unknown() -> None:
+    events = _events(ItemEvent(item=_append("m", "L1")), ItemEvent(item=_read("r")))
+    plan = conservative_plan_repairs(ToolRegistry([]))
+
+    actions = plan(events)
+
+    assert [a.status for a in actions] == ["unknown", "unknown"]
+
+
 async def test_stream_honors_cancel_and_keeps_finished_items() -> None:
     provider = ScenarioProvider(LINES, per_step=2)
     token = CancelToken()
@@ -309,7 +355,11 @@ async def test_read_target_returns_empty_for_missing_file(workdir: Path) -> None
 
 @pytest.mark.parametrize(
     ("planner", "expected"),
-    [(plan_repairs, ["L1", "L2", "L3"]), (naive_plan_repairs, ["L1", "L1", "L2", "L3"])],
+    [
+        (plan_repairs, ["L1", "L2", "L3"]),
+        (conservative_plan_repairs(chaos_tools(TARGET)), ["L1", "L2", "L3"]),
+        (naive_plan_repairs, ["L1", "L1", "L2", "L3"]),
+    ],
 )
 async def test_scenario_resumes_after_a_crash_between_effect_and_result(
     log: JsonlSessionLog, workdir: Path, planner: Planner, expected: list[str]
@@ -396,13 +446,14 @@ def test_a_worker_that_dies_any_other_way_is_a_driver_error(tmp_path: Path) -> N
 
 
 def test_crash_between_effect_and_result_duplicates_only_for_the_naive_baseline(
-    tmp_path: Path,
+    reference: experiment.ReferenceRun, tmp_path: Path
 ) -> None:
-    result = experiment.evaluate_point("after_effect:1", tmp_path)
+    result = experiment.evaluate_point("after_effect:1", tmp_path, reference)
 
     assert (result.ours.duplicates, result.ours.missing) == (0, 0)
+    assert (result.conservative.duplicates, result.conservative.missing) == (0, 0)
     assert (result.naive.duplicates, result.naive.missing) == (1, 0)
-    assert result.ours.resume_ok and result.naive.resume_ok
+    assert result.ours.resume_ok and result.conservative.resume_ok and result.naive.resume_ok
     assert result.file_lines_at_crash == 1
 
 
@@ -411,12 +462,39 @@ def test_crash_before_the_effect_runs_costs_nothing_in_either_mode(
 ) -> None:
     seq = _first_started_seq(reference.events)
 
-    result = experiment.evaluate_point(f"after_event:{seq}", tmp_path)
+    result = experiment.evaluate_point(f"after_event:{seq}", tmp_path, reference)
 
     assert (result.ours.duplicates, result.ours.missing) == (0, 0)
+    assert (result.conservative.duplicates, result.conservative.missing) == (0, 0)
     assert (result.naive.duplicates, result.naive.missing) == (0, 0)
     assert result.ours.resume_ok and result.naive.resume_ok
-    assert result.ours.extra_requests == result.naive.extra_requests + 1
+    assert result.ours.resume_requests == result.naive.resume_requests + 1
+
+
+def test_conservative_pays_for_calls_that_were_emitted_but_never_started(
+    reference: experiment.ReferenceRun, tmp_path: Path
+) -> None:
+    seq = next(e.seq for e in reference.events if isinstance(e.body, ModelRequestFinished))
+
+    result = experiment.evaluate_point(f"after_event:{seq}", tmp_path, reference)
+
+    assert (result.conservative.duplicates, result.conservative.missing) == (0, 0)
+    assert (result.ours.duplicates, result.ours.missing) == (0, 0)
+    assert result.conservative.resume_ok and result.ours.resume_ok
+    assert result.conservative.resume_requests > result.ours.resume_requests
+
+
+def test_crash_prefix_check_accepts_the_reference_prefix_and_rejects_divergence(
+    reference: experiment.ReferenceRun,
+) -> None:
+    events = reference.events
+    experiment.check_crash_prefix("after_event:5", events[:6], events)
+    experiment.check_crash_prefix("after_effect:1", events[:2], events)
+
+    with pytest.raises(experiment.ChaosError, match="after_event:5"):
+        experiment.check_crash_prefix("after_event:5", [*events[:5], events[7]], events)
+    with pytest.raises(experiment.ChaosError, match="after_event:5"):
+        experiment.check_crash_prefix("after_event:5", events[:5], events)
 
 
 def test_copies_are_byte_identical_to_the_crashed_state(tmp_path: Path) -> None:
@@ -424,9 +502,11 @@ def test_copies_are_byte_identical_to_the_crashed_state(tmp_path: Path) -> None:
     experiment.run_crash(crashed, "after_effect:2")
 
     experiment.copy_state(crashed, tmp_path / "ours")
+    experiment.copy_state(crashed, tmp_path / "conservative")
     experiment.copy_state(crashed, tmp_path / "naive")
 
     assert experiment.tree_digest(tmp_path / "ours") == experiment.tree_digest(crashed)
+    assert experiment.tree_digest(tmp_path / "conservative") == experiment.tree_digest(crashed)
     assert experiment.tree_digest(tmp_path / "naive") == experiment.tree_digest(crashed)
     (tmp_path / "naive" / "work" / TARGET).write_text("tampered\n")
     assert experiment.tree_digest(tmp_path / "naive") != experiment.tree_digest(crashed)
@@ -445,16 +525,17 @@ def test_report_generator_writes_both_files_and_totals_equal_the_row_sums(
     data = json.loads((out / "chaos-m1.json").read_text())
     assert [row["point"] for row in data["rows"]] == points
     assert "2026-01-02" in markdown and "page cache" in markdown
-    for mode in ("ours", "naive"):
+    for mode in ("ours", "conservative", "naive"):
         rows = [row[mode] for row in data["rows"]]
         totals = data["totals"][mode]
         assert totals["points"] == len(points)
         assert totals["duplicates"] == sum(r["duplicates"] for r in rows)
         assert totals["missing"] == sum(r["missing"] for r in rows)
         assert totals["resume_ok"] == sum(r["resume_ok"] for r in rows)
-        assert totals["extra_requests"] == sum(r["extra_requests"] for r in rows)
+        assert totals["resume_requests"] == sum(r["resume_requests"] for r in rows)
         assert totals == report.totals[mode].model_dump()
     assert data["totals"]["ours"]["duplicates"] == 0
+    assert data["totals"]["conservative"]["duplicates"] == 0
     assert data["totals"]["naive"]["duplicates"] == 2
     assert report.shape.matches
     assert chr(0x2014) not in markdown and chr(0x2013) not in markdown

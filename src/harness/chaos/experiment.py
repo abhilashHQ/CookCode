@@ -16,7 +16,12 @@ from pydantic import BaseModel, ConfigDict
 
 from harness.agent.repair import plan_repairs
 from harness.chaos.checks import resolution_problems
-from harness.chaos.scenario import APPEND_LINE, naive_plan_repairs
+from harness.chaos.scenario import (
+    APPEND_LINE,
+    chaos_tools,
+    conservative_plan_repairs,
+    naive_plan_repairs,
+)
 from harness.chaos.worker import (
     AFTER_EFFECT,
     AFTER_EVENT,
@@ -41,6 +46,7 @@ __all__ = [
     "PointResult",
     "ReferenceRun",
     "Report",
+    "check_crash_prefix",
     "copy_state",
     "enumerate_points",
     "evaluate_point",
@@ -55,7 +61,7 @@ __all__ = [
 
 CRASH_TIMEOUT_S = 120.0
 REPORT_STEM = "chaos-m1"
-MODES = ("ours", "naive")
+MODES = ("ours", "conservative", "naive")
 
 
 class ChaosError(Exception):
@@ -70,7 +76,7 @@ class ModeResult(_Model):
     duplicates: int
     missing: int
     resume_ok: bool
-    extra_requests: int
+    resume_requests: int
     status: str
     problems: tuple[str, ...]
 
@@ -83,6 +89,7 @@ class PointResult(_Model):
     last_event: str
     file_lines_at_crash: int
     ours: ModeResult
+    conservative: ModeResult
     naive: ModeResult
 
 
@@ -93,11 +100,12 @@ class Totals(_Model):
     missing: int
     points_with_missing: int
     resume_ok: int
-    extra_requests: int
+    resume_requests: int
 
 
 class ShapeCheck(_Model):
     ours_clean: bool
+    conservative_clean: bool
     expected_naive_duplicate_points: tuple[str, ...]
     observed_naive_duplicate_points: tuple[str, ...]
     matches: bool
@@ -263,26 +271,42 @@ def _resume(root: Path, planner: Planner) -> ModeResult:
         duplicates=sum(max(0, counts[line] - 1) for line in LINES),
         missing=sum(1 for line in LINES if counts[line] == 0),
         resume_ok=outcome.status == "done" and not problems,
-        extra_requests=len(provider.requests),
+        resume_requests=len(provider.requests),
         status=outcome.status,
         problems=tuple(problems),
     )
 
 
-def evaluate_point(point: str, base: Path) -> PointResult:
+def check_crash_prefix(
+    point: str, crashed: Sequence[Event], reference: Sequence[Event]
+) -> None:
+    kind, ordinal = parse_point(point)
+    crashed_kinds = [event.body.type for event in crashed]
+    if kind == AFTER_EVENT and len(crashed) != ordinal + 1:
+        raise ChaosError(f"{point}: crashed log has {len(crashed)} events, expected {ordinal + 1}")
+    expected = [event.body.type for event in reference[: len(crashed)]]
+    if len(crashed) > len(reference) or crashed_kinds != expected:
+        raise ChaosError(
+            f"{point}: crashed log diverges from the reference run: "
+            f"{crashed_kinds} versus {expected}"
+        )
+
+
+def evaluate_point(point: str, base: Path, reference: ReferenceRun) -> PointResult:
     kind, ordinal = parse_point(point)
     crashed = base / "crashed"
     run_crash(crashed, point)
     events = JsonlSessionStore(crashed / "sessions").read(SESSION_ID)
     lines = _file_lines(crashed / "work")
-    if kind == AFTER_EVENT and (not events or events[-1].seq != ordinal):
-        last = events[-1].seq if events else None
-        raise ChaosError(f"{point}: crashed log ends at seq {last}, expected {ordinal}")
+    check_crash_prefix(point, events, reference.events)
     if kind == AFTER_EFFECT and lines != list(LINES[:ordinal]):
         raise ChaosError(f"{point}: crashed file holds {lines}, expected {list(LINES[:ordinal])}")
-    copy_state(crashed, base / "ours")
-    copy_state(crashed, base / "naive")
+    for mode in MODES:
+        copy_state(crashed, base / mode)
     ours = _resume(base / "ours", plan_repairs)
+    conservative = _resume(
+        base / "conservative", conservative_plan_repairs(chaos_tools(TARGET))
+    )
     naive = _resume(base / "naive", naive_plan_repairs)
     return PointResult(
         point=point,
@@ -292,12 +316,13 @@ def evaluate_point(point: str, base: Path) -> PointResult:
         last_event=events[-1].body.type if events else "none",
         file_lines_at_crash=len(lines),
         ours=ours,
+        conservative=conservative,
         naive=naive,
     )
 
 
 def _totals(rows: Sequence[PointResult], mode: str) -> Totals:
-    results = [row.ours if mode == "ours" else row.naive for row in rows]
+    results: list[ModeResult] = [getattr(row, mode) for row in rows]
     return Totals(
         points=len(results),
         duplicates=sum(r.duplicates for r in results),
@@ -305,7 +330,7 @@ def _totals(rows: Sequence[PointResult], mode: str) -> Totals:
         missing=sum(r.missing for r in results),
         points_with_missing=sum(1 for r in results if r.missing > 0),
         resume_ok=sum(1 for r in results if r.resume_ok),
-        extra_requests=sum(r.extra_requests for r in results),
+        resume_requests=sum(r.resume_requests for r in results),
     )
 
 
@@ -315,33 +340,40 @@ def _shape(
     points = [row.point for row in rows]
     expected = expected_naive_duplicate_points(reference.events, points)
     observed = {row.point for row in rows if row.naive.duplicates > 0}
-    ours = totals["ours"]
+    ours, conservative = totals["ours"], totals["conservative"]
     ours_clean = ours.duplicates == 0 and ours.missing == 0
+    conservative_clean = conservative.duplicates == 0 and conservative.missing == 0
     return ShapeCheck(
         ours_clean=ours_clean,
+        conservative_clean=conservative_clean,
         expected_naive_duplicate_points=tuple(sorted(expected)),
         observed_naive_duplicate_points=tuple(sorted(observed)),
-        matches=ours_clean and expected == observed,
+        matches=ours_clean and conservative_clean and expected == observed,
     )
 
 
 def _summary(totals: dict[str, Totals], shape: ShapeCheck, reference: ReferenceRun) -> str:
-    ours, naive = totals["ours"], totals["naive"]
+    ours, cons, naive = totals["ours"], totals["conservative"], totals["naive"]
     text = (
         f"Across {ours.points} crash points, the three-state repair produced "
-        f"{ours.duplicates} duplicated and {ours.missing} missing side effects, and "
-        f"{ours.resume_ok} of {ours.points} resumes finished cleanly. The naive baseline "
-        f"produced {naive.duplicates} duplicated side effects across "
-        f"{naive.points_with_duplicates} points and {naive.missing} missing, and "
-        f"{naive.resume_ok} of {naive.points} resumes finished cleanly. "
-        f"The three-state repair issued {ours.extra_requests} model requests in total against "
-        f"{naive.extra_requests} for the baseline, where an uninterrupted run takes "
-        f"{reference.requests}. "
+        f"{ours.duplicates} duplicated and {ours.missing} missing side effects, with "
+        f"{ours.resume_ok} of {ours.points} clean resumes and {ours.resume_requests} model "
+        f"requests. The conservative two-state repair, which has no write-ahead records and "
+        f"marks every dangling mutating call unknown, produced {cons.duplicates} duplicated "
+        f"and {cons.missing} missing, with {cons.resume_ok} of {cons.points} clean resumes and "
+        f"{cons.resume_requests} requests. The naive two-state repair, which marks every "
+        f"dangling call not executed, produced {naive.duplicates} duplicated side effects "
+        f"across {naive.points_with_duplicates} points and {naive.missing} missing, with "
+        f"{naive.resume_ok} of {naive.points} clean resumes and {naive.resume_requests} "
+        f"requests. An uninterrupted run takes {reference.requests} requests. Both safe repairs "
+        f"avoid duplicates. Write-ahead records save {cons.resume_requests - ours.resume_requests} "
+        f"verify requests over the conservative repair, because a call that never started is "
+        f"known to be safe to issue again. "
     )
     if shape.matches:
         text += (
-            "Shape check: the repair was clean at every point, and the baseline duplicated "
-            "at exactly the points between a side effect and its result."
+            "Shape check: both safe repairs were clean at every point, and the naive repair "
+            "duplicated at exactly the points between a side effect and its result."
         )
     else:
         unexpected = sorted(
@@ -352,7 +384,8 @@ def _summary(totals: dict[str, Totals], shape: ShapeCheck, reference: ReferenceR
         )
         text += (
             "SHAPE MISMATCH: the numbers differ from the expected shape. "
-            f"Repair clean at every point: {shape.ours_clean}. "
+            f"Three-state clean at every point: {shape.ours_clean}. "
+            f"Conservative clean at every point: {shape.conservative_clean}. "
             f"Baseline duplicated at unexpected points: {unexpected}. "
             f"Baseline did not duplicate at expected points: {absent}."
         )
@@ -375,12 +408,11 @@ def _git_commit() -> str:
 
 def _cell(result: ModeResult) -> str:
     ok = "yes" if result.resume_ok else "NO"
-    return f"{result.duplicates} | {result.missing} | {ok} | {result.extra_requests}"
+    return f"{result.duplicates} | {result.missing} | {ok} | {result.resume_requests}"
 
 
 def _render(report: Report) -> str:
     scenario = report.scenario
-    ours, naive = report.totals["ours"], report.totals["naive"]
     lines = [
         "# Chaos experiment, M1",
         "",
@@ -403,10 +435,11 @@ def _render(report: Report) -> str:
         "| model requests |",
         "|---|---|---|---|---|---|---|",
     ]
-    for name, totals in (("ours", ours), ("naive", naive)):
+    for name in MODES:
+        totals = report.totals[name]
         lines.append(
             f"| {name} | {totals.points} | {totals.duplicates} | {totals.points_with_duplicates} "
-            f"| {totals.missing} | {totals.resume_ok} | {totals.extra_requests} |"
+            f"| {totals.missing} | {totals.resume_ok} | {totals.resume_requests} |"
         )
     lines += [
         "",
@@ -415,13 +448,14 @@ def _render(report: Report) -> str:
         "Each mode shows duplicates, missing, resume_ok, model requests in the resume.",
         "",
         "| point | last event | file lines | ours dup | ours miss | ours ok | ours req "
+        "| cons dup | cons miss | cons ok | cons req "
         "| naive dup | naive miss | naive ok | naive req |",
-        "|---|---|---|---|---|---|---|---|---|---|---|",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for row in report.rows:
         lines.append(
             f"| {row.point} | {row.last_event} | {row.file_lines_at_crash} "
-            f"| {_cell(row.ours)} | {_cell(row.naive)} |"
+            f"| {_cell(row.ours)} | {_cell(row.conservative)} | {_cell(row.naive)} |"
         )
     lines += [
         "",
@@ -430,9 +464,12 @@ def _render(report: Report) -> str:
         "Each point runs the scenario in a subprocess that SIGKILLs itself, either right after "
         "the log append for a given seq returns (`after_event:k`) or right after the shell exec "
         "that performed a given side effect (`after_effect:i`). The crashed directory (session "
-        "log plus work dir) is copied byte for byte into two directories. One resumes with the "
-        "three-state repair, the other with a naive baseline that marks every dangling call "
-        "as not executed. Both use a fresh scenario provider and one `run(None)`. A resume that "
+        "log plus work dir) is copied byte for byte into three directories. One resumes with the "
+        "three-state repair, one with a conservative two-state repair that ignores write-ahead "
+        "records and marks every dangling mutating call unknown, and one with a naive two-state "
+        "repair that marks every dangling call not executed. Each uses a fresh scenario provider "
+        "and one `run(None)`. For `after_event:k` the crashed log's event kinds must equal the "
+        "reference run's first k+1 kinds, or the driver fails. A resume that "
         "does not end `done`, leaves a dangling call, gives a call more than one result, or "
         "leaves a gap in the seqs is not `resume_ok`.",
         "",
@@ -443,7 +480,8 @@ def _render(report: Report) -> str:
         "behavior under power loss or a kernel crash. It tests the repair rules against process "
         "death at every event boundary and after every side effect. The scenario provider is "
         "deterministic and goal-driven, so the numbers describe the repair logic, not model "
-        "behavior.",
+        "behavior. Crashes are injected only into the first run, never into the resume itself, "
+        "and there is one scenario shape.",
         "",
     ]
     return "\n".join(lines)
@@ -458,7 +496,7 @@ def run_experiment(
         selected = list(points) if points is not None else enumerate_points(reference)
         rows: list[PointResult] = []
         for index, point in enumerate(selected):
-            rows.append(evaluate_point(point, scratch_path / f"p{index:03d}"))
+            rows.append(evaluate_point(point, scratch_path / f"p{index:03d}", reference))
             print(f"[{index + 1}/{len(selected)}] {point}", file=sys.stderr)
     totals = {mode: _totals(rows, mode) for mode in MODES}
     shape = _shape(rows, reference, totals)
@@ -494,7 +532,7 @@ def totals_line(report: Report) -> str:
         t = report.totals[mode]
         parts.append(
             f"{mode}: duplicates={t.duplicates} missing={t.missing} "
-            f"resume_ok={t.resume_ok}/{t.points}"
+            f"resume_ok={t.resume_ok}/{t.points} requests={t.resume_requests}"
         )
     return " | ".join(parts)
 

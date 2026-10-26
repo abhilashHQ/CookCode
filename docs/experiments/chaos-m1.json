@@ -1,6 +1,6 @@
 {
-  "harness_commit": "2f6004ff4c8faca476ee6b9dacb81a406680e8fd",
-  "date": "2026-10-25",
+  "harness_commit": "562a27c79eb590556855c9f8e076a28ca38ade84",
+  "date": "2026-10-26",
   "scenario": {
     "lines": [
       "L1",
@@ -25,7 +25,15 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 3,
+        "resume_requests": 3,
+        "status": "done",
+        "problems": []
+      },
+      "conservative": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "resume_requests": 3,
         "status": "done",
         "problems": []
       },
@@ -33,7 +41,7 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 3,
+        "resume_requests": 3,
         "status": "done",
         "problems": []
       }
@@ -49,7 +57,15 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 3,
+        "resume_requests": 3,
+        "status": "done",
+        "problems": []
+      },
+      "conservative": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "resume_requests": 3,
         "status": "done",
         "problems": []
       },
@@ -57,7 +73,7 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 3,
+        "resume_requests": 3,
         "status": "done",
         "problems": []
       }
@@ -73,7 +89,15 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 3,
+        "resume_requests": 3,
+        "status": "done",
+        "problems": []
+      },
+      "conservative": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "resume_requests": 3,
         "status": "done",
         "problems": []
       },
@@ -81,7 +105,7 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 3,
+        "resume_requests": 3,
         "status": "done",
         "problems": []
       }
@@ -97,7 +121,15 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 3,
+        "resume_requests": 3,
+        "status": "done",
+        "problems": []
+      },
+      "conservative": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "resume_requests": 4,
         "status": "done",
         "problems": []
       },
@@ -105,7 +137,7 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 3,
+        "resume_requests": 3,
         "status": "done",
         "problems": []
       }
@@ -121,7 +153,15 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 3,
+        "resume_requests": 3,
+        "status": "done",
+        "problems": []
+      },
+      "conservative": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "resume_requests": 4,
         "status": "done",
         "problems": []
       },
@@ -129,7 +169,7 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 3,
+        "resume_requests": 3,
         "status": "done",
         "problems": []
       }
@@ -145,7 +185,15 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 3,
+        "resume_requests": 3,
+        "status": "done",
+        "problems": []
+      },
+      "conservative": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "resume_requests": 4,
         "status": "done",
         "problems": []
       },
@@ -153,7 +201,7 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 3,
+        "resume_requests": 3,
         "status": "done",
         "problems": []
       }
@@ -169,7 +217,15 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 4,
+        "resume_requests": 4,
+        "status": "done",
+        "problems": []
+      },
+      "conservative": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "resume_requests": 4,
         "status": "done",
         "problems": []
       },
@@ -177,7 +233,7 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 3,
+        "resume_requests": 3,
         "status": "done",
         "problems": []
       }
@@ -193,7 +249,15 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 3,
+        "resume_requests": 3,
+        "status": "done",
+        "problems": []
+      },
+      "conservative": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "resume_requests": 3,
         "status": "done",
         "problems": []
       },
@@ -201,7 +265,7 @@
         "duplicates": 1,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 3,
+        "resume_requests": 3,
         "status": "done",
         "problems": []
       }
@@ -217,7 +281,15 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 2,
+        "resume_requests": 2,
+        "status": "done",
+        "problems": []
+      },
+      "conservative": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "resume_requests": 3,
         "status": "done",
         "problems": []
       },
@@ -225,7 +297,7 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 2,
+        "resume_requests": 2,
         "status": "done",
         "problems": []
       }
@@ -241,7 +313,15 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 3,
+        "resume_requests": 3,
+        "status": "done",
+        "problems": []
+      },
+      "conservative": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "resume_requests": 3,
         "status": "done",
         "problems": []
       },
@@ -249,7 +329,7 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 2,
+        "resume_requests": 2,
         "status": "done",
         "problems": []
       }
@@ -265,7 +345,15 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 3,
+        "resume_requests": 3,
+        "status": "done",
+        "problems": []
+      },
+      "conservative": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "resume_requests": 3,
         "status": "done",
         "problems": []
       },
@@ -273,7 +361,7 @@
         "duplicates": 1,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 2,
+        "resume_requests": 2,
         "status": "done",
         "problems": []
       }
@@ -289,7 +377,15 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 2,
+        "resume_requests": 2,
+        "status": "done",
+        "problems": []
+      },
+      "conservative": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "resume_requests": 2,
         "status": "done",
         "problems": []
       },
@@ -297,7 +393,7 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 2,
+        "resume_requests": 2,
         "status": "done",
         "problems": []
       }
@@ -313,7 +409,15 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 2,
+        "resume_requests": 2,
+        "status": "done",
+        "problems": []
+      },
+      "conservative": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "resume_requests": 2,
         "status": "done",
         "problems": []
       },
@@ -321,7 +425,7 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 2,
+        "resume_requests": 2,
         "status": "done",
         "problems": []
       }
@@ -337,7 +441,15 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 2,
+        "resume_requests": 2,
+        "status": "done",
+        "problems": []
+      },
+      "conservative": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "resume_requests": 3,
         "status": "done",
         "problems": []
       },
@@ -345,7 +457,7 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 2,
+        "resume_requests": 2,
         "status": "done",
         "problems": []
       }
@@ -361,7 +473,15 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 2,
+        "resume_requests": 2,
+        "status": "done",
+        "problems": []
+      },
+      "conservative": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "resume_requests": 3,
         "status": "done",
         "problems": []
       },
@@ -369,7 +489,7 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 2,
+        "resume_requests": 2,
         "status": "done",
         "problems": []
       }
@@ -385,7 +505,15 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 3,
+        "resume_requests": 3,
+        "status": "done",
+        "problems": []
+      },
+      "conservative": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "resume_requests": 3,
         "status": "done",
         "problems": []
       },
@@ -393,7 +521,7 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 2,
+        "resume_requests": 2,
         "status": "done",
         "problems": []
       }
@@ -409,7 +537,15 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 2,
+        "resume_requests": 2,
+        "status": "done",
+        "problems": []
+      },
+      "conservative": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "resume_requests": 2,
         "status": "done",
         "problems": []
       },
@@ -417,7 +553,7 @@
         "duplicates": 1,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 2,
+        "resume_requests": 2,
         "status": "done",
         "problems": []
       }
@@ -433,7 +569,15 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 1,
+        "resume_requests": 1,
+        "status": "done",
+        "problems": []
+      },
+      "conservative": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "resume_requests": 1,
         "status": "done",
         "problems": []
       },
@@ -441,7 +585,7 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 1,
+        "resume_requests": 1,
         "status": "done",
         "problems": []
       }
@@ -457,7 +601,15 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 1,
+        "resume_requests": 1,
+        "status": "done",
+        "problems": []
+      },
+      "conservative": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "resume_requests": 1,
         "status": "done",
         "problems": []
       },
@@ -465,7 +617,7 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 1,
+        "resume_requests": 1,
         "status": "done",
         "problems": []
       }
@@ -481,7 +633,15 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 1,
+        "resume_requests": 1,
+        "status": "done",
+        "problems": []
+      },
+      "conservative": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "resume_requests": 1,
         "status": "done",
         "problems": []
       },
@@ -489,7 +649,7 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 1,
+        "resume_requests": 1,
         "status": "done",
         "problems": []
       }
@@ -505,7 +665,15 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 1,
+        "resume_requests": 1,
+        "status": "done",
+        "problems": []
+      },
+      "conservative": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "resume_requests": 1,
         "status": "done",
         "problems": []
       },
@@ -513,7 +681,7 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 1,
+        "resume_requests": 1,
         "status": "done",
         "problems": []
       }
@@ -529,7 +697,15 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 1,
+        "resume_requests": 1,
+        "status": "done",
+        "problems": []
+      },
+      "conservative": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "resume_requests": 1,
         "status": "done",
         "problems": []
       },
@@ -537,7 +713,7 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 1,
+        "resume_requests": 1,
         "status": "done",
         "problems": []
       }
@@ -553,7 +729,15 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 3,
+        "resume_requests": 3,
+        "status": "done",
+        "problems": []
+      },
+      "conservative": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "resume_requests": 3,
         "status": "done",
         "problems": []
       },
@@ -561,7 +745,7 @@
         "duplicates": 1,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 3,
+        "resume_requests": 3,
         "status": "done",
         "problems": []
       }
@@ -577,7 +761,15 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 3,
+        "resume_requests": 3,
+        "status": "done",
+        "problems": []
+      },
+      "conservative": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "resume_requests": 3,
         "status": "done",
         "problems": []
       },
@@ -585,7 +777,7 @@
         "duplicates": 1,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 2,
+        "resume_requests": 2,
         "status": "done",
         "problems": []
       }
@@ -601,7 +793,15 @@
         "duplicates": 0,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 2,
+        "resume_requests": 2,
+        "status": "done",
+        "problems": []
+      },
+      "conservative": {
+        "duplicates": 0,
+        "missing": 0,
+        "resume_ok": true,
+        "resume_requests": 2,
         "status": "done",
         "problems": []
       },
@@ -609,7 +809,7 @@
         "duplicates": 1,
         "missing": 0,
         "resume_ok": true,
-        "extra_requests": 2,
+        "resume_requests": 2,
         "status": "done",
         "problems": []
       }
@@ -623,7 +823,16 @@
       "missing": 0,
       "points_with_missing": 0,
       "resume_ok": 25,
-      "extra_requests": 59
+      "resume_requests": 59
+    },
+    "conservative": {
+      "points": 25,
+      "duplicates": 0,
+      "points_with_duplicates": 0,
+      "missing": 0,
+      "points_with_missing": 0,
+      "resume_ok": 25,
+      "resume_requests": 65
     },
     "naive": {
       "points": 25,
@@ -632,11 +841,12 @@
       "missing": 0,
       "points_with_missing": 0,
       "resume_ok": 25,
-      "extra_requests": 54
+      "resume_requests": 54
     }
   },
   "shape": {
     "ours_clean": true,
+    "conservative_clean": true,
     "expected_naive_duplicate_points": [
       "after_effect:1",
       "after_effect:2",
@@ -655,5 +865,5 @@
     ],
     "matches": true
   },
-  "summary": "Across 25 crash points, the three-state repair produced 0 duplicated and 0 missing side effects, and 25 of 25 resumes finished cleanly. The naive baseline produced 6 duplicated side effects across 6 points and 0 missing, and 25 of 25 resumes finished cleanly. The three-state repair issued 59 model requests in total against 54 for the baseline, where an uninterrupted run takes 3. Shape check: the repair was clean at every point, and the baseline duplicated at exactly the points between a side effect and its result."
+  "summary": "Across 25 crash points, the three-state repair produced 0 duplicated and 0 missing side effects, with 25 of 25 clean resumes and 59 model requests. The conservative two-state repair, which has no write-ahead records and marks every dangling mutating call unknown, produced 0 duplicated and 0 missing, with 25 of 25 clean resumes and 65 requests. The naive two-state repair, which marks every dangling call not executed, produced 6 duplicated side effects across 6 points and 0 missing, with 25 of 25 clean resumes and 54 requests. An uninterrupted run takes 3 requests. Both safe repairs avoid duplicates. Write-ahead records save 6 verify requests over the conservative repair, because a call that never started is known to be safe to issue again. Shape check: both safe repairs were clean at every point, and the naive repair duplicated at exactly the points between a side effect and its result."
 }
