@@ -1,6 +1,6 @@
 # 0011. Interrupt versus crash close-out
 
-Status: accepted (M1), with a gate concern below
+Status: accepted (M1 gate, 2026-10-26)
 Date: 2026-10-26
 
 ## Context
@@ -12,6 +12,8 @@ A run can stop on request (user interrupt, wall-clock limit) or without warning 
 - Two paths with one status rule: the loop closes out what it can, and repair handles the rest.
 
 ## Decision
+**Gate:** Accepted at the M1 gate on 2026-10-26: cooperative cancellation stays for now. Add a grace timeout with hard cancellation when the first tool or provider that bypasses the token appears.
+
 `run()` makes an internal `CancelToken`. The caller's token and a wall-clock watchdog both cancel it, with the caller's reason (default `"user"`) or `"wall_clock"`. Providers and tools see only the internal token.
 
 **Graceful path.** The loop closes out every call of the current step itself, then appends `interrupted(phase, killed)`, or `budget_exceeded(wall_clock)`, then `session_finished`. The log needs no repair.

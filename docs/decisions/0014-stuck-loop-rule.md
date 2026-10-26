@@ -1,6 +1,6 @@
 # 0014. Stuck-loop rule
 
-Status: open until the M1 gate
+Status: accepted (M1 gate, 2026-10-26)
 Date: 2026-10-26
 
 ## Context
@@ -12,7 +12,7 @@ A model can repeat the same call and get the same result, turn after turn. The s
 - **Inject a nudge after N identical calls.** The loop appends a message telling the model it is repeating itself and should change approach. Cost: tokens and an extra event type or a reuse of the steer path. It cannot kill a healthy run, and the turn cap still ends one that ignores the nudge.
 
 ## Decision
-Open until the M1 gate.
+**Gate:** Accepted at the M1 gate on 2026-10-26: no stuck-loop rule in M1. Revisit at M6 with measured repeated-call data, starting with a nudge message.
 
 **Recommendation.** Ship M1 with no rule and the turn cap as the backstop. Nothing available now can measure a rule, and a wrong rule is harder to remove than a missing one. At M6, when real runs exist, test the nudge against no rule on the benchmark tasks. Define identical as same tool, same arguments and same result content, with N around 3, and log the nudge as an event so runs can be compared. If a rule is wanted before M6, pick the nudge. Stopping outright is the worst option because it trades a cost problem for silent failures.
 

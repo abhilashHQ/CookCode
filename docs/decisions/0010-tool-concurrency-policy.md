@@ -1,6 +1,6 @@
 # 0010. Tool concurrency policy
 
-Status: provisional, confirm at the M1 gate
+Status: accepted (M1 gate, 2026-10-26)
 Date: 2026-10-26
 
 ## Context
@@ -13,6 +13,8 @@ A response can hold several tool calls. Running them all at once is fast and let
 - A per-tool "parallel safe" flag: more precise, but every tool author must declare it, and `side_effect` already covers the safe case.
 
 ## Decision
+**Gate:** Accepted at the M1 gate on 2026-10-26: keep the policy (consecutive read-only calls concurrent, mutating and external calls alone, in order) with the cap of 8.
+
 `_batches` splits the valid calls, in call order, into maximal runs of consecutive `read_only` calls and one single-call batch for each `mutating` or `external` call. Batches run in order, each in an `asyncio.TaskGroup`. Calls in a read-only batch run concurrently under a semaphore of `AgentConfig.max_parallel_tools`, default 8, created per dispatch. A mutating call waits for earlier reads, and later reads wait for it. Calls that fail validation are answered up front and skipped, so read, unknown, read is one batch.
 
 Results are appended in completion order, right after each call finishes. `build_request` reorders each contiguous block of results into the order of the calls of the response it answers. That response is every call since the previous result block or user message, so text the model writes between two calls does not split it. The log records what happened, and the model sees one fixed order whatever the timing was.

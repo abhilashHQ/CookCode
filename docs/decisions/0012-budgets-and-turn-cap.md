@@ -1,6 +1,6 @@
 # 0012. Budgets and the turn cap
 
-Status: provisional, confirm at the M1 gate
+Status: accepted (M1 gate, 2026-10-26)
 Date: 2026-10-26
 
 ## Context
@@ -13,6 +13,8 @@ An agent that loops without limit burns money and time. The loop needs hard stop
 - Cost limit now: needs a price table that does not exist until M3.
 
 ## Decision
+**Gate:** Accepted at the M1 gate on 2026-10-26: the turn cap stays at 50 until M6 measures real turn counts.
+
 `Limits` has four fields and `AgentConfig` defaults to `Limits(max_turns=50)`.
 
 - **Turns.** A turn is one model request, counted when the request starts, so a failed request counts. At a boundary, `turns >= max_turns` appends `budget_exceeded(turns)` and ends `budget_exceeded`.
