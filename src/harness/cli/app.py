@@ -23,14 +23,27 @@ from harness.core.events import Limits
 from harness.core.ids import new_id
 from harness.env.local import LocalEnvironment
 from harness.providers.base import Provider
-from harness.providers.openai_compat import OPENROUTER_BASE_URL, OpenAICompatProvider
+from harness.providers.openai_compat import (
+    NIM_BASE_URL,
+    OPENROUTER_BASE_URL,
+    OpenAICompatProvider,
+)
 from harness.redact import Redactor
 from harness.store.checkpoints import FileCheckpointStore
 from harness.store.jsonl import JsonlSessionStore
 from harness.tools import default_tools
 
-DEFAULT_MODEL = "cohere/north-mini-code:free"
-SECRET_ENV = ("OPENROUTER_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_API_KEY")
+PRESETS = {
+    "nim": (NIM_BASE_URL, "NVIDIA_API_KEY", "minimaxai/minimax-m3.1-flash"),
+    "openrouter": (OPENROUTER_BASE_URL, "OPENROUTER_API_KEY", "cohere/north-mini-code:free"),
+}
+SECRET_ENV = (
+    "NVIDIA_API_KEY",
+    "OPENROUTER_API_KEY",
+    "OPENAI_API_KEY",
+    "GEMINI_API_KEY",
+    "ANTHROPIC_API_KEY",
+)
 EXIT_CODES = {"done": 0, "error": 1, "budget_exceeded": 2, "interrupted": 130}
 HELP = "commands: /undo [n] reverts file edits of the last n turns, /exit quits"
 
@@ -75,15 +88,21 @@ def _data_dir() -> Path:
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="harness", description="Coding agent, plain CLI.")
     parser.add_argument("prompt", nargs="?", help="first prompt; omit to start at the prompt")
-    parser.add_argument("--model", default=os.environ.get("HARNESS_MODEL", DEFAULT_MODEL))
     parser.add_argument(
-        "--base-url", default=os.environ.get("HARNESS_BASE_URL", OPENROUTER_BASE_URL)
+        "--provider", choices=tuple(PRESETS), default=os.environ.get("HARNESS_PROVIDER", "nim")
     )
-    parser.add_argument("--api-key-env", default="OPENROUTER_API_KEY")
+    parser.add_argument("--model", default=os.environ.get("HARNESS_MODEL"))
+    parser.add_argument("--base-url", default=os.environ.get("HARNESS_BASE_URL"))
+    parser.add_argument("--api-key-env")
     parser.add_argument("--mode", choices=("ask", "auto-edit", "yolo"), default="ask")
     parser.add_argument("--max-turns", type=int, default=50)
     parser.add_argument("--once", action="store_true", help="exit after the first run")
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    base_url, key_env, model = PRESETS[args.provider]
+    args.base_url = args.base_url or base_url
+    args.api_key_env = args.api_key_env or key_env
+    args.model = args.model or model
+    return args
 
 
 class Session:
@@ -114,7 +133,9 @@ class Session:
             BASE_PROMPT.format(root=self.env.root, cwd=self.cwd), self.instructions
         )
         provider = self.provider or OpenAICompatProvider(
-            api_key=os.environ.get(self.args.api_key_env), base_url=self.args.base_url
+            api_key=os.environ.get(self.args.api_key_env),
+            base_url=self.args.base_url,
+            name=self.args.provider,
         )
         config = AgentConfig(
             model=self.args.model,
@@ -189,7 +210,8 @@ class Session:
     def banner(self) -> None:
         loaded = ", ".join(file.path for file in self.instructions) or "none"
         self.t.line(
-            f"session {self.session_id} | {self.args.model} | mode {self.args.mode}\n"
+            f"session {self.session_id} | {self.args.provider} {self.args.model} | "
+            f"mode {self.args.mode}\n"
             f"workspace {self.env.root} (cwd {self.cwd}) | instructions: {loaded}\n{HELP}",
             DIM,
         )

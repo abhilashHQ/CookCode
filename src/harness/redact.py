@@ -12,6 +12,7 @@ _PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ),
     ("anthropic_key", re.compile(_NOT_IN_TOKEN + r"sk-ant-[A-Za-z0-9_-]{20,}")),
     ("openrouter_key", re.compile(_NOT_IN_TOKEN + r"sk-or-v1-[A-Za-z0-9]{32,}")),
+    ("nvidia_key", re.compile(_NOT_IN_TOKEN + r"nvapi-[A-Za-z0-9_-]{32,}")),
     ("openai_key", re.compile(_NOT_IN_TOKEN + r"sk-(?:proj-)?[A-Za-z0-9_-]{20,}")),
     ("aws_access_key", re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b")),
     ("github_token", re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,})")),

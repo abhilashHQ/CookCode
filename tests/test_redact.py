@@ -7,6 +7,7 @@ from harness.redact import Redactor
 FAKES = {
     "anthropic_key": "sk-ant-" + "a1B2" * 10,
     "openrouter_key": "sk-or-v1-" + "f0" * 32,
+    "nvidia_key": "nvapi-" + "Ab3_x-" * 10,
     "openai_key": "sk-proj-" + "Zx9_" * 8,
     "aws_access_key": "AKIA" + "ABCDEFGHIJKLMNOP",
     "github_token": "ghp_" + "a" * 36,

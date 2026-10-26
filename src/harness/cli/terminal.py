@@ -199,7 +199,9 @@ class Display:
         lines = result.content.splitlines()
         color = GREEN if result.status == "ok" else RED
         label = "ok" if result.status == "ok" else result.status
-        self._t.line(f"  [{label}] {len(result.content)} chars", color)
+        call = self._calls.get(result.call_id)
+        source = f" {describe_call(call)}" if call is not None else ""
+        self._t.line(f"  [{label}]{source}: {len(result.content)} chars", color)
         preview = lines if result.status != "ok" else lines[:RESULT_PREVIEW_LINES]
         for line in preview[: RESULT_PREVIEW_LINES * 2]:
             self._t.line(f"  | {_short(line, 160)}", DIM)

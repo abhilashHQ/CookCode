@@ -135,6 +135,43 @@ def test_reasoning_only_turn_still_sends_a_valid_assistant_message() -> None:
     assert messages[-1]["reasoning_details"]
 
 
+def test_reasoning_content_is_replayed_under_its_own_field() -> None:
+    thought = Reasoning(
+        provider="nim", model_family=MODEL, payload={"reasoning_content": "check notes first"}
+    )
+    messages = to_messages(request(thought, CALL_A), provider="nim")
+    assert messages[-1]["reasoning_content"] == "check notes first"
+    assert "reasoning" not in messages[-1]
+
+
+def test_reasoning_content_deltas_become_a_reasoning_item() -> None:
+    assembler = ChatStreamAssembler(provider="nim", model=MODEL)
+    events = [
+        *assembler.feed(delta(reasoning_content="check ")),
+        *assembler.feed(delta(reasoning_content="notes")),
+        *assembler.feed(delta(content="ok")),
+        *assembler.feed(delta("stop")),
+        *assembler.finish(),
+    ]
+    assert [(e.index, e.text) for e in events if isinstance(e, ItemDelta)] == [
+        (0, "check "), (0, "notes"), (1, "ok")
+    ]
+    reasoning = next(e.item for e in events if isinstance(e, ItemDone))
+    assert isinstance(reasoning, Reasoning)
+    assert reasoning.payload == {"reasoning_content": "check notes"}
+    assert reasoning.summary_text == "check notes"
+
+
+def test_duplicate_reasoning_fields_show_once_and_both_replay() -> None:
+    assembler = ChatStreamAssembler(provider="nim", model=MODEL)
+    events = assembler.feed(delta(reasoning="same", reasoning_content="same"))
+    assert [e.text for e in events if isinstance(e, ItemDelta)] == ["same"]
+    assembler.feed(delta("stop"))
+    reasoning = next(e.item for e in assembler.finish() if isinstance(e, ItemDone))
+    assert isinstance(reasoning, Reasoning)
+    assert reasoning.payload == {"reasoning": "same", "reasoning_content": "same"}
+
+
 def test_plain_reasoning_text_is_replayed_when_there_are_no_details() -> None:
     thought = Reasoning(provider="openrouter", model_family=MODEL, payload={"reasoning": "hmm"})
     messages = to_messages(request(thought, CALL_A), provider="openrouter")

@@ -23,7 +23,11 @@ from harness.providers.cassette import (
     ReplayTransport,
     first_difference,
 )
-from harness.providers.openai_compat import OpenAICompatProvider
+from harness.providers.openai_compat import (
+    NIM_BASE_URL,
+    OPENROUTER_BASE_URL,
+    OpenAICompatProvider,
+)
 from harness.redact import Redactor
 from openai_helpers import Script, ok, provider, text_stream
 
@@ -118,14 +122,22 @@ class Tape:
     provider: OpenAICompatProvider
 
 
+PROVIDERS = {
+    "openrouter": (OPENROUTER_BASE_URL, "OPENROUTER_API_KEY"),
+    "nim": (NIM_BASE_URL, "NVIDIA_API_KEY"),
+}
+
+
 @pytest.fixture
 def tape(request: pytest.FixtureRequest) -> Iterator[Tape]:
+    provider_name = getattr(request, "param", "openrouter")
+    base_url, key_env = PROVIDERS[provider_name]
     name = request.node.name.replace("[", "-").replace("]", "").replace("/", "_").replace(":", "_")
     path = CASSETTES / f"{name}.json"
     if RECORD:
         cassette = Cassette()
         transport: httpx.AsyncBaseTransport = RecordingTransport(cassette)
-        key = os.environ["OPENROUTER_API_KEY"]
+        key = os.environ[key_env]
     else:
         if not path.exists():
             pytest.fail(f"missing cassette {path.name}; record with HARNESS_RECORD=1")
@@ -133,7 +145,11 @@ def tape(request: pytest.FixtureRequest) -> Iterator[Tape]:
         transport = ReplayTransport(cassette)
         key = "replay"
     source = OpenAICompatProvider(
-        api_key=key, transport=transport, backoff_base_s=0.0 if not RECORD else 2.0
+        api_key=key,
+        base_url=base_url,
+        name=provider_name,
+        transport=transport,
+        backoff_base_s=0.0 if not RECORD else 2.0,
     )
     yield Tape(provider=source)
     if RECORD:
@@ -152,6 +168,16 @@ def items_of(events: list[StreamEvent]) -> list[Item]:
 
 @pytest.mark.parametrize("model", MODELS)
 async def test_openrouter_tool_round_trip(tape: Tape, model: str) -> None:
+    await round_trip(tape, model)
+
+
+@pytest.mark.parametrize("tape", ["nim"], indirect=True)
+@pytest.mark.parametrize("model", ["minimaxai/minimax-m3.1-flash"])
+async def test_nim_tool_round_trip(tape: Tape, model: str) -> None:
+    await round_trip(tape, model)
+
+
+async def round_trip(tape: Tape, model: str) -> None:
     ask = text_message("user", "Read notes.txt and todo.txt, then tell me what notes.txt says.")
     first = await run(
         tape.provider, ModelRequest(model=model, system=SYSTEM, tools=(READ_TOOL,), items=(ask,))

@@ -52,7 +52,7 @@ async def test_one_shot_run_shows_calls_results_and_status(workspace: Path) -> N
     assert code == 0
     assert "instructions: AGENTS.md" in text
     assert "> read(path=notes.txt)" in text
-    assert "[ok]" in text and "deploy friday" in text
+    assert "[ok] read(path=notes.txt):" in text and "deploy friday" in text
     assert "[done] 2 turns" in text
     assert "Always be terse." in fake.requests[0].system
     assert str(workspace) in fake.requests[0].system
@@ -109,9 +109,9 @@ async def test_ctrl_c_interrupts_the_run_and_exits_130(workspace: Path) -> None:
 async def test_missing_api_key_is_reported(
     workspace: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("NVIDIA_API_KEY", raising=False)
     assert await run_cli(parse_args(["--once", "hi"])) == 1
-    assert "set OPENROUTER_API_KEY" in capsys.readouterr().out
+    assert "set NVIDIA_API_KEY" in capsys.readouterr().out
 
 
 def risk(*subjects: str) -> Risk:
@@ -138,6 +138,18 @@ async def test_stdin_from_dev_null_reads_eof_without_a_selector_error() -> None:
         await term.start()
         assert await term.readline("> ") is None
         term.close()
+
+
+def test_provider_presets_fill_url_key_and_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in ("HARNESS_PROVIDER", "HARNESS_MODEL", "HARNESS_BASE_URL"):
+        monkeypatch.delenv(name, raising=False)
+    nim = parse_args([])
+    assert (nim.provider, nim.api_key_env, nim.model) == (
+        "nim", "NVIDIA_API_KEY", "minimaxai/minimax-m3.1-flash"
+    )
+    assert nim.base_url == "https://integrate.api.nvidia.com/v1"
+    router = parse_args(["--provider", "openrouter", "--model", "x/y"])
+    assert (router.api_key_env, router.model) == ("OPENROUTER_API_KEY", "x/y")
 
 
 def test_always_rule_needs_a_single_subject() -> None:

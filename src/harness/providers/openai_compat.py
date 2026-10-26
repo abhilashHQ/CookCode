@@ -34,11 +34,13 @@ from harness.providers.base import (
 )
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+NIM_BASE_URL = "https://integrate.api.nvidia.com/v1"
 DEFAULT_CAPS = ModelCaps(
     context_window=128_000, parallel_tool_calls=True, reasoning="opaque", prompt_caching=False
 )
 RETRYABLE_STATUS = frozenset({408, 409, 425, 429, 500, 502, 503, 504, *range(520, 530)})
 EMPTY_RESULT = "(no output)"
+REASONING_TEXT_FIELDS = ("reasoning", "reasoning_content")
 FINISH_REASONS: dict[str, StopReason] = {
     "stop": "end_turn",
     "tool_calls": "tool_use",
@@ -95,7 +97,7 @@ class _Turn:
     text: list[str] = field(default_factory=list[str])
     calls: list[JSON] = field(default_factory=list[JSON])
     details: list[Any] = field(default_factory=list[Any])
-    reasoning: list[str] = field(default_factory=list[str])
+    reasoning: dict[str, list[str]] = field(default_factory=dict[str, list[str]])
 
     def message(self) -> JSON:
         message: JSON = {"role": "assistant", "content": "".join(self.text) or None}
@@ -105,8 +107,9 @@ class _Turn:
             message["content"] = ""
         if self.details:
             message["reasoning_details"] = self.details
-        elif self.reasoning:
-            message["reasoning"] = "".join(self.reasoning)
+        else:
+            for name, parts in self.reasoning.items():
+                message[name] = "".join(parts)
         return message
 
 
@@ -140,9 +143,10 @@ def to_messages(request: ModelRequest, *, provider: str) -> list[JSON]:
                 continue
             turn = turn or _Turn()
             turn.details.extend(_array(item.payload.get("reasoning_details")))
-            text = item.payload.get("reasoning")
-            if isinstance(text, str):
-                turn.reasoning.append(text)
+            for name in REASONING_TEXT_FIELDS:
+                text = item.payload.get(name)
+                if isinstance(text, str):
+                    turn.reasoning.setdefault(name, []).append(text)
         elif isinstance(item, ToolResult):
             flush()
             if item.call_id not in provider_ids:
@@ -283,7 +287,7 @@ class ChatStreamAssembler:
         self._model = model
         self._indexes: dict[str, int] = {}
         self._text: list[str] = []
-        self._reasoning: list[str] = []
+        self._reasoning: dict[str, list[str]] = {}
         self._details: dict[int, JSON] = {}
         self._detail_order: list[int] = []
         self._calls: dict[int, _CallParts] = {}
@@ -316,8 +320,12 @@ class ChatStreamAssembler:
 
     def _feed_delta(self, delta: JSON) -> list[StreamEvent]:
         events: list[StreamEvent] = []
-        reasoning = delta.get("reasoning")
-        shown = reasoning if isinstance(reasoning, str) else ""
+        shown = ""
+        for name in REASONING_TEXT_FIELDS:
+            text = delta.get(name)
+            if isinstance(text, str) and text:
+                self._reasoning.setdefault(name, []).append(text)
+                shown = shown or text
         for value in _array(delta.get("reasoning_details")):
             detail = _object(value)
             if detail is None:
@@ -326,8 +334,6 @@ class ChatStreamAssembler:
             text = detail.get("text")
             if not shown and isinstance(text, str):
                 shown = text
-        if isinstance(reasoning, str) and reasoning:
-            self._reasoning.append(reasoning)
         if shown or self._details or self._reasoning:
             events.extend(self._start("reasoning", "reasoning"))
         if shown:
@@ -373,9 +379,9 @@ class ChatStreamAssembler:
             payload: JSON = {}
             if self._details:
                 payload["reasoning_details"] = [self._details[key] for key in self._detail_order]
-            if self._reasoning:
-                payload["reasoning"] = "".join(self._reasoning)
-            summary = "".join(self._reasoning) or "".join(
+            texts = {name: "".join(parts) for name, parts in self._reasoning.items()}
+            payload.update(texts)
+            summary = next(iter(texts.values()), "") or "".join(
                 str(self._details[key].get("text") or self._details[key].get("summary") or "")
                 for key in self._detail_order
             )
