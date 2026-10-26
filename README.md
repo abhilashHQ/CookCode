@@ -8,8 +8,9 @@ Flagship 1: a coding agent harness built from scratch around a replayable event 
 
 Development runs in WSL Ubuntu: `uv sync`, then `uv run pytest -q`.
 
-Run the agent from inside a repo with `NVIDIA_API_KEY` set (NVIDIA NIM, the default) or with
-`--provider openrouter` and `OPENROUTER_API_KEY`: `uv run harness` for the prompt, or
+Run the agent from inside a repo with `NVIDIA_API_KEY` set (NVIDIA NIM, the default), with
+`--provider gemini` and `GEMINI_API_KEY` (native Gemini; the free tier allows 5 requests a
+minute and 20 a day), or with `--provider openrouter` and `OPENROUTER_API_KEY`: `uv run harness` for the prompt, or
 `uv run harness --once "<task>"` for one run. `--model`, `--mode ask|auto-edit|yolo` and
 `--max-turns` override the defaults. Sessions live under `$HARNESS_HOME`
 (default `~/.local/share/harness`).
@@ -30,4 +31,4 @@ Terminal-Bench through Harbor (Docker required):
 `uv run harbor run -d terminal-bench@2.0 -i <task> -a harness.harbor.agent:HarnessAgent -m nim/minimaxai/minimax-m3.1-flash`.
 
 Tests replay recorded provider traffic from `tests/cassettes/`. To re-record against OpenRouter:
-`HARNESS_RECORD=1 uv run pytest tests/test_cassettes.py -k openrouter` (or `-k nim`).
+`HARNESS_RECORD=1 uv run pytest tests/test_cassettes.py -k openrouter` (or `-k nim`, `-k gemini`).

@@ -1,6 +1,6 @@
 # 0032. Adapter B is native Gemini, on a transport shared with adapter A
 
-Status: accepted (M5), live verification pending a working key
+Status: accepted (M5)
 Date: 2026-10-26
 
 ## Context
@@ -27,7 +27,14 @@ Wire mapping:
 
 ## Consequences
 - A third protocol costs a codec, not a transport.
-- Pending live checks once a valid key is set: that `parametersJsonSchema` is accepted, whether `candidatesTokenCount` excludes thoughts, the exact final chunk shape, and a recorded cassette of a signed round trip.
+- Live probes on 2026-10-26 (`gemini-3.5-flash`):
+  - `parametersJsonSchema` is accepted, including `title` and `additionalProperties`.
+  - Parallel calls come back with ids, and the signature arrives on the first call only.
+  - `candidatesTokenCount` excludes thoughts (86 + 32 + 70 = 188 total).
+  - A text-only answer carries its signature on an empty text part.
+  - A signed round trip is recorded in `tests/cassettes/test_gemini_signed_round_trip-*` and replayed in CI.
+  - The fixture task finished `done` in 8 requests, and `harness replay` matched all 8.
+- Free-tier reality: 5 requests a minute and 20 a day per model. The 20-a-day quota error named `gemini-3.6-flash` while we called `3.5-flash`, so quotas look shared or aliased. `gemini-3.8-flash` and `3.7-flash` returned 503 for high demand, and `2.5-flash` is closed to new users. The default is `gemini-3.5-flash`. Gemini is for adapter coverage and replay tests, not for long runs.
 
 ## What would change it
 A paid Anthropic key, which would make the second native protocol cheap to add and worth comparing.
