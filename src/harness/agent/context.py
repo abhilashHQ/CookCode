@@ -1,7 +1,10 @@
+import hashlib
 from collections.abc import Sequence
 
+from pydantic import TypeAdapter
+
 from harness.core.events import CheckpointRestored, Event, ItemEvent, SteerMessage, UserMessage
-from harness.core.items import Item, Message, ToolCall, ToolResult, text_message
+from harness.core.items import Item, Message, Reasoning, ToolCall, ToolResult, text_message
 from harness.providers.base import ModelRequest, ToolSchema
 
 
@@ -58,6 +61,18 @@ def _reorder_results(items: list[Item]) -> list[Item]:
     return ordered
 
 
+def _unreplayable(item: Item, provider: str | None, model: str) -> bool:
+    return (
+        provider is not None
+        and isinstance(item, Reasoning)
+        and not item.replayable_to(provider, model)
+    )
+
+
+def dropped_reasoning(events: Sequence[Event], *, provider: str, model: str) -> int:
+    return sum(_unreplayable(item, provider, model) for item in _project(events))
+
+
 def build_request(
     events: Sequence[Event],
     *,
@@ -65,14 +80,27 @@ def build_request(
     system: str,
     tools: tuple[ToolSchema, ...],
     max_output_tokens: int | None = None,
+    provider: str | None = None,
 ) -> ModelRequest:
+    """Reasoning from another provider or model is dropped: its payloads are opaque and only
+    the model that produced them can read them."""
+    items = [item for item in _project(events) if not _unreplayable(item, provider, model)]
     return ModelRequest(
         model=model,
         system=system,
         tools=tools,
-        items=tuple(_reorder_results(_project(events))),
+        items=tuple(_reorder_results(items)),
         max_output_tokens=max_output_tokens,
     )
+
+
+_ITEMS: TypeAdapter[tuple[Item, ...]] = TypeAdapter(tuple[Item, ...])
+
+
+def items_sha256(items: tuple[Item, ...]) -> str:
+    """Fingerprint of the history part of a request. System prompt and tools are pinned by the
+    run config, so replay can verify the projection from the log alone."""
+    return hashlib.sha256(_ITEMS.dump_json(items)).hexdigest()
 
 
 def estimate_tokens(request: ModelRequest) -> int:

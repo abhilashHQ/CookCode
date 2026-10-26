@@ -10,7 +10,12 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from harness import __version__
 from harness.agent.approval import Approver, Decision, PolicyOnlyApprover, Risk
-from harness.agent.context import build_request, estimate_tokens
+from harness.agent.context import (
+    build_request,
+    dropped_reasoning,
+    estimate_tokens,
+    items_sha256,
+)
 from harness.agent.gate import (
     Mode,
     Policy,
@@ -309,16 +314,23 @@ class Agent:
             self._log.append(SteerMessage(text=self._steering.popleft()))
 
     async def _step(self, run: _RunState) -> RunOutcome | None:
+        events = self._log.read()
+        provider, model = self._provider.name, self._config.model
         request = build_request(
-            self._log.read(),
-            model=self._config.model,
+            events,
+            model=model,
             system=self._config.system_prompt,
             tools=self._tools.schemas(),
+            provider=provider,
         )
         request_id = new_id()
         self._log.append(
             ModelRequestStarted(
-                request_id=request_id, view="raw", token_estimate=estimate_tokens(request)
+                request_id=request_id,
+                view="raw",
+                token_estimate=estimate_tokens(request),
+                items_sha256=items_sha256(request.items),
+                reasoning_dropped=dropped_reasoning(events, provider=provider, model=model),
             )
         )
         run.turns += 1

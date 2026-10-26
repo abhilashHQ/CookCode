@@ -93,6 +93,8 @@ class ModelRequestStarted(_Body):
     request_id: str
     view: str
     token_estimate: int
+    items_sha256: str | None = None
+    reasoning_dropped: int = 0
 
 
 class ItemEvent(_Body):

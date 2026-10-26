@@ -491,6 +491,23 @@
     },
     "ModelRequestStarted": {
       "properties": {
+        "items_sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Items Sha256"
+        },
+        "reasoning_dropped": {
+          "default": 0,
+          "title": "Reasoning Dropped",
+          "type": "integer"
+        },
         "request_id": {
           "title": "Request Id",
           "type": "string"
