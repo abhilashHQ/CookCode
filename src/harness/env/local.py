@@ -76,6 +76,10 @@ class LocalEnvironment:
     def __init__(self, root: Path) -> None:
         self._root = root.resolve()
 
+    @property
+    def root(self) -> str:
+        return str(self._root)
+
     def _resolve(self, path: str) -> Path:
         candidate = Path(path)
         return candidate if candidate.is_absolute() else self._root / candidate

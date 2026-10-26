@@ -11,9 +11,17 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from harness import __version__
 from harness.agent.approval import Approver, Decision, PolicyOnlyApprover, Risk
 from harness.agent.context import build_request, estimate_tokens
-from harness.agent.gate import Mode, Policy, decide, session_rules, subject
+from harness.agent.gate import (
+    Mode,
+    Policy,
+    covers,
+    decide,
+    parse_rule,
+    session_rules,
+    subject,
+)
 from harness.agent.repair import NOT_EXECUTED, RepairAction, plan_repairs, repair_bodies
-from harness.agent.tools import Tool, ToolContext, ToolOutput, ToolRegistry, resolve_path
+from harness.agent.tools import Tool, ToolContext, ToolOutput, ToolRegistry, workspace_path
 from harness.core.cancel import CancelToken
 from harness.core.events import (
     ApprovalRequested,
@@ -119,11 +127,11 @@ class _Dispatch:
     args: BaseModel
     gated_cwd: str | None = None
 
-    def subjects(self, cwd: str) -> list[str]:
+    def subjects(self, root: str, cwd: str) -> list[str]:
         touched = self.tool.touches(self.args) if self.tool.touches is not None else []
         if touched:
-            return [resolve_path(cwd, path) for path in touched]
-        return [subject(self.tool.name, self.args.model_dump(), cwd)]
+            return [workspace_path(root, cwd, path) for path in touched]
+        return [subject(self.tool.name, self.args.model_dump(), cwd, root)]
 
 
 def _batches(dispatches: Sequence[_Dispatch]) -> list[list[_Dispatch]]:
@@ -439,6 +447,7 @@ class Agent:
             tool=tool,
             arguments=tool_call.arguments,
             cwd=cwd,
+            root=self._env.root,
             mode=self._config.mode,
             policy=self._config.policy,
             session_allow=session_rules(self._log.read()),
@@ -464,10 +473,18 @@ class Agent:
         self._log.append(
             ApprovalRequested(call_id=tool_call.id, risk=tool.side_effect, rule=decision.rule)
         )
-        risk = Risk(side_effect=tool.side_effect, rule=decision.rule, reason=decision.reason)
+        risk = Risk(
+            side_effect=tool.side_effect,
+            rule=decision.rule,
+            reason=decision.reason,
+            cwd=cwd,
+            subjects=tuple(dispatch.subjects(self._env.root, cwd)),
+        )
         answer = await self._ask(run, tool_call, risk)
         if answer is None:
             return None
+        if answer.action == "allow_always":
+            answer = self._narrow(dispatch, answer, cwd)
         self._log.append(
             ApprovalResolved(
                 call_id=tool_call.id, decision=answer.action, reason=answer.reason, rule=answer.rule
@@ -477,6 +494,22 @@ class Agent:
             self._append_result(tool_call.id, "denied", f"denied: {answer.reason or NO_REASON}")
             return False
         return True
+
+    def _narrow(self, dispatch: _Dispatch, answer: Decision, cwd: str) -> Decision:
+        rule = parse_rule(answer.rule)
+        if rule is not None and covers(
+            rule,
+            tool=dispatch.tool,
+            arguments=dispatch.call.arguments,
+            cwd=cwd,
+            root=self._env.root,
+            policy=self._config.policy,
+        ):
+            return answer
+        return Decision(
+            action="allow",
+            reason=f"allow_always rule {answer.rule} does not cover this call; allowed once",
+        )
 
     async def _ask(self, run: _RunState, tool_call: ToolCall, risk: Risk) -> Decision | None:
         asking = asyncio.ensure_future(self._approver.decide(tool_call, risk, run.token))
@@ -506,7 +539,8 @@ class Agent:
         cwd: str,
     ) -> str | None:
         try:
-            paths = list(dict.fromkeys(resolve_path(cwd, path) for path in touches(args)))
+            root = self._env.root
+            paths = list(dict.fromkeys(workspace_path(root, cwd, path) for path in touches(args)))
             if not paths:
                 return None
             files: dict[str, bytes | None] = {}
@@ -539,7 +573,8 @@ class Agent:
                 return
             cwd = self._current_cwd()
             gated = dispatch.gated_cwd
-            if gated is not None and dispatch.subjects(gated) != dispatch.subjects(cwd):
+            root = self._env.root
+            if gated is not None and dispatch.subjects(root, gated) != dispatch.subjects(root, cwd):
                 self._append_result(tool_call.id, "error", CWD_MOVED.format(cwd=cwd))
                 return
             if tool.touches is not None and self._checkpoints is not None:

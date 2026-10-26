@@ -204,20 +204,24 @@ def _find_regex(pattern: str) -> str:
     return "\\./" + glob_to_regex(glob)
 
 
+def _explicit(path: str) -> str:
+    return path if path.startswith("/") else f"./{path}"
+
+
 def _glob_command(args: GlobArgs, prefer_rg: bool) -> str:
     quote = shlex.quote
     enter = (
-        f"cd {quote(args.path)} 2>/dev/null || "
+        f"cd -- {quote(_explicit(args.path))} 2>/dev/null || "
         f"{{ echo {quote('directory not found: ' + args.path)}; exit {CD_FAILED}; }}"
     )
     find = (
         "find . -regextype posix-extended -path '*/.*' -prune -o "
         f"-type f -regex {quote(_find_regex(args.pattern))} -print 2>/dev/null"
     )
-    if not prefer_rg:
-        return f"{enter}; {find}"
     rg = f"rg --files --no-config {quote('--glob=' + args.pattern)} . 2>/dev/null"
-    return f"{enter}; if command -v rg >/dev/null 2>&1; then {rg}; else {find}; fi"
+    listing = f"if command -v rg >/dev/null 2>&1; then {rg}; else {find}; fi" if prefer_rg else find
+    bound = f"LC_ALL=C sort | awk 'NR <= {MAX_GLOB_RESULTS} {{ print }} END {{ print NR }}'"
+    return f"{enter}; set -o pipefail; {{ {listing}; }} | {bound}"
 
 
 def _prefix(path: str) -> str:
@@ -232,22 +236,25 @@ def glob_tool(*, prefer_rg: bool = True) -> Tool[GlobArgs]:
             return result
         if result.exit_code == CD_FAILED:
             return _error(result.output.strip())
-        prefix = _prefix(args.path)
-        files = sorted(
-            prefix + _strip_dot_slash(line) for line in result.output.splitlines() if line
-        )
-        if not files:
+        lines = result.output.splitlines()
+        total = int(lines[-1]) if lines and lines[-1].isdigit() else None
+        if result.truncated:
+            matched = "" if total is None else f" ({total} files matched)"
+            return _error(
+                f"glob output exceeded the {ctx.max_output_bytes}-byte output cap{matched}; "
+                "narrow the pattern or the path"
+            )
+        if total is None:
+            return _error(f"glob failed with exit code {result.exit_code}")
+        if total == 0:
             if result.exit_code in (0, 1):
                 return ToolOutput(content=NO_FILES)
             return _error(f"glob failed with exit code {result.exit_code}")
-        if len(files) > MAX_GLOB_RESULTS:
-            extra = len(files) - MAX_GLOB_RESULTS
-            files = [*files[:MAX_GLOB_RESULTS], f"[... {extra} more]"]
-        return ToolOutput(
-            content="\n".join(files),
-            output_bytes=result.output_bytes,
-            truncated=result.truncated,
-        )
+        prefix = _prefix(args.path)
+        files = [prefix + _strip_dot_slash(line) for line in lines[:-1] if line]
+        if total > MAX_GLOB_RESULTS:
+            files.append(f"[... {total - MAX_GLOB_RESULTS} more]")
+        return ToolOutput(content="\n".join(files), output_bytes=result.output_bytes)
 
     return Tool(
         name="glob",

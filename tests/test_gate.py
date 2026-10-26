@@ -8,13 +8,15 @@ from harness.agent.gate import (
     Mode,
     Policy,
     Rule,
+    covers,
     decide,
     inside_workspace,
+    parse_rule,
     session_rules,
     split_command,
     subject,
 )
-from harness.agent.tools import Tool, ToolContext, ToolOutput, resolve_path
+from harness.agent.tools import Tool, ToolContext, ToolOutput, workspace_path
 from harness.core.events import (
     ApprovalRequested,
     ApprovalResolved,
@@ -26,6 +28,7 @@ from harness.core.events import (
 from harness.tools import default_tools
 
 TOOLS = {tool.name: tool for tool in default_tools()}
+ROOT = "/ws/work"
 
 
 class WebArgs(BaseModel):
@@ -50,6 +53,7 @@ def gate(
     deny: tuple[str, ...] = (),
     session: tuple[str, ...] = (),
     cwd: str = ".",
+    root: str = ROOT,
 ) -> GateDecision:
     def rules(specs: tuple[str, ...]) -> tuple[Rule, ...]:
         return tuple(Rule(tool=s.partition(":")[0], pattern=s.partition(":")[2]) for s in specs)
@@ -58,6 +62,7 @@ def gate(
         tool=tool,
         arguments=arguments,
         cwd=cwd,
+        root=root,
         mode=mode,
         policy=Policy(allow=rules(allow), deny=rules(deny)),
         session_allow=rules(session),
@@ -139,6 +144,13 @@ def test_absolute_cwd_makes_relative_edits_outside() -> None:
     assert gate(TOOLS["edit"], args, mode="auto-edit", cwd="/tmp").action == "ask"
 
 
+def test_an_absolute_cwd_under_the_root_is_still_inside() -> None:
+    args = {"path": "a.py", "old_string": "a", "new_string": "b"}
+    assert gate(TOOLS["edit"], args, mode="auto-edit", cwd=f"{ROOT}/sub").action == "allow"
+    decision = gate(TOOLS["edit"], args, cwd=ROOT, deny=("edit:a.py",), mode="yolo")
+    assert decision.action == "deny"
+
+
 def test_deny_wins_in_yolo() -> None:
     decision = bash("rm -rf /", mode="yolo", deny=("bash:rm -rf*",))
     assert decision == GateDecision(action="deny", rule="bash:rm -rf*", reason=decision.reason)
@@ -200,12 +212,13 @@ def test_session_rules_never_beat_deny() -> None:
 
 def test_file_allow_rule() -> None:
     args = {"path": "../shared/a.py", "content": ""}
-    decision = gate(TOOLS["write"], args, allow=("write:../shared/*",))
-    assert (decision.action, decision.rule) == ("allow", "write:../shared/*")
+    decision = gate(TOOLS["write"], args, allow=("write:/ws/shared/*",))
+    assert (decision.action, decision.rule) == ("allow", "write:/ws/shared/*")
+    assert gate(TOOLS["write"], args, allow=("write:../shared/*",)).action == "ask"
 
 
 def test_tool_without_subject_matches_star() -> None:
-    assert subject("web", {"url": "https://x"}, ".") == "*"
+    assert subject("web", {"url": "https://x"}, ".", ROOT) == "*"
     assert gate(WEB, {"url": "https://x"}, allow=("web:*",)).action == "allow"
     assert gate(WEB, {"url": "https://x"}, allow=("web:https*",)).action == "ask"
 
@@ -279,10 +292,15 @@ def test_split_command_unanalyzable(command: str) -> None:
         ("a/../../x", ".", False),
         ("..foo", ".", True),
         ("x", "/abs", False),
+        ("/ws/work/a.py", ".", True),
+        ("/ws/work", ".", True),
+        ("../work/a.py", ".", True),
+        ("../work2/a.py", ".", False),
+        ("x", "/ws/work/sub", True),
     ],
 )
 def test_inside_workspace(path: str, cwd: str, inside: bool) -> None:
-    assert inside_workspace(path, cwd) is inside
+    assert inside_workspace(path, cwd, ROOT) is inside
 
 
 @pytest.mark.parametrize(
@@ -299,11 +317,11 @@ def test_inside_workspace(path: str, cwd: str, inside: bool) -> None:
 )
 def test_subject_agrees_with_tool_path_resolution(path: str, cwd: str) -> None:
     for name in ("read", "write", "edit", "grep", "glob"):
-        assert subject(name, {"path": path}, cwd) == resolve_path(cwd, path)
+        assert subject(name, {"path": path}, cwd, ROOT) == workspace_path(ROOT, cwd, path)
 
 
 def test_subject_for_bash_is_the_command() -> None:
-    assert subject("bash", {"command": "ls -la"}, "sub") == "ls -la"
+    assert subject("bash", {"command": "ls -la"}, "sub", ROOT) == "ls -la"
 
 
 def test_grep_without_path_uses_its_default() -> None:
@@ -527,11 +545,27 @@ def test_unnormalized_absolute_path_does_not_escape_an_allow_rule() -> None:
     assert gate(TOOLS["write"], args, allow=("write:/tmp/*",)).action == "ask"
 
 
-def test_relative_escape_is_unverifiable_against_deny_rules() -> None:
+def test_a_relative_escape_is_canonicalized_before_rule_matching() -> None:
     args = {"path": "../../etc/passwd", "content": ""}
     decision = gate(TOOLS["write"], args, allow=("write:*",), deny=("write:/etc/*",))
-    assert decision.action == "ask"
+    assert (decision.action, decision.rule) == ("deny", "write:/etc/*")
     assert gate(TOOLS["write"], args, allow=("write:*",)).action == "allow"
+
+
+@pytest.mark.parametrize("path", ["secrets/key", "../work/secrets/key", "/ws/work/secrets/key",
+                                  "./secrets/../secrets/key", "//ws/work/secrets/key"])
+@pytest.mark.parametrize("mode", ["ask", "auto-edit", "yolo"])
+def test_every_spelling_of_a_denied_workspace_path_is_denied(path: str, mode: Mode) -> None:
+    read = gate(TOOLS["read"], {"path": path}, mode=mode, deny=("read:secrets/*",))
+    assert (read.action, read.rule) == ("deny", "read:secrets/*")
+    args = {"path": path, "old_string": "a", "new_string": "b"}
+    edit = gate(TOOLS["edit"], args, mode=mode, deny=("edit:secrets/*",))
+    assert (edit.action, edit.rule) == ("deny", "edit:secrets/*")
+
+
+def test_an_absolute_deny_rule_still_covers_a_relative_spelling() -> None:
+    decision = gate(TOOLS["read"], {"path": "secrets/key"}, deny=("read:/ws/work/secrets/*",))
+    assert decision.action == "deny"
 
 
 def test_invalid_arguments_for_a_touching_tool_ask_in_auto_edit() -> None:
@@ -569,3 +603,87 @@ def test_deep_nesting_is_unanalyzable_not_a_crash() -> None:
 def test_wrapper_fan_out_is_bounded() -> None:
     command = " ".join(["stdbuf --weird"] * 60) + " ls"
     assert bash(command, **ALLOW_ALL).action == "ask"
+
+
+@pytest.mark.parametrize(
+    ("rule", "command"),
+    [
+        ("bash:ls*", "ls=1 rm -rf x"),
+        ("bash:pytest*", "pytest=1 rm -rf victim"),
+        ("bash:git*", "git=x rm -rf victim"),
+        ("bash:echo*", "echo+=1 rm -rf victim"),
+        ("bash:ls*", "ls[0]=x rm -rf victim"),
+        ("bash:ls*", "ls; ls=1 rm -rf victim"),
+        ("bash:FOO=1*", "FOO=1 rm -rf victim"),
+    ],
+)
+def test_an_allow_rule_matches_the_executed_command_not_the_raw_text(
+    rule: str, command: str
+) -> None:
+    assert bash(command, allow=(rule,)).action == "ask"
+    assert bash(command, session=(rule,)).action == "ask"
+
+
+@pytest.mark.parametrize(
+    ("rule", "command"),
+    [
+        ("bash:pytest*", "PYTHONPATH=src pytest -q"),
+        ("bash:pytest*", "A=1 B+=2 pytest -q"),
+        ("bash:ls*", "2>/dev/null ls"),
+        ("bash:ls -la", "'ls' \"-la\""),
+        ("bash:ls*", "! ls"),
+    ],
+)
+def test_a_harmless_prefix_keeps_the_executed_command_allowed(rule: str, command: str) -> None:
+    decision = bash(command, allow=(rule,))
+    assert (decision.action, decision.rule) == ("allow", rule)
+
+
+@pytest.mark.parametrize(
+    "command",
+    ["LD_PRELOAD=x.so pytest", "PATH=. pytest", "BASH_ENV=x pytest", "a[1]=x pytest"],
+)
+def test_a_suspicious_leading_assignment_is_never_allowed_by_rule(command: str) -> None:
+    assert bash(command, allow=("bash:pytest*", "bash:*")).action == "ask"
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("bash:ls*", Rule(tool="bash", pattern="ls*")),
+        ("write:src/a:b.py", Rule(tool="write", pattern="src/a:b.py")),
+        (None, None),
+        ("", None),
+        ("nocolon", None),
+        (":ls*", None),
+        ("bash:", None),
+    ],
+)
+def test_parse_rule(text: str | None, expected: Rule | None) -> None:
+    assert parse_rule(text) == expected
+
+
+def _covers(rule: str, tool: str, arguments: dict[str, Any], **kwargs: Any) -> bool:
+    parsed = parse_rule(rule)
+    assert parsed is not None
+    return covers(
+        parsed,
+        tool=TOOLS[tool],
+        arguments=arguments,
+        cwd=kwargs.get("cwd", "."),
+        root=ROOT,
+        policy=kwargs.get("policy", Policy()),
+    )
+
+
+def test_covers_checks_tool_and_pattern_with_the_gate_matching() -> None:
+    edit = {"path": "a.py", "old_string": "a", "new_string": "b"}
+    assert _covers("edit:a.py", "edit", edit)
+    assert _covers("edit:*", "edit", edit)
+    assert not _covers("bash:*", "edit", edit)
+    assert not _covers("edit:b.py", "edit", edit)
+    assert _covers("edit:sub/a.py", "edit", edit, cwd="sub")
+    assert _covers("bash:pytest*", "bash", {"command": "pytest -q"})
+    assert not _covers("bash:pytest*", "bash", {"command": "pytest=1 rm -rf x"})
+    assert not _covers("bash:pytest*", "bash", {"command": "pytest; rm -rf x"})
+    assert not _covers("read:b.py", "read", {"path": "a.py"})

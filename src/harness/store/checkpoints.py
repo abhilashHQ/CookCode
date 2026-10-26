@@ -22,6 +22,14 @@ def _atomic_write(target: Path, data: bytes) -> None:
         tmp.unlink(missing_ok=True)
 
 
+def _fsync_dir(path: Path) -> None:
+    fd = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
 class FileCheckpointStore:
     def __init__(self, root: Path) -> None:
         self._root = root
@@ -36,6 +44,7 @@ class FileCheckpointStore:
         manifest_path = self._manifest(checkpoint_id)
         self._blobs.mkdir(parents=True, exist_ok=True)
         manifest: dict[str, str | None] = {}
+        wrote_blob = False
         for path, data in files.items():
             if data is None:
                 manifest[path] = None
@@ -44,8 +53,12 @@ class FileCheckpointStore:
             blob = self._blobs / digest
             if not blob.exists():
                 _atomic_write(blob, data)
+                wrote_blob = True
             manifest[path] = digest
+        if wrote_blob:
+            _fsync_dir(self._blobs)
         _atomic_write(manifest_path, json.dumps(manifest, sort_keys=True).encode())
+        _fsync_dir(self._root)
 
     def load(self, checkpoint_id: str) -> dict[str, bytes | None]:
         manifest: dict[str, str | None] = json.loads(self._manifest(checkpoint_id).read_bytes())

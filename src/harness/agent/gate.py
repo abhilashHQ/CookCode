@@ -7,7 +7,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from harness.agent.tools import Tool, resolve_path
+from harness.agent.tools import Tool, workspace_path
 from harness.core.events import ApprovalResolved, Event
 
 Mode = Literal["ask", "auto-edit", "yolo"]
@@ -42,28 +42,27 @@ class GateDecision(BaseModel):
     reason: str
 
 
-def _escapes(resolved: str) -> bool:
-    return resolved == ".." or resolved.startswith("../")
+def parse_rule(text: str | None) -> Rule | None:
+    tool, sep, pattern = (text or "").partition(":")
+    return Rule(tool=tool, pattern=pattern) if sep and tool and pattern else None
 
 
-def _path_forms(resolved: str) -> tuple[str, ...]:
-    if not posixpath.isabs(resolved):
-        return (resolved,)
-    normal = "/" + posixpath.normpath(resolved).lstrip("/")
-    return (resolved,) if normal == resolved else (resolved, normal)
+def _deny_forms(canonical: str, root: str) -> tuple[str, ...]:
+    if posixpath.isabs(canonical):
+        return (canonical,)
+    return (canonical, posixpath.normpath(posixpath.join(root, canonical)))
 
 
-def inside_workspace(path: str, cwd: str) -> bool:
-    resolved = resolve_path(cwd, path)
-    return not posixpath.isabs(resolved) and not _escapes(resolved)
+def inside_workspace(path: str, cwd: str, root: str) -> bool:
+    return not posixpath.isabs(workspace_path(root, cwd, path))
 
 
-def subject(tool_name: str, arguments: dict[str, Any], cwd: str) -> str:
+def subject(tool_name: str, arguments: dict[str, Any], cwd: str, root: str) -> str:
     if tool_name == "bash":
         command = arguments.get("command")
         return command if isinstance(command, str) else "*"
     path = arguments.get("path")
-    return resolve_path(cwd, path) if isinstance(path, str) else "*"
+    return workspace_path(root, cwd, path) if isinstance(path, str) else "*"
 
 
 class _Unbalanced(Exception):
@@ -560,14 +559,19 @@ def _find_execs(words: list[_Word]) -> list[list[_Word]]:
     return found
 
 
+def _command_start(words: list[_Word]) -> int:
+    i = 0
+    while i < len(words) and (words[i].value in _PREFIX_WORDS or _ASSIGNMENT.match(words[i].value)):
+        i += 1
+    return i
+
+
 def _forms(words: list[_Word], depth: int, budget: _Budget) -> tuple[list[str], bool]:
     budget.left -= 1
     if depth > _MAX_DEPTH or budget.left < 0:
         return [], True
     opaque = any(_suspicious(word) for word in words)
-    i = 0
-    while i < len(words) and (words[i].value in _PREFIX_WORDS or _ASSIGNMENT.match(words[i].value)):
-        i += 1
+    i = _command_start(words)
     if i == len(words):
         return [], opaque
     rest = words[i:]
@@ -666,7 +670,11 @@ def _bash_allow(analysis: _Analysis, allow: list[Rule], has_deny: bool) -> list[
     for command in analysis.commands:
         if command.unsafe_redirect:
             return f"subcommand {command.raw!r} redirects output to a file"
-        rule = next((r for r in allow if r.matches(command.raw)), None)
+        start = _command_start(command.words)
+        if any(_suspicious(word) for word in command.words[:start]):
+            return f"subcommand {command.raw!r} sets a variable that changes how commands run"
+        executed = " ".join(word.value for word in command.words[start:])
+        rule = next((r for r in allow if r.matches(executed)), None)
         if rule is None:
             return f"subcommand {command.raw!r} matches no allow rule"
         matched.append(rule)
@@ -703,6 +711,7 @@ def _decide_tool(
     tool: Tool[Any],
     arguments: dict[str, Any],
     cwd: str,
+    root: str,
     mode: Mode,
     deny: list[Rule],
     allow: list[Rule],
@@ -710,28 +719,27 @@ def _decide_tool(
     validated = _validate(tool, arguments)
     touched = tool.touches(validated) if tool.touches and validated is not None else None
     if touched:
-        subjects = [resolve_path(cwd, path) for path in touched]
+        subjects = [workspace_path(root, cwd, path) for path in touched]
     else:
         dumped = validated.model_dump() if validated is not None else arguments
-        subjects = [subject(tool.name, dumped, cwd)]
-    forms = [form for s in subjects for form in _path_forms(s)]
+        subjects = [subject(tool.name, dumped, cwd, root)]
+    deny_forms = [form for s in subjects for form in _deny_forms(s, root)]
     for rule in deny:
-        if any(rule.matches(form) for form in forms):
+        if any(rule.matches(form) for form in deny_forms):
             return _deny(rule)
     if mode == "yolo":
         return _by_mode(mode, "allow", "yolo mode allows every call no deny rule matches")
-    if not (deny and any(_escapes(s) for s in subjects)):
-        matched = [next((r for r in allow if r.matches(form)), None) for form in forms]
-        rules = [rule for rule in matched if rule is not None]
-        if forms and len(rules) == len(forms):
-            return _allow_by_rules(rules)
+    matched = [next((r for r in allow if r.matches(s)), None) for s in subjects]
+    rules = [rule for rule in matched if rule is not None]
+    if subjects and len(rules) == len(subjects):
+        return _allow_by_rules(rules)
     if tool.side_effect == "read_only":
         return _by_mode(mode, "allow", "read-only calls are allowed")
     if (
         mode == "auto-edit"
         and tool.side_effect == "mutating"
         and touched
-        and all(inside_workspace(path, cwd) for path in touched)
+        and all(inside_workspace(path, cwd, root) for path in touched)
     ):
         return _by_mode(mode, "allow", "auto-edit allows file edits inside the workspace")
     return _by_mode(mode, "ask", f"{tool.side_effect} call needs approval in {mode} mode")
@@ -742,6 +750,7 @@ def decide(
     tool: Tool[Any],
     arguments: dict[str, Any],
     cwd: str,
+    root: str,
     mode: Mode,
     policy: Policy,
     session_allow: Sequence[Rule],
@@ -750,7 +759,30 @@ def decide(
     allow = [rule for rule in (*policy.allow, *session_allow) if rule.tool == tool.name]
     if tool.name == "bash":
         return _decide_bash(arguments, mode, deny, allow)
-    return _decide_tool(tool, arguments, cwd, mode, deny, allow)
+    return _decide_tool(tool, arguments, cwd, root, mode, deny, allow)
+
+
+def covers(
+    rule: Rule,
+    *,
+    tool: Tool[Any],
+    arguments: dict[str, Any],
+    cwd: str,
+    root: str,
+    policy: Policy,
+) -> bool:
+    if rule.tool != tool.name:
+        return False
+    decision = decide(
+        tool=tool,
+        arguments=arguments,
+        cwd=cwd,
+        root=root,
+        mode="ask",
+        policy=Policy(deny=policy.deny),
+        session_allow=(rule,),
+    )
+    return decision.action == "allow" and decision.rule == rule.display
 
 
 def session_rules(events: Sequence[Event]) -> list[Rule]:
@@ -759,7 +791,7 @@ def session_rules(events: Sequence[Event]) -> list[Rule]:
         body = event.body
         if not isinstance(body, ApprovalResolved) or body.decision != "allow_always":
             continue
-        tool, sep, pattern = (body.rule or "").partition(":")
-        if sep and tool and pattern:
-            rules.append(Rule(tool=tool, pattern=pattern))
+        rule = parse_rule(body.rule)
+        if rule is not None:
+            rules.append(rule)
     return rules

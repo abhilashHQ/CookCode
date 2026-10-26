@@ -18,6 +18,9 @@ class ExecResult(BaseModel):
 
 
 class Environment(Protocol):
+    @property
+    def root(self) -> str: ...
+
     async def exec(
         self,
         cmd: str,

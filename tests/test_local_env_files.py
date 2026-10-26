@@ -84,3 +84,9 @@ async def test_remove_file_accepts_absolute_paths(tmp_path: Path) -> None:
     target.write_bytes(b"x")
     await LocalEnvironment(tmp_path / "root").remove_file(str(target))
     assert not target.exists()
+
+
+def test_root_is_the_resolved_absolute_workspace(tmp_path: Path) -> None:
+    (tmp_path / "real").mkdir()
+    (tmp_path / "link").symlink_to(tmp_path / "real")
+    assert LocalEnvironment(tmp_path / "link").root == str((tmp_path / "real").resolve())

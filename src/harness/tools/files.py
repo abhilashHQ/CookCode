@@ -2,7 +2,7 @@ import re
 
 from pydantic import BaseModel, Field
 
-from harness.agent.tools import Tool, ToolContext, ToolOutput, resolve_path
+from harness.agent.tools import Tool, ToolContext, ToolOutput, workspace_path
 
 MAX_LINE_CHARS = 2000
 LINE_TRUNCATED = " [... line truncated]"
@@ -18,7 +18,7 @@ def _describe(exc: Exception) -> str:
 
 async def _read_text(ctx: ToolContext, path: str) -> str | ToolOutput:
     try:
-        data = await ctx.env.read_file(resolve_path(ctx.cwd, path))
+        data = await ctx.env.read_file(workspace_path(ctx.env.root, ctx.cwd, path))
     except (FileNotFoundError, NotADirectoryError):
         return _error(f"file not found: {path}")
     except IsADirectoryError:
@@ -93,7 +93,7 @@ class WriteArgs(BaseModel):
 async def _write(args: WriteArgs, ctx: ToolContext) -> ToolOutput:
     data = args.content.encode()
     try:
-        await ctx.env.write_file(resolve_path(ctx.cwd, args.path), data)
+        await ctx.env.write_file(workspace_path(ctx.env.root, ctx.cwd, args.path), data)
     except Exception as exc:
         return _error(f"cannot write {args.path}: {_describe(exc)}")
     return ToolOutput(content=f"wrote {len(data)} bytes to {args.path}")
@@ -146,7 +146,7 @@ async def _edit(args: EditArgs, ctx: ToolContext) -> ToolOutput:
         )
     updated = text.replace(args.old_string, args.new_string)
     try:
-        await ctx.env.write_file(resolve_path(ctx.cwd, args.path), updated.encode())
+        await ctx.env.write_file(workspace_path(ctx.env.root, ctx.cwd, args.path), updated.encode())
     except Exception as exc:
         return _error(f"cannot write {args.path}: {_describe(exc)}")
     return ToolOutput(content=f"edited {args.path}: replaced {count} occurrence(s)")

@@ -179,3 +179,23 @@ async def test_a_failed_snapshot_means_the_edit_never_runs(rigs: RigFactory) -> 
     assert bodies(events, ToolCallStarted) == []
     assert bodies(events, CheckpointCreated) == []
     assert_every_call_resolved(events)
+
+
+def test_save_fsyncs_the_blob_and_root_directories(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import os
+
+    synced: list[str] = []
+    real_fsync = os.fsync
+
+    def recording_fsync(fd: int) -> None:
+        synced.append(os.readlink(f"/proc/self/fd/{fd}"))
+        real_fsync(fd)
+
+    monkeypatch.setattr(os, "fsync", recording_fsync)
+    root = tmp_path / "cps"
+    FileCheckpointStore(root).save("c1", {"a.py": b"one", "gone.py": None})
+    assert str(root / "blobs") in synced
+    assert synced[-1] == str(root)
+    assert synced.index(str(root / "blobs")) < synced.index(str(root))

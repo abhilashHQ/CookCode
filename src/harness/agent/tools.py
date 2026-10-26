@@ -11,10 +11,17 @@ from harness.env.base import Environment
 from harness.providers.base import ToolSchema
 
 
-def resolve_path(cwd: str, path: str) -> str:
-    if posixpath.isabs(path):
-        return path
-    return posixpath.normpath(posixpath.join(cwd, path))
+def _absolute(path: str) -> str:
+    return "/" + posixpath.normpath(path).lstrip("/")
+
+
+def workspace_path(root: str, cwd: str, path: str) -> str:
+    resolved = _absolute(posixpath.join(root, cwd, path))
+    base = _absolute(root)
+    if resolved == base:
+        return "."
+    prefix = base.rstrip("/") + "/"
+    return resolved.removeprefix(prefix) if resolved.startswith(prefix) else resolved
 
 
 @dataclass(frozen=True)

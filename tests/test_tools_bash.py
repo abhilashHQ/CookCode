@@ -322,3 +322,73 @@ async def test_a_deleted_working_directory_resets_to_the_root_without_running(
     after = await run_tool(bash_tool(), make_ctx(tmp_path, cwd=out.cwd), command="pwd")
     assert after.status == "ok"
     assert after.cwd == "."
+
+
+async def test_leaving_the_workspace_and_coming_back_is_relative_again(tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    outside = tmp_path / "outside"
+    (root / "sub").mkdir(parents=True)
+    outside.mkdir()
+    out = await run_tool(bash_tool(), make_ctx(root), command=f"cd {outside}")
+    assert out.cwd == str(outside.resolve())
+    back = await run_tool(bash_tool(), make_ctx(root, cwd=str(outside)), command=f"cd {root}/sub")
+    assert back.cwd == "sub"
+    home = await run_tool(bash_tool(), make_ctx(root, cwd=str(outside)), command=f"cd {root}")
+    assert home.cwd == "."
+
+
+async def test_an_absolute_tracked_cwd_under_the_root_reports_relative(tmp_path: Path) -> None:
+    (tmp_path / "sub").mkdir()
+    ctx = make_ctx(tmp_path, cwd=str(tmp_path.resolve() / "sub"))
+    out = await run_tool(bash_tool(), ctx, command="pwd")
+    assert out.content == str(tmp_path.resolve() / "sub")
+    assert out.cwd == "sub"
+
+
+async def test_a_symlinked_directory_is_reported_by_its_physical_path(tmp_path: Path) -> None:
+    (tmp_path / "real").mkdir()
+    (tmp_path / "link").symlink_to(tmp_path / "real")
+    out = await run_tool(bash_tool(), make_ctx(tmp_path), command="cd link")
+    assert out.cwd == "real"
+
+
+async def test_a_tracked_cwd_starting_with_a_dash_is_entered_literally(tmp_path: Path) -> None:
+    (tmp_path / "-P").mkdir()
+    out = await run_tool(bash_tool(), make_ctx(tmp_path, cwd="-P"), command="pwd")
+    assert out.content == str(tmp_path.resolve() / "-P")
+    assert out.cwd == "-P"
+
+
+async def test_a_tracked_cwd_that_is_a_file_resets_without_running(tmp_path: Path) -> None:
+    (tmp_path / "f").write_text("x")
+    out = await run_tool(bash_tool(), make_ctx(tmp_path, cwd="f"), command="touch marker")
+    assert (out.status, out.cwd) == ("error", ".")
+    assert not (tmp_path / "marker").exists()
+    assert not (tmp_path / "f" / "marker").exists()
+
+
+async def test_the_command_cannot_fake_the_cd_failure(tmp_path: Path) -> None:
+    out = await run_tool(
+        bash_tool(),
+        make_ctx(tmp_path),
+        command="trap -p; printf '%s\n' __flagship_nocwd_deadbeef__; exit 97",
+    )
+    assert out.status == "error"
+    assert out.cwd == "."
+    assert "no longer exists" not in out.content
+
+
+async def test_the_tracked_cwd_is_never_resolved_through_oldpwd_or_cdpath(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    elsewhere = tmp_path / "elsewhere"
+    (elsewhere / "sub").mkdir(parents=True)
+    root = tmp_path / "root"
+    (root / "-").mkdir(parents=True)
+    monkeypatch.setenv("OLDPWD", str(elsewhere))
+    monkeypatch.setenv("CDPATH", str(elsewhere))
+    dash = await run_tool(bash_tool(), make_ctx(root, cwd="-"), command="pwd")
+    assert (dash.content, dash.cwd) == (str(root.resolve() / "-"), "-")
+    missing = await run_tool(bash_tool(), make_ctx(root, cwd="sub"), command="touch marker")
+    assert (missing.status, missing.cwd) == ("error", ".")
+    assert not (elsewhere / "sub" / "marker").exists()

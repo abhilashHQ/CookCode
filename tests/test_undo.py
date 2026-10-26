@@ -5,8 +5,8 @@ import pytest
 
 from agent_helpers import Rig, RigFactory, assert_every_call_resolved, bodies
 from harness.agent.undo import undo
-from harness.core.events import CheckpointCreated, CheckpointRestored
-from harness.core.items import Message
+from harness.core.events import CheckpointCreated, CheckpointRestored, ItemEvent
+from harness.core.items import Message, ToolCall
 from harness.env.local import LocalEnvironment
 from harness.providers.base import ModelRequest
 from harness.providers.fake import FakeTurn, call, say
@@ -183,3 +183,17 @@ async def test_undo_works_on_a_reopened_log_with_a_fresh_store(rigs: RigFactory)
     assert again is not None and again.turns == (3,)
     assert not (rigs.workdir / "b.py").exists()
     assert (rigs.workdir / "a.py").read_text() == "v2\n"
+
+
+async def test_undo_refuses_a_log_with_an_unresolved_tool_call(rigs: RigFactory) -> None:
+    rig = await _two_turns(rigs)
+    dangling = ToolCall(id="dangling", provider_call_id="p", name="edit", arguments={})
+    rig.log.append(ItemEvent(item=dangling))
+    before = rig.log.read()
+
+    with pytest.raises(ValueError) as raised:
+        await undo(log=rig.log, env=LocalEnvironment(rig.workdir), checkpoints=_store(rigs))
+
+    assert str(raised.value) == "undo needs every tool call resolved; resume the session first"
+    assert rig.log.read() == before
+    assert (rig.workdir / "b.py").read_text() == "new\n"

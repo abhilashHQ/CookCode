@@ -1,15 +1,16 @@
-import posixpath
 import secrets
+import shlex
 
 from pydantic import BaseModel, Field
 
-from harness.agent.tools import Tool, ToolContext, ToolOutput
+from harness.agent.tools import Tool, ToolContext, ToolOutput, workspace_path
 
 DESCRIPTION = (
     "Run a shell command with bash. Each call runs in a fresh shell: a directory change made "
     "with cd persists to later calls, but exported variables and shell state do not. Stdout and "
     "stderr are merged, output is capped, and a non-zero exit is reported as an error."
 )
+CD_FAILED_EXIT = 97
 
 
 class BashArgs(BaseModel):
@@ -19,82 +20,68 @@ class BashArgs(BaseModel):
     )
 
 
-def _wrap(command: str, sentinel: str, start_var: str) -> str:
-    trap = f'printf "\\n%s\\n%s\\n%s\\n" {sentinel} "${start_var}" "$PWD"'
-    return f"{start_var}=$PWD; trap '{trap}' EXIT\n{command}"
+def _wrap(command: str, cwd: str, sentinel: str, no_cwd: str) -> str:
+    target = cwd if cwd.startswith("/") else f"./{cwd}"
+    enter = (
+        f"cd -P -- {shlex.quote(target)} 2>/dev/null || "
+        f"{{ printf '%s\\n' {no_cwd}; exit {CD_FAILED_EXIT}; }}"
+    )
+    trap = f'printf "\\n%s\\n%s\\n" {sentinel} "$(pwd -P 2>/dev/null)"'
+    return f"{enter}\ntrap '{trap}' EXIT\n{command}"
 
 
-def _split_trailer(output: str, sentinel: str) -> tuple[str, str, str] | None:
+def _split_trailer(output: str, sentinel: str) -> tuple[str, str] | None:
     marker = f"\n{sentinel}\n"
     index = output.rfind(marker)
     if index == -1:
         return None
-    lines = output[index + len(marker) :].split("\n")
-    if len(lines) < 2 or not lines[0] or not lines[1]:
+    final = output[index + len(marker) :].split("\n")[0]
+    if not final:
         return None
-    return output[:index], lines[0], lines[1]
+    return output[:index], final
 
 
-def _root_of(start: str, cwd: str) -> str | None:
-    tracked = posixpath.normpath(cwd)
-    if tracked == ".":
-        return start
-    if posixpath.isabs(tracked):
-        return None
-    suffix = "/" + tracked
-    if start.endswith(suffix):
-        return start[: -len(suffix)] or "/"
-    return None
-
-
-def _report_cwd(start: str, final: str, tracked: str) -> str:
-    root = _root_of(start, tracked)
-    if root is None:
-        return final
-    prefix = root.rstrip("/") + "/"
-    if final == root or final.startswith(prefix):
-        return posixpath.relpath(final, root)
-    return final
+def _reset(cwd: str) -> ToolOutput:
+    return ToolOutput(
+        content=(
+            f"the working directory {cwd} no longer exists or cannot be entered, so the command "
+            "did not run. The working directory is now the workspace root."
+        ),
+        status="error",
+        exit_status="error",
+        cwd=".",
+    )
 
 
 async def _bash(args: BashArgs, ctx: ToolContext) -> ToolOutput:
     token = secrets.token_hex(16)
     sentinel = f"__flagship_cwd_{token}__"
-    wrapped = _wrap(args.command, sentinel, f"__flagship_start_{token}")
+    no_cwd = f"__flagship_nocwd_{token}__"
+    wrapped = _wrap(args.command, ctx.cwd, sentinel, no_cwd)
     timeout_s = ctx.timeout_s if args.timeout_s is None else min(args.timeout_s, ctx.timeout_s)
     try:
         result = await ctx.env.exec(
             wrapped,
-            cwd=ctx.cwd,
+            cwd=".",
             timeout_s=timeout_s,
             max_output_bytes=ctx.max_output_bytes,
             cancel=ctx.cancel,
         )
     except Exception as exc:
-        if isinstance(exc, FileNotFoundError | NotADirectoryError) and (
-            posixpath.normpath(ctx.cwd) != "."
-        ):
-            return ToolOutput(
-                content=(
-                    f"the working directory {ctx.cwd} no longer exists, so the command did not "
-                    "run. The working directory is now the workspace root."
-                ),
-                status="error",
-                exit_status="error",
-                cwd=".",
-            )
         return ToolOutput(
             content=f"bash failed to run: {type(exc).__name__}: {exc}",
             status="error",
             exit_status="error",
         )
+    if result.exit_code == CD_FAILED_EXIT and result.output.strip() == no_cwd:
+        return _reset(ctx.cwd)
     content = result.output
     cwd: str | None = None
     trailer = _split_trailer(content, sentinel)
     if trailer is not None:
-        content, start, final = trailer
+        content, final = trailer
         content = content.removesuffix("\n")
-        cwd = _report_cwd(start, final, ctx.cwd)
+        cwd = workspace_path(ctx.env.root, ".", final)
     if result.cancelled:
         exit_status = "killed"
     elif result.timed_out:

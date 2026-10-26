@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from harness.agent.tools import Tool, ToolContext, ToolOutput, ToolRegistry
+from harness.agent.tools import Tool, ToolContext, ToolOutput, ToolRegistry, workspace_path
 from harness.core.cancel import CancelToken
 from harness.env.local import LocalEnvironment
 
@@ -98,3 +98,33 @@ async def test_handler_runs_through_the_tool(tmp_path: Path) -> None:
     tool = _echo_tool()
     result = await tool.handler(EchoArgs(text="hi"), ctx)
     assert result.content == "hi"
+
+
+@pytest.mark.parametrize(
+    ("cwd", "path", "expected"),
+    [
+        (".", "src/a.py", "src/a.py"),
+        (".", ".", "."),
+        (".", "", "."),
+        ("sub", "../a.py", "a.py"),
+        (".", "/ws/work/a.py", "a.py"),
+        (".", "/ws/work", "."),
+        (".", "../work/secrets/key", "secrets/key"),
+        (".", "../x", "/ws/x"),
+        (".", "../work2/x", "/ws/work2/x"),
+        (".", "/etc/../etc//passwd", "/etc/passwd"),
+        (".", "//etc/passwd", "/etc/passwd"),
+        ("/tmp", "x", "/tmp/x"),
+        ("/ws/work/sub", "x", "sub/x"),
+        ("/tmp", "/ws/work/a.py", "a.py"),
+    ],
+)
+def test_workspace_path_is_root_relative_inside_and_absolute_outside(
+    cwd: str, path: str, expected: str
+) -> None:
+    assert workspace_path("/ws/work", cwd, path) == expected
+
+
+def test_workspace_path_with_the_filesystem_root_as_workspace() -> None:
+    assert workspace_path("/", ".", "/etc/passwd") == "etc/passwd"
+    assert workspace_path("/", "/", ".") == "."

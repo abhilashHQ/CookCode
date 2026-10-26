@@ -247,3 +247,65 @@ async def test_glob_fallback_gives_the_same_file_set_as_rg(tmp_path: Path) -> No
         with_rg = await run_tool(glob_tool(), make_ctx(tmp_path), pattern=pattern)
         without = await run_tool(glob_tool(prefer_rg=False), make_ctx(tmp_path), pattern=pattern)
         assert with_rg.content == without.content, pattern
+
+
+@BOTH
+async def test_glob_path_starting_with_a_dash_is_a_directory_not_a_cd_option(
+    tmp_path: Path, prefer_rg: bool
+) -> None:
+    tool = glob_tool(prefer_rg=prefer_rg)
+    for path in ("-P", "-L", "-"):
+        out = await run_tool(tool, make_ctx(tmp_path), pattern="*", path=path)
+        assert (out.status, out.content) == ("error", f"directory not found: {path}")
+    (tmp_path / "-P").mkdir()
+    (tmp_path / "-P" / "in.txt").write_text("")
+    out = await run_tool(tool, make_ctx(tmp_path), pattern="*", path="-P")
+    assert out.content == "-P/in.txt"
+
+
+@BOTH
+async def test_glob_output_over_the_byte_cap_is_an_error_not_a_list(
+    tmp_path: Path, prefer_rg: bool
+) -> None:
+    (tmp_path / "many").mkdir()
+    for i in range(600):
+        (tmp_path / "many" / f"{'n' * 40}{i:04d}.txt").write_text("")
+    out = await run_tool(
+        glob_tool(prefer_rg=prefer_rg), make_ctx(tmp_path, max_output_bytes=4000), pattern="*.txt"
+    )
+    assert (out.status, out.exit_status) == ("error", "error")
+    assert "600 files matched" in out.content
+    assert "truncated" not in out.content
+
+
+@BOTH
+async def test_glob_bounds_its_output_inside_the_command(tmp_path: Path, prefer_rg: bool) -> None:
+    (tmp_path / "many").mkdir()
+    for i in range(2000):
+        (tmp_path / "many" / f"f{i:04d}.txt").write_text("")
+    out = await run_tool(
+        glob_tool(prefer_rg=prefer_rg), make_ctx(tmp_path, max_output_bytes=12_000), pattern="*"
+    )
+    assert out.status == "ok"
+    lines = out.content.splitlines()
+    assert lines[0] == "many/f0000.txt"
+    assert lines[-1] == "[... 1500 more]"
+    assert out.output_bytes is not None and out.output_bytes < 12_000
+
+
+@BOTH
+async def test_glob_path_is_never_resolved_through_oldpwd_or_cdpath(
+    tmp_path: Path, prefer_rg: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    elsewhere = tmp_path / "elsewhere"
+    (elsewhere / "src").mkdir(parents=True)
+    (elsewhere / "src" / "decoy.txt").write_text("")
+    root = tmp_path / "root"
+    root.mkdir()
+    monkeypatch.setenv("OLDPWD", str(elsewhere))
+    monkeypatch.setenv("CDPATH", str(elsewhere))
+    tool = glob_tool(prefer_rg=prefer_rg)
+    dash = await run_tool(tool, make_ctx(root), pattern="*", path="-")
+    assert (dash.status, dash.content) == ("error", "directory not found: -")
+    src = await run_tool(tool, make_ctx(root), pattern="*", path="src")
+    assert (src.status, src.content) == ("error", "directory not found: src")

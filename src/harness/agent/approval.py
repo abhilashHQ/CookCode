@@ -17,6 +17,8 @@ class Risk(BaseModel):
     side_effect: SideEffect
     rule: str | None
     reason: str
+    cwd: str
+    subjects: tuple[str, ...]
 
 
 class Decision(BaseModel):

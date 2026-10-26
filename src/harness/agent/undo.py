@@ -1,6 +1,10 @@
+from harness.agent.repair import unresolved_calls
+from harness.agent.tools import workspace_path
 from harness.core.events import CheckpointCreated, CheckpointRestored
 from harness.env.base import Environment
 from harness.store.base import CheckpointStore, SessionLog
+
+UNRESOLVED = "undo needs every tool call resolved; resume the session first"
 
 
 async def undo(
@@ -9,6 +13,8 @@ async def undo(
     if turns < 1:
         raise ValueError("turns must be at least 1")
     events = log.read()
+    if unresolved_calls(events):
+        raise ValueError(UNRESOLVED)
     covered = {
         checkpoint_id
         for event in events
@@ -24,12 +30,13 @@ async def undo(
     selected = [checkpoint for checkpoint in open_checkpoints if checkpoint.turn in picked]
     if not selected:
         return None
-    earliest: dict[str, str] = {}
+    earliest: dict[str, tuple[str, str]] = {}
     for checkpoint in selected:
         for path in checkpoint.paths:
-            earliest.setdefault(path, checkpoint.checkpoint_id)
-    loaded = {cid: checkpoints.load(cid) for cid in set(earliest.values())}
-    contents = {path: loaded[cid][path] for path, cid in earliest.items()}
+            canonical = workspace_path(env.root, ".", path)
+            earliest.setdefault(canonical, (checkpoint.checkpoint_id, path))
+    loaded = {cid: checkpoints.load(cid) for cid, _ in earliest.values()}
+    contents = {canonical: loaded[cid][path] for canonical, (cid, path) in earliest.items()}
     for path, content in contents.items():
         if content is None:
             await env.remove_file(path)
