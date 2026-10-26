@@ -13,12 +13,13 @@ from harness.agent.approval import Approver, Decision, PolicyOnlyApprover, Risk
 from harness.agent.context import build_request, estimate_tokens
 from harness.agent.gate import Mode, Policy, decide, session_rules
 from harness.agent.repair import NOT_EXECUTED, RepairAction, plan_repairs, repair_bodies
-from harness.agent.tools import Tool, ToolContext, ToolOutput, ToolRegistry
+from harness.agent.tools import Tool, ToolContext, ToolOutput, ToolRegistry, resolve_path
 from harness.core.cancel import CancelToken
 from harness.core.events import (
     ApprovalRequested,
     ApprovalResolved,
     BudgetExceeded,
+    CheckpointCreated,
     ErrorEvent,
     Event,
     Interrupted,
@@ -41,7 +42,7 @@ from harness.core.items import ToolCall, ToolResult, ToolResultStatus
 from harness.core.usage import StopReason, Usage
 from harness.env.base import Environment
 from harness.providers.base import ItemDone, ModelRequest, Provider, StreamEnd, UsageReport
-from harness.store.base import SessionLog
+from harness.store.base import CheckpointStore, SessionLog
 
 RunStatus = Literal["done", "error", "budget_exceeded", "interrupted"]
 Phase = Literal["streaming", "tool", "idle"]
@@ -181,6 +182,7 @@ class Agent:
         harness_version: str = __version__,
         repair_planner: Callable[[Sequence[Event]], list[RepairAction]] = plan_repairs,
         approver: Approver | None = None,
+        checkpoints: CheckpointStore | None = None,
     ) -> None:
         if config.limits.max_cost_usd is not None:
             raise ValueError("cost limits need pricing, which arrives in M3")
@@ -192,6 +194,7 @@ class Agent:
         self._harness_version = harness_version
         self._repair_planner = repair_planner
         self._approver: Approver = approver or PolicyOnlyApprover()
+        self._checkpoints = checkpoints
         self._steering: deque[str] = deque()
         self._active = False
 
@@ -479,6 +482,37 @@ class Agent:
             raise error
         return Decision(action="deny", reason=f"approver failed: {type(error).__name__}: {error}")
 
+    async def _snapshot(
+        self,
+        store: CheckpointStore,
+        touches: Callable[[Any], list[str]],
+        args: BaseModel,
+        cwd: str,
+    ) -> str | None:
+        try:
+            paths = list(dict.fromkeys(resolve_path(cwd, path) for path in touches(args)))
+            if not paths:
+                return None
+            files: dict[str, bytes | None] = {}
+            for path in paths:
+                try:
+                    files[path] = await self._env.read_file(path)
+                except FileNotFoundError:
+                    files[path] = None
+            checkpoint_id = new_id()
+            store.save(checkpoint_id, files)
+        except asyncio.CancelledError:
+            if _hard_cancelled():
+                raise
+            return "snapshot failed: CancelledError: "
+        except Exception as exc:
+            return f"snapshot failed: {type(exc).__name__}: {exc}"
+        turn = sum(1 for event in self._log.read() if isinstance(event.body, UserMessage))
+        self._log.append(
+            CheckpointCreated(checkpoint_id=checkpoint_id, paths=tuple(paths), turn=turn)
+        )
+        return None
+
     async def _run_call(
         self, run: _RunState, dispatch: _Dispatch, slots: asyncio.Semaphore, killed: set[str]
     ) -> None:
@@ -487,6 +521,15 @@ class Agent:
             if run.cancelled():
                 self._append_result(tool_call.id, "interrupted", NOT_EXECUTED)
                 return
+            cwd = self._current_cwd()
+            if tool.touches is not None and self._checkpoints is not None:
+                failure = await self._snapshot(self._checkpoints, tool.touches, dispatch.args, cwd)
+                if failure is not None:
+                    self._append_result(tool_call.id, "error", failure)
+                    return
+                if run.cancelled():
+                    self._append_result(tool_call.id, "interrupted", NOT_EXECUTED)
+                    return
             self._log.append(
                 ToolCallStarted(
                     call_id=tool_call.id,
@@ -499,7 +542,7 @@ class Agent:
             ctx = ToolContext(
                 env=self._env,
                 cancel=run.token,
-                cwd=self._current_cwd(),
+                cwd=cwd,
                 timeout_s=self._config.tool_timeout_s,
                 max_output_bytes=self._config.max_tool_output_bytes,
             )

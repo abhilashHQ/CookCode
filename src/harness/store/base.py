@@ -1,4 +1,7 @@
+from collections.abc import Mapping
 from typing import Protocol
+
+from pydantic import BaseModel, ConfigDict
 
 from harness.core.events import Event, EventBody
 
@@ -37,3 +40,15 @@ class SessionStore(Protocol):
     def fork(self, session_id: str, at_seq: int, new_session_id: str) -> None: ...
 
     def list_sessions(self) -> list[str]: ...
+
+
+class SnapshotRef(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    checkpoint_id: str
+
+
+class CheckpointStore(Protocol):
+    def save(self, checkpoint_id: str, files: Mapping[str, bytes | None]) -> None: ...
+
+    def load(self, checkpoint_id: str) -> dict[str, bytes | None]: ...

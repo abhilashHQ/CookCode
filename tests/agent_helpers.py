@@ -16,6 +16,7 @@ from harness.core.events import Event, ItemEvent, Limits, SideEffect
 from harness.core.items import Item, ToolCall, ToolResult
 from harness.env.local import LocalEnvironment
 from harness.providers.fake import FakeProvider, FakeTurn
+from harness.store.base import CheckpointStore
 from harness.store.jsonl import JsonlSessionLog, JsonlSessionStore
 
 SESSION = "s1"
@@ -284,6 +285,7 @@ class RigFactory:
         event_delay_s: float = 0.0,
         repair_planner: Callable[[Sequence[Event]], list[RepairAction]] = plan_repairs,
         approver: Approver | None = None,
+        checkpoints: CheckpointStore | None = None,
         **config: Any,
     ) -> Rig:
         log = log or self.open_log()
@@ -303,6 +305,7 @@ class RigFactory:
             config=agent_config,
             repair_planner=repair_planner,
             approver=approver or PolicyOnlyApprover(),
+            checkpoints=checkpoints,
         )
         return Rig(agent=agent, log=log, provider=provider, workdir=self.workdir)
 
