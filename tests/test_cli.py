@@ -132,6 +132,14 @@ async def test_approver_denies_when_input_closes() -> None:
     assert decision.action == "deny"
 
 
+async def test_stdin_from_dev_null_reads_eof_without_a_selector_error() -> None:
+    with open(os.devnull) as null:
+        term = Terminal(out=io.StringIO(), stdin=null)
+        await term.start()
+        assert await term.readline("> ") is None
+        term.close()
+
+
 def test_always_rule_needs_a_single_subject() -> None:
     edit = ToolCall(id="c", provider_call_id="p", name="edit", arguments={})
     assert always_rule(edit, risk("a.py")) == "edit:a.py"

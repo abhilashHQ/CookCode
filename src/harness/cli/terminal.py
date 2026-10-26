@@ -2,6 +2,7 @@ import asyncio
 import difflib
 import json
 import os
+import stat
 import sys
 from collections.abc import AsyncGenerator, AsyncIterator, Callable
 from typing import Any, TextIO
@@ -50,9 +51,16 @@ class Terminal:
         reader = asyncio.StreamReader()
         try:
             fd = self._stdin.fileno()
-            self._was_blocking = os.get_blocking(fd)
-            await loop.connect_read_pipe(lambda: asyncio.StreamReaderProtocol(reader), self._stdin)
+            mode = os.fstat(fd).st_mode
         except (OSError, ValueError):
+            return
+        if not (os.isatty(fd) or stat.S_ISFIFO(mode) or stat.S_ISSOCK(mode)):
+            return
+        self._was_blocking = os.get_blocking(fd)
+        try:
+            await loop.connect_read_pipe(lambda: asyncio.StreamReaderProtocol(reader), self._stdin)
+        except OSError:
+            os.set_blocking(fd, self._was_blocking)
             self._was_blocking = None
             return
         self._reader = reader

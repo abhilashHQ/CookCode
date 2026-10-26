@@ -28,6 +28,7 @@ from harness.providers.openai_compat import (
     SSEDecoder,
     StreamFailure,
     build_body,
+    server_wait,
     to_messages,
 )
 from openai_helpers import (
@@ -350,12 +351,36 @@ async def test_a_rate_limit_is_retried_and_reported() -> None:
     assert len(script.bodies) == 2
 
 
-async def test_retry_after_raises_the_delay_up_to_the_cap() -> None:
-    script = Script([status(503, headers={"retry-after": "7"}), ok(text_stream("ok"))])
+async def test_retry_after_within_the_cap_sets_the_delay() -> None:
+    script = Script([status(503, headers={"retry-after": "0.02"}), ok(text_stream("ok"))])
+    events = await collect(provider(script), request(text_message("user", "x")))
+    assert next(e for e in events if isinstance(e, StreamRetry)).delay_s == pytest.approx(0.02)
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        {"retry-after": "120"},
+        {"x-ratelimit-remaining": "0", "x-ratelimit-reset": str((1_000 + 3_600) * 1000)},
+    ],
+    ids=["retry-after", "exhausted-limit"],
+)
+async def test_a_wait_longer_than_the_cap_fails_at_once(headers: dict[str, str]) -> None:
+    script = Script([status(429, "free-models-per-day", headers)])
     events = await collect(
-        provider(script, backoff_base_s=0.0, backoff_cap_s=0.01), request(text_message("user", "x"))
+        provider(script, backoff_cap_s=30.0, clock=lambda: 1_000.0),
+        request(text_message("user", "x")),
     )
-    assert next(e for e in events if isinstance(e, StreamRetry)).delay_s == pytest.approx(0.01)
+    assert not any(isinstance(e, StreamRetry) for e in events)
+    end = events[-1]
+    assert isinstance(end, StreamEnd) and end.error is not None
+    assert "free-models-per-day" in end.error and "over the 30s retry cap" in end.error
+    assert len(script.bodies) == 1
+
+
+def test_a_limit_with_requests_left_asks_for_no_wait() -> None:
+    headers = httpx.Headers({"x-ratelimit-remaining": "3", "x-ratelimit-reset": "99999999999999"})
+    assert server_wait(headers, now=0.0) is None
 
 
 @pytest.mark.parametrize(

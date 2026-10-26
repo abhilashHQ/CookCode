@@ -19,7 +19,8 @@ Probed on 2026-10-26 against every `:free` model that advertises `tools`:
 
 ## Consequences
 - Free-tier availability changes daily, so the fallback is part of the decision.
-- Not yet measured: whether either model completes a multi-step task end to end. The acceptance run is the fixture task in the walkthrough, run with `harness --once`.
+- North fixed both fixture bugs correctly on its first edit (walkthrough section 5). A clean end-to-end run that finishes with `done` is pending the daily quota reset.
+- 50 free requests a day is about three agent tasks. Ten dollars of credit raises it to 1000.
 
 ## What would change it
 The real-task runs: if north fails tasks that nemotron completes, swap them. Azure credits for runs that count replace both for measurement.

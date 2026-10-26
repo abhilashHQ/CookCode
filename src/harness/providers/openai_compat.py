@@ -1,6 +1,7 @@
 import asyncio
 import json
 import random
+import time
 from collections.abc import AsyncGenerator, Callable, Mapping
 from contextlib import aclosing
 from dataclasses import dataclass, field
@@ -414,17 +415,27 @@ def _chunk_failure(error: JSON) -> StreamFailure:
     return StreamFailure(f"stream error {status}: {message}", retryable=retryable, status=status)
 
 
-def _retry_after(headers: httpx.Headers) -> float | None:
-    value = headers.get("retry-after")
+def _number(value: str | None) -> float | None:
     if value is None:
         return None
     try:
-        return max(float(value), 0.0)
+        return float(value)
     except ValueError:
         return None
 
 
-async def _http_failure(response: httpx.Response) -> StreamFailure:
+def server_wait(headers: httpx.Headers, now: float) -> float | None:
+    """Seconds the server asks us to wait: Retry-After, or the reset of an exhausted limit."""
+    retry_after = _number(headers.get("retry-after"))
+    if retry_after is not None:
+        return max(retry_after, 0.0)
+    reset_ms = _number(headers.get("x-ratelimit-reset"))
+    if _number(headers.get("x-ratelimit-remaining")) == 0 and reset_ms is not None:
+        return max(reset_ms / 1000 - now, 0.0)
+    return None
+
+
+async def _http_failure(response: httpx.Response, now: float) -> StreamFailure:
     body = (await response.aread()).decode("utf-8", "replace")
     try:
         error = _object((_object(json.loads(body)) or {}).get("error"))
@@ -437,7 +448,7 @@ async def _http_failure(response: httpx.Response) -> StreamFailure:
         f"HTTP {status}: {body[:500]}",
         retryable=status in RETRYABLE_STATUS,
         status=status,
-        retry_after_s=_retry_after(response.headers),
+        retry_after_s=server_wait(response.headers, now),
     )
 
 
@@ -459,6 +470,7 @@ class OpenAICompatProvider:
         read_timeout_s: float = 180.0,
         extra_body: Mapping[str, Any] | None = None,
         jitter: Callable[[], float] = random.random,
+        clock: Callable[[], float] = time.time,
     ) -> None:
         self.name = name
         self._api_key = api_key
@@ -471,6 +483,7 @@ class OpenAICompatProvider:
         self._timeout = httpx.Timeout(read_timeout_s, connect=connect_timeout_s)
         self._extra_body = dict(extra_body or {})
         self._jitter = jitter
+        self._clock = clock
 
     def capabilities(self, model: str) -> ModelCaps:
         return self._caps
@@ -488,7 +501,7 @@ class OpenAICompatProvider:
         backoff = min(self._backoff_cap_s, self._backoff_base_s * 2 ** (attempt - 1))
         backoff *= 0.5 + self._jitter() / 2
         if failure.retry_after_s is not None:
-            backoff = max(backoff, min(failure.retry_after_s, self._backoff_cap_s))
+            backoff = max(backoff, failure.retry_after_s)
         return backoff
 
     async def stream(
@@ -512,6 +525,14 @@ class OpenAICompatProvider:
                         if isinstance(event, StreamEnd):
                             return
                 assert failure is not None
+                wait = failure.retry_after_s
+                if failure.retryable and wait is not None and wait > self._backoff_cap_s:
+                    yield StreamEnd(
+                        stop_reason="error",
+                        error=f"{failure.reason} (the server asks to wait {wait:.0f}s, "
+                        f"over the {self._backoff_cap_s:.0f}s retry cap)",
+                    )
+                    return
                 if not failure.retryable or attempt > self._max_retries:
                     tries = f" after {attempt} attempts" if attempt > 1 else ""
                     yield StreamEnd(stop_reason="error", error=f"{failure.reason}{tries}")
@@ -564,7 +585,7 @@ class OpenAICompatProvider:
                 "POST", self._url, json=body, headers=self._headers()
             ) as response:
                 if response.status_code != 200:
-                    await queue.put(await _http_failure(response))
+                    await queue.put(await _http_failure(response, self._clock()))
                     return
                 assembler = ChatStreamAssembler(provider=self.name, model=model)
                 decoder = SSEDecoder()
