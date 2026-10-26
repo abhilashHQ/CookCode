@@ -1,0 +1,182 @@
+import os
+from collections.abc import Iterator
+from dataclasses import dataclass
+from pathlib import Path
+
+import httpx
+import pytest
+
+from harness.core.cancel import CancelToken
+from harness.core.items import Item, Reasoning, ToolCall, ToolResult, text_message
+from harness.providers.base import (
+    ItemDone,
+    ModelRequest,
+    StreamEnd,
+    StreamEvent,
+    ToolSchema,
+    UsageReport,
+)
+from harness.providers.cassette import (
+    Cassette,
+    CassetteMismatch,
+    RecordingTransport,
+    ReplayTransport,
+    first_difference,
+)
+from harness.providers.openai_compat import OpenAICompatProvider
+from harness.redact import Redactor
+from openai_helpers import Script, ok, provider, text_stream
+
+CASSETTES = Path(__file__).parent / "cassettes"
+RECORD = os.environ.get("HARNESS_RECORD") == "1"
+READ_TOOL = ToolSchema(
+    name="read",
+    description="Read a text file and return its contents.",
+    parameters={
+        "type": "object",
+        "properties": {"path": {"type": "string", "description": "File path."}},
+        "required": ["path"],
+    },
+)
+SYSTEM = "You are a coding agent. Use the tools to answer. Keep replies to one short line."
+
+
+# --- the machinery ----------------------------------------------------------------------
+
+
+async def run(source: OpenAICompatProvider, request: ModelRequest) -> list[StreamEvent]:
+    return [event async for event in source.stream(request, CancelToken())]
+
+
+def simple_request(text: str = "hi") -> ModelRequest:
+    return ModelRequest(model="m", system="s", items=(text_message("user", text),))
+
+
+async def test_a_recorded_exchange_replays_to_the_same_events(tmp_path: Path) -> None:
+    cassette = Cassette()
+    inner = Script([ok(text_stream("recorded answer"))]).transport
+    live = await run(provider(Script([]), transport=RecordingTransport(cassette, inner)),
+                     simple_request())
+    path = tmp_path / "tape.json"
+    cassette.save(path)
+    replay = ReplayTransport(Cassette.load(path))
+    replayed = await run(provider(Script([]), transport=replay), simple_request())
+    replay.assert_exhausted()
+    assert [e for e in replayed if not isinstance(e, ItemDone)] == [
+        e for e in live if not isinstance(e, ItemDone)
+    ]
+    assert [e.item.model_dump(exclude={"id"}) for e in replayed if isinstance(e, ItemDone)] == [
+        e.item.model_dump(exclude={"id"}) for e in live if isinstance(e, ItemDone)
+    ]
+
+
+async def test_replay_refuses_a_request_body_that_drifted(tmp_path: Path) -> None:
+    cassette = Cassette()
+    inner = Script([ok(text_stream("x"))]).transport
+    await run(provider(Script([]), transport=RecordingTransport(cassette, inner)),
+              simple_request("first"))
+    events = await run(provider(Script([]), transport=ReplayTransport(cassette)),
+                       simple_request("second"))
+    end = events[-1]
+    assert isinstance(end, StreamEnd) and end.stop_reason == "error"
+    assert end.error is not None
+    assert "$.messages[1].content: expected 'first', got 'second'" in end.error
+
+
+async def test_replay_reports_unrecorded_and_unused_requests() -> None:
+    replay = ReplayTransport(Cassette())
+    events = await run(provider(Script([]), transport=replay), simple_request())
+    end = events[-1]
+    assert isinstance(end, StreamEnd) and end.error is not None
+    assert "was not recorded" in end.error
+    with pytest.raises(CassetteMismatch, match="never made"):
+        ReplayTransport(Cassette([{"request": {}, "response": {}}])).assert_exhausted()
+
+
+def test_saved_cassettes_are_redacted(tmp_path: Path) -> None:
+    secret = "sk-or-v1-" + "a" * 40
+    cassette = Cassette([{"request": {"json": {"note": secret}}, "response": {"body": secret}}])
+    path = tmp_path / "tape.json"
+    cassette.save(path, Redactor())
+    assert secret not in path.read_text()
+
+
+def test_first_difference_names_the_path() -> None:
+    assert first_difference({"a": [1, {"b": 2}]}, {"a": [1, {"b": 3}]}) == (
+        "$.a[1].b: expected 2, got 3"
+    )
+    assert first_difference({"a": 1}, {"a": 1, "c": 2}) == "$.c: unexpected"
+    assert first_difference([1], [1, 2]) == "$: expected 1 entries, got 2"
+    assert first_difference({"a": 1}, {"a": 1}) is None
+
+
+# --- recorded against OpenRouter, replayed offline ---------------------------------------
+
+
+@dataclass
+class Tape:
+    provider: OpenAICompatProvider
+
+
+@pytest.fixture
+def tape(request: pytest.FixtureRequest) -> Iterator[Tape]:
+    name = request.node.name.replace("[", "-").replace("]", "").replace("/", "_").replace(":", "_")
+    path = CASSETTES / f"{name}.json"
+    if RECORD:
+        cassette = Cassette()
+        transport: httpx.AsyncBaseTransport = RecordingTransport(cassette)
+        key = os.environ["OPENROUTER_API_KEY"]
+    else:
+        if not path.exists():
+            pytest.fail(f"missing cassette {path.name}; record with HARNESS_RECORD=1")
+        cassette = Cassette.load(path)
+        transport = ReplayTransport(cassette)
+        key = "replay"
+    source = OpenAICompatProvider(
+        api_key=key, transport=transport, backoff_base_s=0.0 if not RECORD else 2.0
+    )
+    yield Tape(provider=source)
+    if RECORD:
+        cassette.save(path, Redactor([key]))
+    else:
+        assert isinstance(transport, ReplayTransport)
+        transport.assert_exhausted()
+
+
+MODELS = ["cohere/north-mini-code:free", "nvidia/nemotron-3.5-lightning:free"]
+
+
+def items_of(events: list[StreamEvent]) -> list[Item]:
+    return [event.item for event in events if isinstance(event, ItemDone)]
+
+
+@pytest.mark.parametrize("model", MODELS)
+async def test_openrouter_tool_round_trip(tape: Tape, model: str) -> None:
+    ask = text_message("user", "Read notes.txt and todo.txt, then tell me what notes.txt says.")
+    first = await run(
+        tape.provider, ModelRequest(model=model, system=SYSTEM, tools=(READ_TOOL,), items=(ask,))
+    )
+    assert first[-1] == StreamEnd(stop_reason="tool_use")
+    turn = items_of(first)
+    calls = [item for item in turn if isinstance(item, ToolCall)]
+    assert calls and all(call.name == "read" for call in calls)
+    assert any(isinstance(item, Reasoning) for item in turn)
+    usage = next(event for event in first if isinstance(event, UsageReport))
+    assert usage.usage.input > 0 and usage.raw
+
+    def result(call: ToolCall) -> ToolResult:
+        if "notes" in str(call.arguments.get("path")):
+            return ToolResult(call_id=call.id, status="ok", content="the deploy is on friday")
+        return ToolResult(
+            call_id=call.id,
+            status="interrupted",
+            content="not executed: the session stopped before this call ran. Safe to issue again.",
+        )
+
+    history = (ask, *turn, *(result(call) for call in calls))
+    second = await run(
+        tape.provider, ModelRequest(model=model, system=SYSTEM, tools=(READ_TOOL,), items=history)
+    )
+    end = second[-1]
+    assert isinstance(end, StreamEnd) and end.stop_reason in ("end_turn", "tool_use")
+    assert end.error is None
