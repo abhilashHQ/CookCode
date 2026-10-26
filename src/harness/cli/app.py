@@ -3,26 +3,31 @@ import asyncio
 import os
 import signal
 import subprocess
+import sys
+from collections.abc import Callable
 from pathlib import Path
 
+from pydantic import BaseModel, ConfigDict, ValidationError
+
+from harness.agent.approval import Approver
+from harness.agent.gate import Policy, Rule, parse_rule
 from harness.agent.instructions import InstructionFile, load_instructions, render_system
 from harness.agent.loop import Agent, AgentConfig, RunOutcome
 from harness.agent.tools import ToolRegistry
 from harness.agent.undo import undo
+from harness.cli.observe import DisplayProvider, ObservedLog
 from harness.cli.terminal import (
     DIM,
     RED,
     Display,
-    DisplayProvider,
-    ObservedLog,
     Terminal,
     TerminalApprover,
 )
 from harness.core.cancel import CancelToken
-from harness.core.events import Limits
+from harness.core.events import Event, Limits
 from harness.core.ids import new_id
 from harness.env.local import LocalEnvironment
-from harness.providers.base import Provider
+from harness.providers.base import Provider, StreamEvent
 from harness.providers.openai_compat import (
     NIM_BASE_URL,
     OPENROUTER_BASE_URL,
@@ -77,7 +82,7 @@ def _workspace(start: Path) -> Path:
     return Path(top) if top else start
 
 
-def _data_dir() -> Path:
+def data_dir() -> Path:
     configured = os.environ.get("HARNESS_HOME")
     if configured:
         return Path(configured)
@@ -85,9 +90,52 @@ def _data_dir() -> Path:
     return Path(base) / "harness"
 
 
+class PolicyFile(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    allow: list[str] = []
+    deny: list[str] = []
+
+
+def _rules(texts: list[str]) -> tuple[Rule, ...]:
+    rules: list[Rule] = []
+    for text in texts:
+        rule = parse_rule(text)
+        if rule is None:
+            raise ValueError(f"policy rule {text!r} is not in the form tool:pattern")
+        rules.append(rule)
+    return tuple(rules)
+
+
+def load_policy(path: str | None) -> Policy:
+    if path is None:
+        return Policy()
+    try:
+        data = PolicyFile.model_validate_json(Path(path).read_bytes())
+    except (OSError, ValidationError) as exc:
+        raise ValueError(f"cannot load policy {path}: {exc}") from exc
+    return Policy(allow=_rules(data.allow), deny=_rules(data.deny))
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(prog="harness", description="Coding agent, plain CLI.")
+    parser = argparse.ArgumentParser(
+        prog="harness",
+        description="Coding agent. Other commands: harness schema, harness export <session>.",
+    )
     parser.add_argument("prompt", nargs="?", help="first prompt; omit to start at the prompt")
+    parser.add_argument(
+        "-p", "--print", dest="headless", metavar="PROMPT", help="run one prompt headless"
+    )
+    parser.add_argument(
+        "--json", action="store_true", help="headless: write every event as one JSON line"
+    )
+    parser.add_argument(
+        "--approvals",
+        choices=("policy", "stdin"),
+        default="policy",
+        help="headless: who answers approvals the policy leaves open",
+    )
+    parser.add_argument("--policy", help="JSON file with allow and deny rules (tool:pattern)")
     parser.add_argument(
         "--provider", choices=tuple(PRESETS), default=os.environ.get("HARNESS_PROVIDER", "nim")
     )
@@ -105,54 +153,90 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return args
 
 
-class Session:
+class Runtime:
+    """What every client shares: workspace, session store, environment and the agent factory."""
+
     def __init__(
-        self, args: argparse.Namespace, terminal: Terminal, provider: Provider | None = None
+        self,
+        args: argparse.Namespace,
+        sink: Callable[[Event], None],
+        provider: Provider | None = None,
+        policy: Policy | None = None,
     ) -> None:
         self.args = args
         self.provider = provider
-        self.t = terminal
-        self.display = Display(terminal)
-        self.cwd_path = Path.cwd()
-        self.root = _workspace(self.cwd_path)
-        self.cwd = os.path.relpath(self.cwd_path, self.root)
-        data = _data_dir()
+        self.policy = policy if policy is not None else load_policy(args.policy)
+        cwd_path = Path.cwd()
+        root = _workspace(cwd_path)
+        self.cwd = os.path.relpath(cwd_path, root)
+        data = data_dir()
         self.session_id = new_id()
         store = JsonlSessionStore(data / "sessions", Redactor.from_env(SECRET_ENV, os.environ))
-        self.log = ObservedLog(store.open(self.session_id, create=True), self.display.on_event)
+        self.log = ObservedLog(store.open(self.session_id, create=True), sink)
         self.checkpoints = FileCheckpointStore(data / "checkpoints" / self.session_id)
-        self.env = LocalEnvironment(self.root)
-        self.running: CancelToken | None = None
-        self.run_task: asyncio.Task[RunOutcome] | None = None
-        self.read_task: asyncio.Task[str | None] | None = None
+        self.env = LocalEnvironment(root)
         self.instructions: list[InstructionFile] = []
 
-    async def build_agent(self) -> Agent:
+    async def build_agent(
+        self, approver: Approver, stream_sink: Callable[[StreamEvent], None] | None = None
+    ) -> Agent:
         self.instructions = await load_instructions(self.env, self.cwd)
         system = render_system(
             BASE_PROMPT.format(root=self.env.root, cwd=self.cwd), self.instructions
         )
-        provider = self.provider or OpenAICompatProvider(
+        provider: Provider = self.provider or OpenAICompatProvider(
             api_key=os.environ.get(self.args.api_key_env),
             base_url=self.args.base_url,
             name=self.args.provider,
         )
+        if stream_sink is not None:
+            provider = DisplayProvider(provider, stream_sink)
         config = AgentConfig(
             model=self.args.model,
             system_prompt=system,
             limits=Limits(max_turns=self.args.max_turns),
             cwd=self.cwd,
             mode=self.args.mode,
+            policy=self.policy,
         )
         return Agent(
             log=self.log,
-            provider=DisplayProvider(provider, self.display.on_stream),
+            provider=provider,
             env=self.env,
             tools=ToolRegistry(default_tools()),
             config=config,
-            approver=TerminalApprover(self.t),
+            approver=approver,
             checkpoints=self.checkpoints,
         )
+
+
+class Session:
+    def __init__(
+        self,
+        args: argparse.Namespace,
+        terminal: Terminal,
+        provider: Provider | None = None,
+        policy: Policy | None = None,
+    ) -> None:
+        self.args = args
+        self.t = terminal
+        self.display = Display(terminal)
+        self.runtime = Runtime(args, self.display.on_event, provider, policy)
+        self.session_id = self.runtime.session_id
+        self.log = self.runtime.log
+        self.env = self.runtime.env
+        self.checkpoints = self.runtime.checkpoints
+        self.cwd = self.runtime.cwd
+        self.running: CancelToken | None = None
+        self.run_task: asyncio.Task[RunOutcome] | None = None
+        self.read_task: asyncio.Task[str | None] | None = None
+
+    @property
+    def instructions(self) -> list[InstructionFile]:
+        return self.runtime.instructions
+
+    async def build_agent(self) -> Agent:
+        return await self.runtime.build_agent(TerminalApprover(self.t), self.display.on_stream)
 
     def on_interrupt(self) -> None:
         if self.running is not None and not self.running.cancelled:
@@ -226,9 +310,14 @@ async def run_cli(
     if provider is None and not os.environ.get(args.api_key_env):
         print(f"harness: set {args.api_key_env} to an API key for {args.base_url}")
         return 1
+    try:
+        policy = load_policy(args.policy)
+    except ValueError as exc:
+        print(f"harness: {exc}")
+        return 1
     terminal = terminal or Terminal()
     await terminal.start()
-    session = Session(args, terminal, provider)
+    session = Session(args, terminal, provider, policy)
     loop = asyncio.get_running_loop()
     loop.add_signal_handler(signal.SIGINT, session.on_interrupt)
     status = "done"
@@ -260,4 +349,15 @@ async def run_cli(
 
 
 def main(argv: list[str] | None = None) -> int:
-    return asyncio.run(run_cli(parse_args(argv)))
+    from harness.cli import commands, headless
+
+    argv = sys.argv[1:] if argv is None else argv
+    if argv and argv[0] in commands.COMMANDS:
+        return commands.COMMANDS[argv[0]](argv[1:])
+    args = parse_args(argv)
+    if args.headless is not None:
+        return asyncio.run(headless.run_headless(args))
+    if args.json:
+        print("harness: --json needs -p <prompt>", file=sys.stderr)
+        return 1
+    return asyncio.run(run_cli(args))

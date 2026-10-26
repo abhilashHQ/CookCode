@@ -3,7 +3,15 @@ import json
 from datetime import datetime
 from typing import Annotated, Any, ClassVar, Literal
 
-from pydantic import BaseModel, ConfigDict, Discriminator, Field, Tag, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Discriminator,
+    Field,
+    Tag,
+    TypeAdapter,
+    model_validator,
+)
 
 from harness.core._union import tag_or_fallback
 from harness.core.ids import new_id, utc_now
@@ -266,3 +274,12 @@ def to_json_line(event: Event) -> str:
 
 def from_json_line(line: str) -> Event:
     return Event.model_validate_json(line)
+
+
+def event_schema() -> dict[str, Any]:
+    schema = TypeAdapter(Event).json_schema(mode="serialization")
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": f"harness-events-v{SCHEMA_VERSION}",
+        **schema,
+    }

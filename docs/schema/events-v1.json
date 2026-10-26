@@ -1,0 +1,1241 @@
+{
+  "$defs": {
+    "ApprovalRequested": {
+      "properties": {
+        "call_id": {
+          "title": "Call Id",
+          "type": "string"
+        },
+        "risk": {
+          "enum": [
+            "read_only",
+            "mutating",
+            "external"
+          ],
+          "title": "Risk",
+          "type": "string"
+        },
+        "rule": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rule"
+        },
+        "type": {
+          "const": "approval_requested",
+          "default": "approval_requested",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "call_id",
+        "risk"
+      ],
+      "title": "ApprovalRequested",
+      "type": "object"
+    },
+    "ApprovalResolved": {
+      "properties": {
+        "call_id": {
+          "title": "Call Id",
+          "type": "string"
+        },
+        "decision": {
+          "enum": [
+            "allow",
+            "deny",
+            "allow_always"
+          ],
+          "title": "Decision",
+          "type": "string"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "rule": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rule"
+        },
+        "type": {
+          "const": "approval_resolved",
+          "default": "approval_resolved",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "call_id",
+        "decision"
+      ],
+      "title": "ApprovalResolved",
+      "type": "object"
+    },
+    "BudgetExceeded": {
+      "properties": {
+        "limit": {
+          "enum": [
+            "turns",
+            "tokens",
+            "cost",
+            "wall_clock"
+          ],
+          "title": "Limit",
+          "type": "string"
+        },
+        "type": {
+          "const": "budget_exceeded",
+          "default": "budget_exceeded",
+          "title": "Type",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "limit",
+        "value"
+      ],
+      "title": "BudgetExceeded",
+      "type": "object"
+    },
+    "CheckpointCreated": {
+      "properties": {
+        "checkpoint_id": {
+          "title": "Checkpoint Id",
+          "type": "string"
+        },
+        "paths": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Paths",
+          "type": "array"
+        },
+        "turn": {
+          "title": "Turn",
+          "type": "integer"
+        },
+        "type": {
+          "const": "checkpoint_created",
+          "default": "checkpoint_created",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "checkpoint_id",
+        "paths",
+        "turn"
+      ],
+      "title": "CheckpointCreated",
+      "type": "object"
+    },
+    "CheckpointRestored": {
+      "properties": {
+        "checkpoint_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Checkpoint Ids",
+          "type": "array"
+        },
+        "paths": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Paths",
+          "type": "array"
+        },
+        "turns": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Turns",
+          "type": "array"
+        },
+        "type": {
+          "const": "checkpoint_restored",
+          "default": "checkpoint_restored",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "checkpoint_ids",
+        "paths",
+        "turns"
+      ],
+      "title": "CheckpointRestored",
+      "type": "object"
+    },
+    "CompactionApplied": {
+      "properties": {
+        "from_seq": {
+          "title": "From Seq",
+          "type": "integer"
+        },
+        "strategy": {
+          "title": "Strategy",
+          "type": "string"
+        },
+        "to_seq": {
+          "title": "To Seq",
+          "type": "integer"
+        },
+        "tokens_after": {
+          "title": "Tokens After",
+          "type": "integer"
+        },
+        "tokens_before": {
+          "title": "Tokens Before",
+          "type": "integer"
+        },
+        "type": {
+          "const": "compaction_applied",
+          "default": "compaction_applied",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "strategy",
+        "from_seq",
+        "to_seq",
+        "tokens_before",
+        "tokens_after"
+      ],
+      "title": "CompactionApplied",
+      "type": "object"
+    },
+    "ErrorEvent": {
+      "properties": {
+        "kind": {
+          "enum": [
+            "provider",
+            "tool",
+            "environment",
+            "internal"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "retryable": {
+          "title": "Retryable",
+          "type": "boolean"
+        },
+        "type": {
+          "const": "error",
+          "default": "error",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "retryable",
+        "message"
+      ],
+      "title": "ErrorEvent",
+      "type": "object"
+    },
+    "Interrupted": {
+      "properties": {
+        "killed": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Killed",
+          "type": "array"
+        },
+        "phase": {
+          "enum": [
+            "streaming",
+            "tool",
+            "idle"
+          ],
+          "title": "Phase",
+          "type": "string"
+        },
+        "type": {
+          "const": "interrupted",
+          "default": "interrupted",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "phase"
+      ],
+      "title": "Interrupted",
+      "type": "object"
+    },
+    "ItemEvent": {
+      "properties": {
+        "item": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Message"
+            },
+            {
+              "$ref": "#/$defs/Reasoning"
+            },
+            {
+              "$ref": "#/$defs/ToolCall"
+            },
+            {
+              "$ref": "#/$defs/ToolResult"
+            },
+            {
+              "$ref": "#/$defs/OtherItem"
+            },
+            {
+              "$ref": "#/$defs/UnknownItem"
+            }
+          ],
+          "title": "Item"
+        },
+        "request_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Request Id"
+        },
+        "type": {
+          "const": "item",
+          "default": "item",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "item"
+      ],
+      "title": "ItemEvent",
+      "type": "object"
+    },
+    "Limits": {
+      "properties": {
+        "max_cost_usd": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Cost Usd"
+        },
+        "max_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Tokens"
+        },
+        "max_turns": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Turns"
+        },
+        "max_wall_s": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Wall S"
+        }
+      },
+      "title": "Limits",
+      "type": "object"
+    },
+    "Message": {
+      "properties": {
+        "parts": {
+          "items": {
+            "$ref": "#/$defs/TextPart"
+          },
+          "title": "Parts",
+          "type": "array"
+        },
+        "role": {
+          "enum": [
+            "user",
+            "assistant",
+            "system"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "type": {
+          "const": "message",
+          "default": "message",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "parts"
+      ],
+      "title": "Message",
+      "type": "object"
+    },
+    "ModelRequestFinished": {
+      "properties": {
+        "raw_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw Ref"
+        },
+        "raw_usage": {
+          "additionalProperties": true,
+          "title": "Raw Usage",
+          "type": "object"
+        },
+        "request_id": {
+          "title": "Request Id",
+          "type": "string"
+        },
+        "stop_reason": {
+          "enum": [
+            "end_turn",
+            "tool_use",
+            "max_tokens",
+            "refusal",
+            "aborted",
+            "error"
+          ],
+          "title": "Stop Reason",
+          "type": "string"
+        },
+        "type": {
+          "const": "model_request_finished",
+          "default": "model_request_finished",
+          "title": "Type",
+          "type": "string"
+        },
+        "usage": {
+          "$ref": "#/$defs/Usage"
+        }
+      },
+      "required": [
+        "request_id",
+        "stop_reason",
+        "usage"
+      ],
+      "title": "ModelRequestFinished",
+      "type": "object"
+    },
+    "ModelRequestStarted": {
+      "properties": {
+        "request_id": {
+          "title": "Request Id",
+          "type": "string"
+        },
+        "token_estimate": {
+          "title": "Token Estimate",
+          "type": "integer"
+        },
+        "type": {
+          "const": "model_request_started",
+          "default": "model_request_started",
+          "title": "Type",
+          "type": "string"
+        },
+        "view": {
+          "title": "View",
+          "type": "string"
+        }
+      },
+      "required": [
+        "request_id",
+        "view",
+        "token_estimate"
+      ],
+      "title": "ModelRequestStarted",
+      "type": "object"
+    },
+    "OtherEvent": {
+      "additionalProperties": true,
+      "properties": {
+        "type": {
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "OtherEvent",
+      "type": "object"
+    },
+    "OtherItem": {
+      "properties": {
+        "provider": {
+          "title": "Provider",
+          "type": "string"
+        },
+        "raw": {
+          "additionalProperties": true,
+          "title": "Raw",
+          "type": "object"
+        },
+        "type": {
+          "const": "other",
+          "default": "other",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "raw"
+      ],
+      "title": "OtherItem",
+      "type": "object"
+    },
+    "ProviderRetry": {
+      "properties": {
+        "attempt": {
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "delay_s": {
+          "title": "Delay S",
+          "type": "number"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "request_id": {
+          "title": "Request Id",
+          "type": "string"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        },
+        "type": {
+          "const": "provider_retry",
+          "default": "provider_retry",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "request_id",
+        "attempt",
+        "delay_s",
+        "reason"
+      ],
+      "title": "ProviderRetry",
+      "type": "object"
+    },
+    "Reasoning": {
+      "properties": {
+        "model_family": {
+          "title": "Model Family",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "provider": {
+          "title": "Provider",
+          "type": "string"
+        },
+        "summary_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Summary Text"
+        },
+        "type": {
+          "const": "reasoning",
+          "default": "reasoning",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "model_family",
+        "payload"
+      ],
+      "title": "Reasoning",
+      "type": "object"
+    },
+    "Repaired": {
+      "properties": {
+        "call_id": {
+          "title": "Call Id",
+          "type": "string"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "interrupted",
+            "unknown"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "type": {
+          "const": "repaired",
+          "default": "repaired",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "call_id",
+        "status",
+        "reason"
+      ],
+      "title": "Repaired",
+      "type": "object"
+    },
+    "RunConfig": {
+      "properties": {
+        "effort": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Effort"
+        },
+        "harness_version": {
+          "title": "Harness Version",
+          "type": "string"
+        },
+        "limits": {
+          "$ref": "#/$defs/Limits",
+          "default": {
+            "max_cost_usd": null,
+            "max_tokens": null,
+            "max_turns": null,
+            "max_wall_s": null
+          }
+        },
+        "mode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mode"
+        },
+        "model": {
+          "title": "Model",
+          "type": "string"
+        },
+        "policy": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Policy",
+          "type": "array"
+        },
+        "provider": {
+          "title": "Provider",
+          "type": "string"
+        },
+        "system_prompt_sha256": {
+          "default": "",
+          "title": "System Prompt Sha256",
+          "type": "string"
+        },
+        "tools": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tools",
+          "type": "array"
+        }
+      },
+      "required": [
+        "provider",
+        "model",
+        "harness_version"
+      ],
+      "title": "RunConfig",
+      "type": "object"
+    },
+    "RunStarted": {
+      "properties": {
+        "config": {
+          "$ref": "#/$defs/RunConfig"
+        },
+        "config_id": {
+          "title": "Config Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "run_started",
+          "default": "run_started",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "config",
+        "config_id"
+      ],
+      "title": "RunStarted",
+      "type": "object"
+    },
+    "SessionFinished": {
+      "properties": {
+        "status": {
+          "enum": [
+            "done",
+            "error",
+            "budget_exceeded",
+            "interrupted"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "turns": {
+          "title": "Turns",
+          "type": "integer"
+        },
+        "type": {
+          "const": "session_finished",
+          "default": "session_finished",
+          "title": "Type",
+          "type": "string"
+        },
+        "usage": {
+          "$ref": "#/$defs/Usage"
+        }
+      },
+      "required": [
+        "status",
+        "turns",
+        "usage"
+      ],
+      "title": "SessionFinished",
+      "type": "object"
+    },
+    "SessionStarted": {
+      "properties": {
+        "config": {
+          "$ref": "#/$defs/RunConfig"
+        },
+        "config_id": {
+          "title": "Config Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "session_started",
+          "default": "session_started",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "config",
+        "config_id"
+      ],
+      "title": "SessionStarted",
+      "type": "object"
+    },
+    "SteerMessage": {
+      "properties": {
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "const": "steer_message",
+          "default": "steer_message",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "SteerMessage",
+      "type": "object"
+    },
+    "TextPart": {
+      "properties": {
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "const": "text",
+          "default": "text",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextPart",
+      "type": "object"
+    },
+    "ToolCall": {
+      "properties": {
+        "arguments": {
+          "additionalProperties": true,
+          "title": "Arguments",
+          "type": "object"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "provider_call_id": {
+          "title": "Provider Call Id",
+          "type": "string"
+        },
+        "provider_item_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Item Id"
+        },
+        "raw_arguments": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw Arguments"
+        },
+        "type": {
+          "const": "tool_call",
+          "default": "tool_call",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "provider_call_id",
+        "name",
+        "arguments"
+      ],
+      "title": "ToolCall",
+      "type": "object"
+    },
+    "ToolCallFinished": {
+      "properties": {
+        "call_id": {
+          "title": "Call Id",
+          "type": "string"
+        },
+        "cwd": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cwd"
+        },
+        "duration_s": {
+          "title": "Duration S",
+          "type": "number"
+        },
+        "exit_status": {
+          "enum": [
+            "ok",
+            "error",
+            "timeout",
+            "killed"
+          ],
+          "title": "Exit Status",
+          "type": "string"
+        },
+        "output_bytes": {
+          "title": "Output Bytes",
+          "type": "integer"
+        },
+        "truncated": {
+          "title": "Truncated",
+          "type": "boolean"
+        },
+        "type": {
+          "const": "tool_call_finished",
+          "default": "tool_call_finished",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "call_id",
+        "exit_status",
+        "duration_s",
+        "output_bytes",
+        "truncated"
+      ],
+      "title": "ToolCallFinished",
+      "type": "object"
+    },
+    "ToolCallStarted": {
+      "properties": {
+        "arguments": {
+          "additionalProperties": true,
+          "title": "Arguments",
+          "type": "object"
+        },
+        "call_id": {
+          "title": "Call Id",
+          "type": "string"
+        },
+        "side_effect": {
+          "enum": [
+            "read_only",
+            "mutating",
+            "external"
+          ],
+          "title": "Side Effect",
+          "type": "string"
+        },
+        "tool": {
+          "title": "Tool",
+          "type": "string"
+        },
+        "type": {
+          "const": "tool_call_started",
+          "default": "tool_call_started",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "call_id",
+        "tool",
+        "arguments",
+        "side_effect"
+      ],
+      "title": "ToolCallStarted",
+      "type": "object"
+    },
+    "ToolResult": {
+      "properties": {
+        "call_id": {
+          "title": "Call Id",
+          "type": "string"
+        },
+        "content": {
+          "title": "Content",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "error",
+            "interrupted",
+            "denied",
+            "unknown"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "type": {
+          "const": "tool_result",
+          "default": "tool_result",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "call_id",
+        "status",
+        "content"
+      ],
+      "title": "ToolResult",
+      "type": "object"
+    },
+    "UnknownItem": {
+      "additionalProperties": true,
+      "properties": {
+        "type": {
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "UnknownItem",
+      "type": "object"
+    },
+    "Usage": {
+      "properties": {
+        "cache_read": {
+          "default": 0,
+          "title": "Cache Read",
+          "type": "integer"
+        },
+        "cache_write": {
+          "default": 0,
+          "title": "Cache Write",
+          "type": "integer"
+        },
+        "input": {
+          "default": 0,
+          "title": "Input",
+          "type": "integer"
+        },
+        "output": {
+          "default": 0,
+          "title": "Output",
+          "type": "integer"
+        },
+        "reasoning": {
+          "default": 0,
+          "title": "Reasoning",
+          "type": "integer"
+        }
+      },
+      "title": "Usage",
+      "type": "object"
+    },
+    "UserMessage": {
+      "properties": {
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "const": "user_message",
+          "default": "user_message",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "UserMessage",
+      "type": "object"
+    }
+  },
+  "$id": "harness-events-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "body": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/SessionStarted"
+        },
+        {
+          "$ref": "#/$defs/RunStarted"
+        },
+        {
+          "$ref": "#/$defs/UserMessage"
+        },
+        {
+          "$ref": "#/$defs/SteerMessage"
+        },
+        {
+          "$ref": "#/$defs/ModelRequestStarted"
+        },
+        {
+          "$ref": "#/$defs/ItemEvent"
+        },
+        {
+          "$ref": "#/$defs/ModelRequestFinished"
+        },
+        {
+          "$ref": "#/$defs/ProviderRetry"
+        },
+        {
+          "$ref": "#/$defs/ToolCallStarted"
+        },
+        {
+          "$ref": "#/$defs/ToolCallFinished"
+        },
+        {
+          "$ref": "#/$defs/ApprovalRequested"
+        },
+        {
+          "$ref": "#/$defs/ApprovalResolved"
+        },
+        {
+          "$ref": "#/$defs/CheckpointCreated"
+        },
+        {
+          "$ref": "#/$defs/CheckpointRestored"
+        },
+        {
+          "$ref": "#/$defs/CompactionApplied"
+        },
+        {
+          "$ref": "#/$defs/Interrupted"
+        },
+        {
+          "$ref": "#/$defs/Repaired"
+        },
+        {
+          "$ref": "#/$defs/BudgetExceeded"
+        },
+        {
+          "$ref": "#/$defs/ErrorEvent"
+        },
+        {
+          "$ref": "#/$defs/SessionFinished"
+        },
+        {
+          "$ref": "#/$defs/OtherEvent"
+        }
+      ],
+      "title": "Body"
+    },
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "layer": {
+      "enum": [
+        "model",
+        "internal"
+      ],
+      "title": "Layer",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "seq": {
+      "minimum": 0,
+      "title": "Seq",
+      "type": "integer"
+    },
+    "ts": {
+      "format": "date-time",
+      "title": "Ts",
+      "type": "string"
+    }
+  },
+  "required": [
+    "seq",
+    "id",
+    "ts",
+    "layer",
+    "body"
+  ],
+  "title": "Event",
+  "type": "object"
+}

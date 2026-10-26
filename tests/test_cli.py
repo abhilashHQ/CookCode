@@ -8,8 +8,8 @@ import pytest
 
 from harness.agent.approval import Risk
 from harness.cli.app import parse_args, run_cli
+from harness.cli.observe import ObservedLog
 from harness.cli.terminal import (
-    ObservedLog,
     Terminal,
     TerminalApprover,
     always_rule,
