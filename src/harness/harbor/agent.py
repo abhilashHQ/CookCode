@@ -17,14 +17,13 @@ from harness import __version__
 from harness.agent.instructions import load_instructions, render_system
 from harness.agent.loop import Agent, AgentConfig
 from harness.agent.tools import ToolRegistry
-from harness.cli.app import BASE_PROMPT, PRESETS, SECRET_ENV
+from harness.cli.app import BASE_PROMPT, PRESETS, SECRET_ENV, make_provider
 from harness.core.events import Event, Limits, ModelRequestFinished, SessionFinished
 from harness.core.ids import new_id
 from harness.core.usage import Usage
 from harness.env.harbor import HarborEnvironment
 from harness.export.atif import AGENT_NAME, to_atif
 from harness.providers.base import Provider
-from harness.providers.openai_compat import OpenAICompatProvider
 from harness.redact import Redactor
 from harness.store.checkpoints import FileCheckpointStore
 from harness.store.jsonl import JsonlSessionStore
@@ -100,9 +99,7 @@ class HarnessAgent(BaseAgent):
             agent = Agent(
                 log=log,
                 provider=self.provider
-                or OpenAICompatProvider(
-                    api_key=secrets.get(key_env), base_url=base_url, name=preset
-                ),
+                or make_provider(preset, api_key=secrets.get(key_env), base_url=base_url),
                 env=env,
                 tools=tools,
                 config=AgentConfig(

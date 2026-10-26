@@ -28,6 +28,7 @@ from harness.core.events import Event, Limits, RunConfig, RunStarted, SessionSta
 from harness.core.ids import new_id
 from harness.env.local import LocalEnvironment
 from harness.providers.base import Provider, StreamEvent
+from harness.providers.gemini import GEMINI_BASE_URL, GeminiProvider
 from harness.providers.openai_compat import (
     NIM_BASE_URL,
     OPENROUTER_BASE_URL,
@@ -46,7 +47,14 @@ from harness.tools import default_tools
 PRESETS = {
     "nim": (NIM_BASE_URL, "NVIDIA_API_KEY", "minimaxai/minimax-m3.1-flash"),
     "openrouter": (OPENROUTER_BASE_URL, "OPENROUTER_API_KEY", "cohere/north-mini-code:free"),
+    "gemini": (GEMINI_BASE_URL, "GEMINI_API_KEY", "gemini-3.5-flash"),
 }
+
+
+def make_provider(preset: str, *, api_key: str | None, base_url: str) -> Provider:
+    if preset == "gemini":
+        return GeminiProvider(api_key=api_key, base_url=base_url, name=preset)
+    return OpenAICompatProvider(api_key=api_key, base_url=base_url, name=preset)
 SECRET_ENV = (
     "NVIDIA_API_KEY",
     "OPENROUTER_API_KEY",
@@ -245,10 +253,10 @@ class Runtime:
         system = render_system(
             BASE_PROMPT.format(root=self.env.root, cwd=self.cwd), self.instructions
         )
-        provider: Provider = self.provider or OpenAICompatProvider(
+        provider: Provider = self.provider or make_provider(
+            self.args.provider,
             api_key=os.environ.get(self.args.api_key_env),
             base_url=self.args.base_url,
-            name=self.args.provider,
         )
         if stream_sink is not None:
             provider = DisplayProvider(provider, stream_sink)

@@ -23,6 +23,8 @@ from harness.providers.cassette import (
     ReplayTransport,
     first_difference,
 )
+from harness.providers.gemini import FOREIGN_SIGNATURE, GEMINI_BASE_URL, GeminiProvider
+from harness.providers.http import StreamingHttpProvider
 from harness.providers.openai_compat import (
     NIM_BASE_URL,
     OPENROUTER_BASE_URL,
@@ -48,7 +50,7 @@ SYSTEM = "You are a coding agent. Use the tools to answer. Keep replies to one s
 # --- the machinery ----------------------------------------------------------------------
 
 
-async def run(source: OpenAICompatProvider, request: ModelRequest) -> list[StreamEvent]:
+async def run(source: StreamingHttpProvider, request: ModelRequest) -> list[StreamEvent]:
     return [event async for event in source.stream(request, CancelToken())]
 
 
@@ -119,12 +121,14 @@ def test_first_difference_names_the_path() -> None:
 
 @dataclass
 class Tape:
-    provider: OpenAICompatProvider
+    provider: StreamingHttpProvider
+    path: Path
 
 
 PROVIDERS = {
     "openrouter": (OPENROUTER_BASE_URL, "OPENROUTER_API_KEY"),
     "nim": (NIM_BASE_URL, "NVIDIA_API_KEY"),
+    "gemini": (GEMINI_BASE_URL, "GEMINI_API_KEY"),
 }
 
 
@@ -144,14 +148,15 @@ def tape(request: pytest.FixtureRequest) -> Iterator[Tape]:
         cassette = Cassette.load(path)
         transport = ReplayTransport(cassette)
         key = "replay"
-    source = OpenAICompatProvider(
+    kind = GeminiProvider if provider_name == "gemini" else OpenAICompatProvider
+    source = kind(
         api_key=key,
         base_url=base_url,
         name=provider_name,
         transport=transport,
         backoff_base_s=0.0 if not RECORD else 2.0,
     )
-    yield Tape(provider=source)
+    yield Tape(provider=source, path=path)
     if RECORD:
         cassette.save(path, Redactor([key]))
     else:
@@ -175,6 +180,19 @@ async def test_openrouter_tool_round_trip(tape: Tape, model: str) -> None:
 @pytest.mark.parametrize("model", ["minimaxai/minimax-m3.1-flash"])
 async def test_nim_tool_round_trip(tape: Tape, model: str) -> None:
     await round_trip(tape, model)
+
+
+@pytest.mark.parametrize("tape", ["gemini"], indirect=True)
+@pytest.mark.parametrize("model", ["gemini-3.5-flash"])
+async def test_gemini_signed_round_trip(tape: Tape, model: str) -> None:
+    await round_trip(tape, model)
+    if RECORD:
+        return
+    second = Cassette.load(tape.path).interactions[1]["request"]["json"]
+    model_turn = second["contents"][1]
+    signed = [part for part in model_turn["parts"] if "thoughtSignature" in part]
+    assert signed and "functionCall" in signed[0]
+    assert signed[0]["thoughtSignature"] != FOREIGN_SIGNATURE
 
 
 async def round_trip(tape: Tape, model: str) -> None:

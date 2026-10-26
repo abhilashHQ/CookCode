@@ -282,12 +282,20 @@ async def test_retry_delay_from_error_details() -> None:
     assert isinstance(retry, StreamRetry) and retry.delay_s >= 2.0 and retry.status == 429
 
 
+async def test_a_per_minute_wait_over_the_backoff_cap_is_honored() -> None:
+    script = Script([rate_limited("37s")])
+    stream = provider(script).stream(request(text_message("user", "hi")), CancelToken())
+    first = await anext(stream)
+    await stream.aclose()
+    assert isinstance(first, StreamRetry) and first.delay_s == 37.0
+
+
 async def test_long_retry_delay_fails_fast() -> None:
     events = await collect(provider(Script([rate_limited("400s")])), request())
     assert events == [StreamEnd(
         stop_reason="error",
         error="HTTP 429: stream error 429: RESOURCE_EXHAUSTED quota "
-        "(the server asks to wait 400s, over the 30s retry cap)",
+        "(the server asks to wait 400s, over the 120s limit)",
     )]
 
 

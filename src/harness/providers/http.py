@@ -124,6 +124,7 @@ class StreamingHttpProvider(ABC):
         max_retries: int = 4,
         backoff_base_s: float = 1.0,
         backoff_cap_s: float = 30.0,
+        max_server_wait_s: float = 120.0,
         connect_timeout_s: float = 30.0,
         read_timeout_s: float = 180.0,
         jitter: Callable[[], float] = random.random,
@@ -135,6 +136,7 @@ class StreamingHttpProvider(ABC):
         self._max_retries = max_retries
         self._backoff_base_s = backoff_base_s
         self._backoff_cap_s = backoff_cap_s
+        self._max_server_wait_s = max_server_wait_s
         self._timeout = httpx.Timeout(read_timeout_s, connect=connect_timeout_s)
         self._jitter = jitter
         self._clock = clock
@@ -210,11 +212,11 @@ class StreamingHttpProvider(ABC):
                             return
                 assert failure is not None
                 wait = failure.retry_after_s
-                if failure.retryable and wait is not None and wait > self._backoff_cap_s:
+                if failure.retryable and wait is not None and wait > self._max_server_wait_s:
                     yield StreamEnd(
                         stop_reason="error",
                         error=f"{failure.reason} (the server asks to wait {wait:.0f}s, "
-                        f"over the {self._backoff_cap_s:.0f}s retry cap)",
+                        f"over the {self._max_server_wait_s:.0f}s limit)",
                     )
                     return
                 if not failure.retryable or attempt > self._max_retries:

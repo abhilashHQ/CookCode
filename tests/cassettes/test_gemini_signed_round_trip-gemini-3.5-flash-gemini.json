@@ -1,0 +1,173 @@
+{
+ "version": 1,
+ "interactions": [
+  {
+   "request": {
+    "method": "POST",
+    "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:streamGenerateContent?alt=sse",
+    "json": {
+     "contents": [
+      {
+       "role": "user",
+       "parts": [
+        {
+         "text": "Read notes.txt and todo.txt, then tell me what notes.txt says."
+        }
+       ]
+      }
+     ],
+     "systemInstruction": {
+      "parts": [
+       {
+        "text": "You are a coding agent. Use the tools to answer. Keep replies to one short line."
+       }
+      ]
+     },
+     "tools": [
+      {
+       "functionDeclarations": [
+        {
+         "name": "read",
+         "description": "Read a text file and return its contents.",
+         "parametersJsonSchema": {
+          "type": "object",
+          "properties": {
+           "path": {
+            "type": "string",
+            "description": "File path."
+           }
+          },
+          "required": [
+           "path"
+          ]
+         }
+        }
+       ]
+      }
+     ],
+     "generationConfig": {
+      "thinkingConfig": {
+       "includeThoughts": true
+      }
+     }
+    }
+   },
+   "response": {
+    "status": 200,
+    "headers": {
+     "content-type": "text/event-stream"
+    },
+    "body": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"**Analyzing Tool Interaction**\\n\\nI'm currently focused on how to best interact with tools, specifically the reading ones. It seems I need to read both `notes.txt` and `todo.txt` but I'm unsure if I can call them in sequence or parallel. I'll need to check the tool definitions for this capability. It's a key factor for the next steps!\\n\\n\\n\",\"thought\": true}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 90,\"totalTokenCount\": 161,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 90}],\"thoughtsTokenCount\": 71,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.6-flash\",\"responseId\": \"RYHfaqGwM_mQ3LUP1qmKkQU\"}\r\n\r\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"functionCall\": {\"name\": \"read\",\"args\": {\"path\": \"notes.txt\"},\"id\": \"call_3269389\"},\"thoughtSignature\": \"EqADCp0DAWkUfRMreZJSBiKBTkCOP83k4D+4Y9zVkEkIqFvZL4pc/Wm+OXPlIGePyXbXm08jI+YxGqa7to7i4hN9i7ORgTC9aUUVFS/TXtVasVSW3t2peDKRodg3uvdPi9VK16VH/ezZfyUkgGtyeHegNnshIEucRuD7dF5Dxlzo5sZqsIbQJfwpJ/ElhOm0AJpFExL7kI/a/oymBIYrsC3bjW19tdmfaogBDIT7igkq2/CZpuziGQvgfb6JJaFN1xpwEvCgaM3OQgujILWNoKWcDAebnOCVvn3WaDXZH6A99MvzkF1wUpwstYI6UDxVGSod726I+ft2HWV7ZLAUtLoI06p56DdJUmFhHGjvZc+bMQgJKIfwb5Zid3fUiAUmidf6yMRrBBzgAOEC2oTFucsfZPe8UQ/pLoa6sZ4XrRO4oqZg9fl8qkCT/MfsBx8jfiXStfG3v7/0+lnoaUn2sSjCoN/72SMym3w7FgNmPMphT9uWyAPv2rzi2Gfm2R6a7kkNGDiJFF5RdgIBwcQmXdjL5BcgS5IVlARlOmpieCJzXpg=\"}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 90,\"candidatesTokenCount\": 16,\"totalTokenCount\": 180,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 90}],\"thoughtsTokenCount\": 74,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.6-flash\",\"responseId\": \"RYHfaqGwM_mQ3LUP1qmKkQU\"}\r\n\r\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"functionCall\": {\"name\": \"read\",\"args\": {\"path\": \"todo.txt\"},\"id\": \"call_3269390\"}}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 90,\"candidatesTokenCount\": 32,\"totalTokenCount\": 196,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 90}],\"thoughtsTokenCount\": 74,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.6-flash\",\"responseId\": \"RYHfaqGwM_mQ3LUP1qmKkQU\"}\r\n\r\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"\"}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 90,\"candidatesTokenCount\": 32,\"totalTokenCount\": 196,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 90}],\"thoughtsTokenCount\": 74,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.6-flash\",\"responseId\": \"RYHfaqGwM_mQ3LUP1qmKkQU\"}\r\n\r\n"
+   }
+  },
+  {
+   "request": {
+    "method": "POST",
+    "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:streamGenerateContent?alt=sse",
+    "json": {
+     "contents": [
+      {
+       "role": "user",
+       "parts": [
+        {
+         "text": "Read notes.txt and todo.txt, then tell me what notes.txt says."
+        }
+       ]
+      },
+      {
+       "role": "model",
+       "parts": [
+        {
+         "text": ""
+        },
+        {
+         "functionCall": {
+          "name": "read",
+          "args": {
+           "path": "notes.txt"
+          },
+          "id": "call_3269389"
+         },
+         "thoughtSignature": "EqADCp0DAWkUfRMreZJSBiKBTkCOP83k4D+4Y9zVkEkIqFvZL4pc/Wm+OXPlIGePyXbXm08jI+YxGqa7to7i4hN9i7ORgTC9aUUVFS/TXtVasVSW3t2peDKRodg3uvdPi9VK16VH/ezZfyUkgGtyeHegNnshIEucRuD7dF5Dxlzo5sZqsIbQJfwpJ/ElhOm0AJpFExL7kI/a/oymBIYrsC3bjW19tdmfaogBDIT7igkq2/CZpuziGQvgfb6JJaFN1xpwEvCgaM3OQgujILWNoKWcDAebnOCVvn3WaDXZH6A99MvzkF1wUpwstYI6UDxVGSod726I+ft2HWV7ZLAUtLoI06p56DdJUmFhHGjvZc+bMQgJKIfwb5Zid3fUiAUmidf6yMRrBBzgAOEC2oTFucsfZPe8UQ/pLoa6sZ4XrRO4oqZg9fl8qkCT/MfsBx8jfiXStfG3v7/0+lnoaUn2sSjCoN/72SMym3w7FgNmPMphT9uWyAPv2rzi2Gfm2R6a7kkNGDiJFF5RdgIBwcQmXdjL5BcgS5IVlARlOmpieCJzXpg="
+        },
+        {
+         "functionCall": {
+          "name": "read",
+          "args": {
+           "path": "todo.txt"
+          },
+          "id": "call_3269390"
+         }
+        }
+       ]
+      },
+      {
+       "role": "user",
+       "parts": [
+        {
+         "functionResponse": {
+          "name": "read",
+          "response": {
+           "output": "the deploy is on friday"
+          },
+          "id": "call_3269389"
+         }
+        },
+        {
+         "functionResponse": {
+          "name": "read",
+          "response": {
+           "error": "[interrupted] not executed: the session stopped before this call ran. Safe to issue again."
+          },
+          "id": "call_3269390"
+         }
+        }
+       ]
+      }
+     ],
+     "systemInstruction": {
+      "parts": [
+       {
+        "text": "You are a coding agent. Use the tools to answer. Keep replies to one short line."
+       }
+      ]
+     },
+     "tools": [
+      {
+       "functionDeclarations": [
+        {
+         "name": "read",
+         "description": "Read a text file and return its contents.",
+         "parametersJsonSchema": {
+          "type": "object",
+          "properties": {
+           "path": {
+            "type": "string",
+            "description": "File path."
+           }
+          },
+          "required": [
+           "path"
+          ]
+         }
+        }
+       ]
+      }
+     ],
+     "generationConfig": {
+      "thinkingConfig": {
+       "includeThoughts": true
+      }
+     }
+    }
+   },
+   "response": {
+    "status": 200,
+    "headers": {
+     "content-type": "text/event-stream"
+    },
+    "body": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"functionCall\": {\"name\": \"read\",\"args\": {\"path\": \"todo.txt\"},\"id\": \"call_2901443\"},\"thoughtSignature\": \"EokCCoYCAWkUfRMk0l9FITwnOezurvXqitwOIKNdAYQ5KxI/vs6MX/EhYagX0/9yU9+FMWiIT/bNOpz+vc+Ds+peQT21yhVjECkQH3Cd8ehPxbxPQBwAzNAOyAtGEDuf3fSLutg0OjeA0NwZFp+k7/nEIHMLtv+J1LwnyH+bemsm61/jTV2ovFTmgmP0jo3clTA25k3MoXMd46f0NVwCkG2k2LGOU9Kx/N2b04wguOY5eGILiwmi+uNTYl0O3tNRYy8NiunDrDU0Z+uyRRMzCCYXu9dyDkaOfFGOKE2RtGm3PAzSlnCwM893nF1MVeKUWgh862HEl9QQ1AIjOLmR4lP6hR05z199k0KuSA==\"}],\"role\": \"model\"},\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 167,\"candidatesTokenCount\": 16,\"totalTokenCount\": 217,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 167}],\"thoughtsTokenCount\": 34,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.6-flash\",\"responseId\": \"ZoHfasDlN72n694PlIG36Ac\"}\r\n\r\ndata: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"\"}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 241,\"candidatesTokenCount\": 16,\"totalTokenCount\": 291,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 241}],\"thoughtsTokenCount\": 34,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-3.6-flash\",\"responseId\": \"ZoHfasDlN72n694PlIG36Ac\"}\r\n\r\n"
+   }
+  }
+ ]
+}

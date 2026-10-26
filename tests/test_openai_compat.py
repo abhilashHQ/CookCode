@@ -391,7 +391,7 @@ async def test_retry_after_within_the_cap_sets_the_delay() -> None:
 @pytest.mark.parametrize(
     "headers",
     [
-        {"retry-after": "120"},
+        {"retry-after": "3600"},
         {"x-ratelimit-remaining": "0", "x-ratelimit-reset": str((1_000 + 3_600) * 1000)},
     ],
     ids=["retry-after", "exhausted-limit"],
@@ -399,13 +399,13 @@ async def test_retry_after_within_the_cap_sets_the_delay() -> None:
 async def test_a_wait_longer_than_the_cap_fails_at_once(headers: dict[str, str]) -> None:
     script = Script([status(429, "free-models-per-day", headers)])
     events = await collect(
-        provider(script, backoff_cap_s=30.0, clock=lambda: 1_000.0),
+        provider(script, max_server_wait_s=120.0, clock=lambda: 1_000.0),
         request(text_message("user", "x")),
     )
     assert not any(isinstance(e, StreamRetry) for e in events)
     end = events[-1]
     assert isinstance(end, StreamEnd) and end.error is not None
-    assert "free-models-per-day" in end.error and "over the 30s retry cap" in end.error
+    assert "free-models-per-day" in end.error and "over the 120s limit" in end.error
     assert len(script.bodies) == 1
 
 
