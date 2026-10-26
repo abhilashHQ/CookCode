@@ -1,6 +1,11 @@
 from collections.abc import Sequence
 
-from harness.agent.context import build_request, estimate_tokens
+from harness.agent.context import (
+    build_request,
+    dropped_reasoning,
+    estimate_tokens,
+    items_sha256,
+)
 from harness.core.events import (
     CheckpointRestored,
     Event,
@@ -14,7 +19,7 @@ from harness.core.events import (
     UserMessage,
     make_event,
 )
-from harness.core.items import Item, ToolCall, ToolResult, text_message
+from harness.core.items import Item, Reasoning, ToolCall, ToolResult, text_message
 from harness.providers.base import ToolSchema
 from harness.providers.fake import call, say
 
@@ -170,3 +175,23 @@ def test_run_started_is_not_shown_to_the_model() -> None:
     config = RunConfig(provider="fake", model="m", harness_version="0.0.1")
     request = _build(_events(RunStarted.for_config(config), UserMessage(text="go")))
     assert request.items == (text_message("user", "go"),)
+
+
+def test_reasoning_from_another_provider_or_model_is_dropped_and_counted() -> None:
+    mine = Reasoning(provider="gemini", model_family="m", payload={"signatures": {}})
+    other_model = Reasoning(provider="gemini", model_family="n", payload={})
+    other_provider = Reasoning(provider="nim", model_family="m", payload={})
+    events = _events(
+        UserMessage(text="go"),
+        ItemEvent(item=mine),
+        ItemEvent(item=other_model),
+        ItemEvent(item=other_provider),
+    )
+    request = build_request(events, model="m", system="s", tools=(), provider="gemini")
+    assert [i for i in request.items if isinstance(i, Reasoning)] == [mine]
+    assert dropped_reasoning(events, provider="gemini", model="m") == 2
+    assert len(_build(events).items) == 4
+    assert items_sha256(request.items) == items_sha256(
+        build_request(events, model="m", system="other", tools=TOOLS, provider="gemini").items
+    )
+    assert items_sha256(request.items) != items_sha256(_build(events).items)
