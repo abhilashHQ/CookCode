@@ -37,6 +37,7 @@ DEFAULT_CAPS = ModelCaps(
     context_window=128_000, parallel_tool_calls=True, reasoning="opaque", prompt_caching=False
 )
 RETRYABLE_STATUS = frozenset({408, 409, 425, 429, 500, 502, 503, 504, *range(520, 530)})
+EMPTY_RESULT = "(no output)"
 FINISH_REASONS: dict[str, StopReason] = {
     "stop": "end_turn",
     "tool_calls": "tool_use",
@@ -73,7 +74,8 @@ class StreamFailure(Exception):
 
 
 def _result_content(result: ToolResult) -> str:
-    return result.content if result.status == "ok" else f"[{result.status}] {result.content}"
+    content = result.content or EMPTY_RESULT
+    return content if result.status == "ok" else f"[{result.status}] {content}"
 
 
 def _wire_call(call: ToolCall) -> JSON:

@@ -71,6 +71,7 @@ async def test_ask_mode_takes_yes_and_no_from_the_terminal(workspace: Path) -> N
     assert not (workspace / "b.txt").exists()
     assert "denied: not that file" in fake.requests[2].model_dump_json()
     assert "allow? [y]es, [n]o, [a]lways (write:a.txt)" in out.getvalue()
+    assert "  touches a.txt (cwd .)" in out.getvalue()
 
 
 async def test_undo_command_restores_the_last_turn(workspace: Path) -> None:

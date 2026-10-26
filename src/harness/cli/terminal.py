@@ -281,9 +281,10 @@ class TerminalApprover:
 
     async def decide(self, call: ToolCall, risk: Risk, cancel: CancelToken) -> Decision:
         t = self._t
-        t.line(f"? {risk.side_effect} call needs approval: {risk.reason}", CYAN)
+        t.line(f"? approval needed: {risk.reason}", CYAN)
+        label = "runs" if call.name == "bash" else "touches"
         if risk.subjects:
-            t.line(f"  touches {', '.join(risk.subjects)} (cwd {risk.cwd})", DIM)
+            t.line(f"  {label} {', '.join(risk.subjects)} (cwd {risk.cwd})", DIM)
         rule = always_rule(call, risk)
         choices = "[y]es, [n]o" + (f", [a]lways ({rule})" if rule else "")
         while True:

@@ -107,6 +107,17 @@ def test_non_ok_results_carry_their_status_in_the_text(status_: str) -> None:
     assert messages[-1]["content"] == f"[{status_}] why"
 
 
+def test_an_empty_result_is_sent_as_an_explicit_placeholder() -> None:
+    ok_empty = ToolResult(call_id="ours-a", status="ok", content="")
+    assert to_messages(request(CALL_A, ok_empty), provider="openrouter")[-1]["content"] == (
+        "(no output)"
+    )
+    error_empty = ToolResult(call_id="ours-a", status="error", content="")
+    assert to_messages(request(CALL_A, error_empty), provider="openrouter")[-1]["content"] == (
+        "[error] (no output)"
+    )
+
+
 def test_reasoning_from_another_model_or_provider_is_not_replayed() -> None:
     other_model = THOUGHT.model_copy(update={"model_family": "vendor/model-b"})
     other_provider = THOUGHT.model_copy(update={"provider": "gemini"})
