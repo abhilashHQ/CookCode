@@ -1,5 +1,4 @@
 import asyncio
-import codecs
 import contextlib
 import os
 import shutil
@@ -10,7 +9,7 @@ from pathlib import Path
 
 from harness.core.cancel import CancelToken
 from harness.core.ids import new_id
-from harness.env.base import ExecResult
+from harness.env.base import ExecResult, render_capped
 
 _READ_CHUNK = 65536
 _PUMP_DRAIN_TIMEOUT_S = 5.0
@@ -41,17 +40,7 @@ class _CappedBuffer:
         return self.total > len(self._head) + len(self._tail)
 
     def render(self) -> str:
-        if not self.truncated:
-            return bytes(self._head + self._tail).decode(errors="replace")
-        decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
-        head = decoder.decode(bytes(self._head))
-        partial_head = len(decoder.getstate()[0])
-        skip = 0
-        while skip < min(3, len(self._tail)) and self._tail[skip] & 0xC0 == 0x80:
-            skip += 1
-        tail = bytes(self._tail[skip:]).decode(errors="replace")
-        dropped = self.total - len(self._head) - len(self._tail) + partial_head + skip
-        return f"{head}\n[... {dropped} bytes truncated ...]\n{tail}"
+        return render_capped(bytes(self._head), bytes(self._tail), self.total)
 
 
 def _kill_group(pgid: int) -> None:
