@@ -56,6 +56,16 @@ class SessionStarted(_Body):
         return cls(config=config, config_id=compute_config_id(config))
 
 
+class RunStarted(_Body):
+    type: Literal["run_started"] = "run_started"
+    config: RunConfig
+    config_id: str
+
+    @classmethod
+    def for_config(cls, config: RunConfig) -> "RunStarted":
+        return cls(config=config, config_id=compute_config_id(config))
+
+
 class UserMessage(_Body):
     LAYER: ClassVar[Layer] = "model"
     type: Literal["user_message"] = "user_message"
@@ -106,6 +116,7 @@ class ToolCallFinished(_Body):
     duration_s: float
     output_bytes: int
     truncated: bool
+    cwd: str | None = None
 
 
 class ApprovalRequested(_Body):
@@ -128,6 +139,14 @@ class CheckpointCreated(_Body):
     checkpoint_id: str
     paths: tuple[str, ...]
     turn: int
+
+
+class CheckpointRestored(_Body):
+    LAYER: ClassVar[Layer] = "model"
+    type: Literal["checkpoint_restored"] = "checkpoint_restored"
+    checkpoint_ids: tuple[str, ...]
+    paths: tuple[str, ...]
+    turns: tuple[int, ...]
 
 
 class CompactionApplied(_Body):
@@ -178,14 +197,16 @@ class OtherEvent(_Body):
 
 
 EVENT_TYPES = frozenset({
-    "session_started", "user_message", "steer_message", "model_request_started", "item",
-    "model_request_finished", "tool_call_started", "tool_call_finished", "approval_requested",
-    "approval_resolved", "checkpoint_created", "compaction_applied", "interrupted", "repaired",
-    "budget_exceeded", "error", "session_finished",
+    "session_started", "run_started", "user_message", "steer_message", "model_request_started",
+    "item", "model_request_finished", "tool_call_started", "tool_call_finished",
+    "approval_requested", "approval_resolved", "checkpoint_created", "checkpoint_restored",
+    "compaction_applied", "interrupted", "repaired", "budget_exceeded", "error",
+    "session_finished",
 })
 
 EventBody = Annotated[
     Annotated[SessionStarted, Tag("session_started")]
+    | Annotated[RunStarted, Tag("run_started")]
     | Annotated[UserMessage, Tag("user_message")]
     | Annotated[SteerMessage, Tag("steer_message")]
     | Annotated[ModelRequestStarted, Tag("model_request_started")]
@@ -196,6 +217,7 @@ EventBody = Annotated[
     | Annotated[ApprovalRequested, Tag("approval_requested")]
     | Annotated[ApprovalResolved, Tag("approval_resolved")]
     | Annotated[CheckpointCreated, Tag("checkpoint_created")]
+    | Annotated[CheckpointRestored, Tag("checkpoint_restored")]
     | Annotated[CompactionApplied, Tag("compaction_applied")]
     | Annotated[Interrupted, Tag("interrupted")]
     | Annotated[Repaired, Tag("repaired")]

@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 
-from harness.core.events import Event, ItemEvent, SteerMessage, UserMessage
+from harness.core.events import CheckpointRestored, Event, ItemEvent, SteerMessage, UserMessage
 from harness.core.items import Item, Message, ToolCall, ToolResult, text_message
 from harness.providers.base import ModelRequest, ToolSchema
 
@@ -13,6 +13,16 @@ def _project(events: Sequence[Event]) -> list[Item]:
             items.append(text_message("user", body.text))
         elif isinstance(body, ItemEvent):
             items.append(body.item)
+        elif isinstance(body, CheckpointRestored):
+            turns = sorted(set(body.turns))
+            items.append(
+                text_message(
+                    "user",
+                    f"[undo] Restored {', '.join(body.paths)} to their state before turn "
+                    f"{min(body.turns, default=0)}. File edits made in turns "
+                    f"{', '.join(str(turn) for turn in turns)} are gone.",
+                )
+            )
     return items
 
 

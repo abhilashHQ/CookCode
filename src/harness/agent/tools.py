@@ -27,6 +27,7 @@ class ToolOutput(BaseModel):
     exit_status: Literal["ok", "error", "timeout", "killed"] = "ok"
     output_bytes: int | None = None
     truncated: bool = False
+    cwd: str | None = None
 
     @property
     def size(self) -> int:
@@ -42,6 +43,7 @@ class Tool[A: BaseModel]:
     args_model: type[A]
     side_effect: SideEffect
     handler: Callable[[A, ToolContext], Awaitable[ToolOutput]]
+    touches: Callable[[A], list[str]] | None = None
 
     def schema(self) -> ToolSchema:
         return ToolSchema(

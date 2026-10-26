@@ -2,10 +2,13 @@ from collections.abc import Sequence
 
 from harness.agent.context import build_request, estimate_tokens
 from harness.core.events import (
+    CheckpointRestored,
     Event,
     EventBody,
     ItemEvent,
     ModelRequestStarted,
+    RunConfig,
+    RunStarted,
     SteerMessage,
     ToolCallStarted,
     UserMessage,
@@ -135,3 +138,35 @@ def test_text_between_calls_does_not_split_the_response() -> None:
     request = build_request(events, model="m", system="s", tools=())
     result_ids = [i.call_id for i in request.items if isinstance(i, ToolResult)]
     assert result_ids == [a.id, b.id]
+
+
+def test_checkpoint_restored_renders_as_an_undo_message() -> None:
+    request = _build(
+        _events(
+            UserMessage(text="go"),
+            CheckpointRestored(checkpoint_ids=("c1", "c2"), paths=("a.py", "b.py"), turns=(3, 4)),
+        )
+    )
+    assert request.items[-1] == text_message(
+        "user",
+        "[undo] Restored a.py, b.py to their state before turn 3. "
+        "File edits made in turns 3, 4 are gone.",
+    )
+
+
+def test_checkpoint_restored_uses_the_earliest_turn_and_sorts_unique_turns() -> None:
+    request = _build(
+        _events(
+            CheckpointRestored(checkpoint_ids=("c1", "c2", "c3"), paths=("a",), turns=(5, 2, 5))
+        )
+    )
+    assert request.items[-1] == text_message(
+        "user",
+        "[undo] Restored a to their state before turn 2. File edits made in turns 2, 5 are gone.",
+    )
+
+
+def test_run_started_is_not_shown_to_the_model() -> None:
+    config = RunConfig(provider="fake", model="m", harness_version="0.0.1")
+    request = _build(_events(RunStarted.for_config(config), UserMessage(text="go")))
+    assert request.items == (text_message("user", "go"),)

@@ -63,6 +63,7 @@ async def test_event_order_for_one_tool_call(rigs: RigFactory) -> None:
     events = rig.events()
     assert kinds(events) == [
         "session_started",
+        "run_started",
         "user_message",
         "model_request_started",
         "item",
@@ -247,8 +248,9 @@ async def test_steer_before_run_lands_before_the_first_request(rigs: RigFactory)
     rig.agent.steer("use tabs")
     await rig.agent.run("hi")
     events = rig.events()
-    assert kinds(events)[:4] == [
+    assert kinds(events)[:5] == [
         "session_started",
+        "run_started",
         "user_message",
         "steer_message",
         "model_request_started",

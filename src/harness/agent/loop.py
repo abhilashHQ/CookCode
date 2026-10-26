@@ -23,6 +23,7 @@ from harness.core.events import (
     ModelRequestFinished,
     ModelRequestStarted,
     RunConfig,
+    RunStarted,
     SessionFinished,
     SessionStarted,
     SideEffect,
@@ -232,6 +233,7 @@ class Agent:
         events = self._log.read()
         if not events:
             self._log.append(SessionStarted.for_config(self._run_config()))
+        self._log.append(RunStarted.for_config(self._run_config()))
         for body in repair_bodies(self._repair_planner(events)):
             self._log.append(body)
         if prompt is not None:
@@ -246,6 +248,13 @@ class Agent:
             harness_version=self._harness_version,
             limits=self._config.limits,
         )
+
+    def _current_cwd(self) -> str:
+        for event in reversed(self._log.read()):
+            body = event.body
+            if isinstance(body, ToolCallFinished) and body.cwd is not None:
+                return body.cwd
+        return self._config.cwd
 
     def _drain_steering(self) -> None:
         while self._steering:
@@ -394,7 +403,7 @@ class Agent:
             ctx = ToolContext(
                 env=self._env,
                 cancel=run.token,
-                cwd=self._config.cwd,
+                cwd=self._current_cwd(),
                 timeout_s=self._config.tool_timeout_s,
                 max_output_bytes=self._config.max_tool_output_bytes,
             )
@@ -425,6 +434,7 @@ class Agent:
                     duration_s=duration_s,
                     output_bytes=output.size,
                     truncated=output.truncated,
+                    cwd=output.cwd,
                 )
             )
             self._append_result(tool_call.id, *_tool_result(tool.side_effect, output))

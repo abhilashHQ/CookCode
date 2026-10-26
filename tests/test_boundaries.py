@@ -53,6 +53,7 @@ def test_core_never_calls_print_input_open_or_reads_environ() -> None:
 
 
 AGENT = Path(__file__).parents[1] / "src" / "harness" / "agent"
+TOOLS = Path(__file__).parents[1] / "src" / "harness" / "tools"
 AGENT_ALLOWED_HARNESS = (
     "harness.core",
     "harness.agent",
@@ -60,27 +61,33 @@ AGENT_ALLOWED_HARNESS = (
     "harness.providers.base",
     "harness.env.base",
 )
+TOOLS_ALLOWED_HARNESS = (
+    "harness.core",
+    "harness.agent.tools",
+    "harness.env.base",
+    "harness.tools",
+)
 
 
-def _agent_import_violation(module: str) -> bool:
+def _import_violation(module: str, allowed_harness: tuple[str, ...]) -> bool:
     root = module.split(".")[0]
     if root in FORBIDDEN_MODULES:
         return True
     if root != "harness" or module == "harness":
         return False
     return not any(
-        module == allowed or module.startswith(allowed + ".") for allowed in AGENT_ALLOWED_HARNESS
+        module == allowed or module.startswith(allowed + ".") for allowed in allowed_harness
     )
 
 
-def scan_agent_source(source: str) -> list[str]:
+def _scan_source(source: str, package: list[str], allowed_harness: tuple[str, ...]) -> list[str]:
     violations: list[str] = []
     for node in ast.walk(ast.parse(source)):
         imported: list[str] = []
         if isinstance(node, ast.Import):
             imported = [alias.name for alias in node.names]
         elif isinstance(node, ast.ImportFrom) and node.level > 0:
-            base = ["harness", "agent"][: 2 - (node.level - 1)]
+            base = package[: len(package) - (node.level - 1)]
             if node.module:
                 imported = [".".join([*base, node.module])]
             else:
@@ -92,13 +99,21 @@ def scan_agent_source(source: str) -> list[str]:
             ]
         elif isinstance(node, ast.ImportFrom) and node.module:
             imported = [node.module]
-        violations.extend(f"imports {m}" for m in imported if _agent_import_violation(m))
+        violations.extend(f"imports {m}" for m in imported if _import_violation(m, allowed_harness))
         if isinstance(node, ast.Call):
             func = node.func
             name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
             if name in FORBIDDEN_CALLS:
                 violations.append(f"calls {name}")
     return violations
+
+
+def scan_agent_source(source: str) -> list[str]:
+    return _scan_source(source, ["harness", "agent"], AGENT_ALLOWED_HARNESS)
+
+
+def scan_tools_source(source: str) -> list[str]:
+    return _scan_source(source, ["harness", "tools"], TOOLS_ALLOWED_HARNESS)
 
 
 def test_agent_scan_accepts_allowed_imports() -> None:
@@ -129,6 +144,12 @@ def test_agent_scan_accepts_allowed_imports() -> None:
         "from ..store.jsonl import JsonlSessionStore",
         "from .. import chaos",
         "from ..providers import fake",
+        "import harness.tools",
+        "from harness.tools.files import read_tool",
+        "from harness import tools",
+        "from ..tools import files",
+        "from harness.store.checkpoints import FileCheckpointStore",
+        "from harness.store import checkpoints",
         "import subprocess",
         "import socket",
         "from http import client",
@@ -149,3 +170,51 @@ def test_agent_package_respects_boundaries() -> None:
     assert files
     for path in files:
         assert scan_agent_source(path.read_text()) == [], path.name
+
+
+def test_tools_scan_accepts_allowed_imports() -> None:
+    source = (
+        "from harness.core.items import ToolCall\n"
+        "from harness.agent.tools import Tool, ToolContext, ToolOutput\n"
+        "from harness.env.base import Environment\n"
+        "from harness.tools.files import read_tool\n"
+        "from .files import read_tool\n"
+        "from . import files\n"
+        "import shlex\n"
+    )
+    assert scan_tools_source(source) == []
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "from harness.env.local import LocalEnvironment",
+        "from harness.env import local",
+        "from harness import env",
+        "from harness.agent.loop import Agent",
+        "from harness.agent import loop",
+        "from harness.agent.gate import decide",
+        "from harness.store.jsonl import JsonlSessionStore",
+        "from harness.providers.base import Provider",
+        "from harness.chaos import scenario",
+        "from ..agent.loop import Agent",
+        "from ..env.local import LocalEnvironment",
+        "import subprocess",
+        "import socket",
+        "from http import client",
+        "import urllib.request",
+        "import sys",
+        "print('x')",
+        "input()",
+        "open('f')",
+        "path.open()",
+    ],
+)
+def test_tools_scan_catches_violations(source: str) -> None:
+    assert scan_tools_source(source)
+
+
+def test_tools_package_respects_boundaries() -> None:
+    files = sorted(TOOLS.rglob("*.py")) if TOOLS.exists() else []
+    for path in files:
+        assert scan_tools_source(path.read_text()) == [], path.name

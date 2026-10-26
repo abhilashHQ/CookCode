@@ -68,3 +68,19 @@ async def test_long_file_names_still_fit(tmp_path: Path) -> None:
     name = "n" * 250
     await LocalEnvironment(tmp_path).write_file(name, b"x")
     assert (tmp_path / name).read_bytes() == b"x"
+
+
+async def test_remove_file_deletes_the_file_and_is_a_no_op_when_missing(tmp_path: Path) -> None:
+    env = LocalEnvironment(tmp_path)
+    await env.write_file("a/f.txt", b"x")
+    await env.remove_file("a/f.txt")
+    assert not (tmp_path / "a/f.txt").exists()
+    await env.remove_file("a/f.txt")
+    await env.remove_file("never/existed.txt")
+
+
+async def test_remove_file_accepts_absolute_paths(tmp_path: Path) -> None:
+    target = tmp_path / "elsewhere.txt"
+    target.write_bytes(b"x")
+    await LocalEnvironment(tmp_path / "root").remove_file(str(target))
+    assert not target.exists()

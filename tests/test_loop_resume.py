@@ -106,6 +106,7 @@ async def test_resume_repairs_each_dangling_state(rigs: RigFactory, state: str) 
     outcome = await rig.agent.run(None)
     new = rig.events()[prefix:]
     assert kinds(new) == [
+        "run_started",
         "repaired",
         "item",
         "model_request_started",
@@ -113,7 +114,7 @@ async def test_resume_repairs_each_dangling_state(rigs: RigFactory, state: str) 
         "model_request_finished",
         "session_finished",
     ]
-    assert new[0].body == Repaired(call_id=dangling.id, status=status, reason=reason)  # type: ignore[arg-type]
+    assert new[1].body == Repaired(call_id=dangling.id, status=status, reason=reason)  # type: ignore[arg-type]
     assert results(new) == [ToolResult(call_id=dangling.id, status=status, content=reason)]  # type: ignore[arg-type]
     assert results(new)[0] in rig.provider.requests[0].items
     assert outcome.status == "done"
@@ -127,7 +128,8 @@ async def test_repair_comes_before_the_new_prompt(rigs: RigFactory) -> None:
     prefix = len(log.read())
     rig = rigs.make([FakeTurn(items=(say("ok"),))], [echo_tool()], log=log)
     await rig.agent.run("continue")
-    assert kinds(rig.events()[prefix:])[:4] == [
+    assert kinds(rig.events()[prefix:])[:5] == [
+        "run_started",
         "repaired",
         "item",
         "user_message",

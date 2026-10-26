@@ -56,7 +56,13 @@ async def test_pre_cancelled_token_makes_no_request(rigs: RigFactory) -> None:
     outcome = await rig.agent.run("hi", cancel=token)
     events = rig.events()
     assert rig.provider.requests == []
-    assert kinds(events) == ["session_started", "user_message", "interrupted", "session_finished"]
+    assert kinds(events) == [
+        "session_started",
+        "run_started",
+        "user_message",
+        "interrupted",
+        "session_finished",
+    ]
     assert bodies(events, Interrupted) == [Interrupted(phase="idle")]
     assert outcome.status == "interrupted"
     assert outcome.turns == 0

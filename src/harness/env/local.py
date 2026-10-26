@@ -193,3 +193,6 @@ class LocalEnvironment:
             _fsync_dir(target.parent)
 
         await asyncio.to_thread(write)
+
+    async def remove_file(self, path: str) -> None:
+        await asyncio.to_thread(self._resolve(path).unlink, missing_ok=True)
