@@ -3,7 +3,7 @@ import hashlib
 import time
 from collections import deque
 from collections.abc import AsyncGenerator, Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from harness import __version__
 from harness.agent.approval import Approver, Decision, PolicyOnlyApprover, Risk
 from harness.agent.context import build_request, estimate_tokens
-from harness.agent.gate import Mode, Policy, decide, session_rules
+from harness.agent.gate import Mode, Policy, decide, session_rules, subject
 from harness.agent.repair import NOT_EXECUTED, RepairAction, plan_repairs, repair_bodies
 from harness.agent.tools import Tool, ToolContext, ToolOutput, ToolRegistry, resolve_path
 from harness.core.cancel import CancelToken
@@ -56,6 +56,10 @@ KILLED_MUTATING = (
     "so inspect before retrying.]"
 )
 NO_REASON = "the approver gave no reason"
+CWD_MOVED = (
+    "not run: the working directory changed to {cwd} after this call was gated, "
+    "so its paths now resolve differently. Issue the call again."
+)
 TIMEOUT_MUTATING = (
     "[killed by the harness at the tool timeout. It may have changed state, "
     "so inspect before retrying.]"
@@ -113,6 +117,13 @@ class _Dispatch:
     call: ToolCall
     tool: Tool[Any]
     args: BaseModel
+    gated_cwd: str | None = None
+
+    def subjects(self, cwd: str) -> list[str]:
+        touched = self.tool.touches(self.args) if self.tool.touches is not None else []
+        if touched:
+            return [resolve_path(cwd, path) for path in touched]
+        return [subject(self.tool.name, self.args.model_dump(), cwd)]
 
 
 def _batches(dispatches: Sequence[_Dispatch]) -> list[list[_Dispatch]]:
@@ -267,6 +278,11 @@ class Agent:
             system_prompt_sha256=hashlib.sha256(self._config.system_prompt.encode()).hexdigest(),
             harness_version=self._harness_version,
             limits=self._config.limits,
+            mode=self._config.mode,
+            policy=(
+                *(f"allow {rule.display}" for rule in self._config.policy.allow),
+                *(f"deny {rule.display}" for rule in self._config.policy.deny),
+            ),
         )
 
     def _current_cwd(self) -> str:
@@ -408,24 +424,24 @@ class Agent:
         self, run: _RunState, runnable: Sequence[_Dispatch]
     ) -> tuple[list[_Dispatch], list[_Dispatch]]:
         approved: list[_Dispatch] = []
+        cwd = self._current_cwd()
         for index, dispatch in enumerate(runnable):
-            verdict = None if run.cancelled() else await self._gate(run, dispatch)
+            verdict = None if run.cancelled() else await self._gate(run, dispatch, cwd)
             if verdict is None:
                 return approved, list(runnable[index:])
             if verdict:
-                approved.append(dispatch)
+                approved.append(replace(dispatch, gated_cwd=cwd))
         return approved, []
 
-    async def _gate(self, run: _RunState, dispatch: _Dispatch) -> bool | None:
+    async def _gate(self, run: _RunState, dispatch: _Dispatch, cwd: str) -> bool | None:
         tool, tool_call = dispatch.tool, dispatch.call
-        events = self._log.read()
         decision = decide(
             tool=tool,
             arguments=tool_call.arguments,
-            cwd=_cwd(events, self._config.cwd),
+            cwd=cwd,
             mode=self._config.mode,
             policy=self._config.policy,
-            session_allow=session_rules(events),
+            session_allow=session_rules(self._log.read()),
         )
         if decision.action == "allow":
             by_mode = decision.rule is not None and decision.rule.startswith("mode:")
@@ -522,6 +538,10 @@ class Agent:
                 self._append_result(tool_call.id, "interrupted", NOT_EXECUTED)
                 return
             cwd = self._current_cwd()
+            gated = dispatch.gated_cwd
+            if gated is not None and dispatch.subjects(gated) != dispatch.subjects(cwd):
+                self._append_result(tool_call.id, "error", CWD_MOVED.format(cwd=cwd))
+                return
             if tool.touches is not None and self._checkpoints is not None:
                 failure = await self._snapshot(self._checkpoints, tool.touches, dispatch.args, cwd)
                 if failure is not None:

@@ -5,6 +5,7 @@ import pytest
 from pydantic import BaseModel
 
 from agent_helpers import RigFactory, bodies, echo_tool, kinds
+from harness.agent.gate import Policy, Rule
 from harness.agent.loop import Agent, AgentConfig
 from harness.agent.tools import Tool, ToolContext, ToolOutput, ToolRegistry
 from harness.core.events import (
@@ -159,3 +160,29 @@ async def test_the_configured_cwd_is_the_starting_point(rigs: RigFactory) -> Non
     )
     await rig.agent.run("go")
     assert seen == ["start"]
+
+
+async def test_mode_and_policy_are_part_of_run_provenance(rigs: RigFactory) -> None:
+    policy = Policy(
+        allow=(Rule(tool="bash", pattern="pytest*"),), deny=(Rule(tool="bash", pattern="rm *"),)
+    )
+    first = rigs.make([FakeTurn(items=(say("one"),))], mode="ask", policy=policy)
+    await first.agent.run("hi")
+    first.log.close()
+    second = rigs.make([FakeTurn(items=(say("two"),))], log=rigs.open_log(), mode="yolo")
+    await second.agent.run("again")
+
+    runs = bodies(second.events(), RunStarted)
+    assert (runs[0].config.mode, runs[0].config.policy) == (
+        "ask",
+        ("allow bash:pytest*", "deny bash:rm *"),
+    )
+    assert (runs[1].config.mode, runs[1].config.policy) == ("yolo", ())
+    assert runs[0].config_id != runs[1].config_id
+
+
+def test_old_run_configs_without_mode_or_policy_still_load() -> None:
+    config = RunConfig.model_validate(
+        {"provider": "fake", "model": "m", "harness_version": "0.0.1"}
+    )
+    assert (config.mode, config.policy) == (None, ())

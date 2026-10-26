@@ -29,12 +29,14 @@ from harness.core.events import (
     Repaired,
     RunConfig,
     SessionStarted,
+    ToolCallFinished,
     ToolCallStarted,
     UserMessage,
 )
 from harness.core.items import ToolCall, ToolResult
 from harness.core.usage import Usage
 from harness.providers.fake import FakeTurn, call, say
+from harness.tools.bash import bash_tool
 from harness.tools.files import edit_tool, read_tool, write_tool
 
 
@@ -445,4 +447,74 @@ async def test_resume_after_an_allow_reissues_the_call_once(rigs: RigFactory) ->
     ]
     assert (rig.workdir / "out.txt").read_text() == "L1\n"
     assert result_for(events, retry.id).status == "ok"
+    assert_every_call_resolved(events)
+
+
+async def test_an_edit_gated_before_a_cd_is_refused_when_its_path_moves(
+    rigs: RigFactory,
+) -> None:
+    (rigs.workdir / "x.txt").write_text("old\n")
+    (rigs.root / "x.txt").write_text("old\n")
+    cd = call("bash", command="cd ..")
+    edit = call("edit", path="x.txt", old_string="old", new_string="new")
+    rig = rigs.make(
+        [FakeTurn(items=(cd, edit)), FakeTurn(items=(say("ok"),))],
+        [bash_tool(), edit_tool()],
+        mode="auto-edit",
+        approver=ScriptedApprover([Decision(action="allow")]),
+    )
+
+    await rig.agent.run("go")
+
+    events = rig.events()
+    [finished] = bodies(events, ToolCallFinished)
+    assert finished.cwd is not None and finished.cwd != "."
+    assert result_for(events, edit.id) == ToolResult(
+        call_id=edit.id,
+        status="error",
+        content=(
+            f"not run: the working directory changed to {finished.cwd} after this call was "
+            "gated, so its paths now resolve differently. Issue the call again."
+        ),
+    )
+    assert [b.call_id for b in bodies(events, ToolCallStarted)] == [cd.id]
+    assert (rigs.root / "x.txt").read_text() == "old\n"
+    assert (rigs.workdir / "x.txt").read_text() == "old\n"
+    assert_every_call_resolved(events)
+
+
+async def test_bash_calls_after_a_cd_in_the_same_response_still_run(rigs: RigFactory) -> None:
+    (rigs.workdir / "sub").mkdir()
+    cd = call("bash", command="cd sub")
+    pwd = call("bash", command="pwd")
+    rig = rigs.make(
+        [FakeTurn(items=(cd, pwd)), FakeTurn(items=(say("ok"),))], [bash_tool()], mode="yolo"
+    )
+
+    await rig.agent.run("go")
+
+    events = rig.events()
+    assert result_for(events, cd.id).status == "ok"
+    assert result_for(events, pwd.id).status == "ok"
+    assert result_for(events, pwd.id).content == str((rigs.workdir / "sub").resolve())
+    assert_every_call_resolved(events)
+
+
+async def test_an_absolute_path_edit_after_a_cd_still_runs(rigs: RigFactory) -> None:
+    (rigs.workdir / "sub").mkdir()
+    target = rigs.workdir / "abs.txt"
+    target.write_text("old\n")
+    cd = call("bash", command="cd sub")
+    edit = call("edit", path=str(target), old_string="old", new_string="new")
+    rig = rigs.make(
+        [FakeTurn(items=(cd, edit)), FakeTurn(items=(say("ok"),))],
+        [bash_tool(), edit_tool()],
+        mode="yolo",
+    )
+
+    await rig.agent.run("go")
+
+    events = rig.events()
+    assert result_for(events, edit.id).status == "ok"
+    assert target.read_text() == "new\n"
     assert_every_call_resolved(events)

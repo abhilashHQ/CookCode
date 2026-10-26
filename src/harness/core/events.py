@@ -35,6 +35,8 @@ class RunConfig(_Frozen):
     system_prompt_sha256: str = ""
     harness_version: str
     limits: Limits = Limits()
+    mode: str | None = None
+    policy: tuple[str, ...] = ()
 
 
 def compute_config_id(config: RunConfig) -> str:
