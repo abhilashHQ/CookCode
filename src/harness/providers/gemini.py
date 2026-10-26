@@ -123,7 +123,13 @@ def to_contents(request: ModelRequest, *, provider: str) -> list[JSON]:
 
 
 def _is_user_text(content: _Content) -> bool:
-    return content.role == "user" and any("text" in part for part in content.parts)
+    """Gemini starts the current turn at a user message; a content carrying function
+    responses is not one, even when a prompt was merged into it."""
+    return (
+        content.role == "user"
+        and any("text" in part for part in content.parts)
+        and not any("functionResponse" in part for part in content.parts)
+    )
 
 
 def _sign_current_turn(contents: list[_Content]) -> None:

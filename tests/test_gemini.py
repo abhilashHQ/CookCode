@@ -201,6 +201,7 @@ def test_unsigned_calls_in_the_current_turn_get_the_skip_signature() -> None:
     contents = to_contents(
         request(
             text_message("user", "first"), old, ToolResult(call_id="o", status="ok", content="1"),
+            text_message("assistant", "read it"),
             text_message("user", "second"), foreign, new_a, new_b,
             ToolResult(call_id="a", status="ok", content="2"),
             ToolResult(call_id="b", status="ok", content="3"),
@@ -208,8 +209,8 @@ def test_unsigned_calls_in_the_current_turn_get_the_skip_signature() -> None:
         provider="gemini",
     )
     assert "thoughtSignature" not in contents[1]["parts"][0]
-    assert contents[2]["parts"][1] == {"text": "second"}
-    current = contents[3]["parts"]
+    assert contents[4] == {"role": "user", "parts": [{"text": "second"}]}
+    current = contents[5]["parts"]
     assert current[0]["thoughtSignature"] == FOREIGN_SIGNATURE
     assert "thoughtSignature" not in current[1]
 
@@ -322,3 +323,23 @@ async def test_signature_round_trips_through_the_log(tmp_path: Path) -> None:
     assert second[2]["parts"][0]["functionResponse"]["response"]["output"].endswith("alpha")
     started = [e.body for e in events if isinstance(e.body, ModelRequestStarted)]
     assert [s.reasoning_dropped for s in started] == [0, 0]
+
+
+def test_a_prompt_merged_into_results_does_not_end_the_turn() -> None:
+    foreign = ToolCall(id="f", provider_call_id="call_f", name="read", arguments={})
+    own = ToolCall(id="g", provider_call_id="g1", name="edit", arguments={})
+    signed = Reasoning(provider="gemini", model_family=MODEL, payload={"signatures": {"g1": "S"}})
+    contents = to_contents(
+        request(
+            text_message("user", "fix it"), foreign,
+            ToolResult(call_id="f", status="ok", content="code"),
+            text_message("user", "continue"), signed, own,
+            ToolResult(call_id="g", status="ok", content="edited"),
+        ),
+        provider="gemini",
+    )
+    assert [part.keys() for part in contents[2]["parts"]] == [
+        {"functionResponse"}, {"text"}
+    ]
+    assert contents[1]["parts"][0]["thoughtSignature"] == FOREIGN_SIGNATURE
+    assert contents[3]["parts"][0]["thoughtSignature"] == "S"
