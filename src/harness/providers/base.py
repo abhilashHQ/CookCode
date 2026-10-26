@@ -57,13 +57,21 @@ class UsageReport(_Frozen):
     raw: dict[str, Any] = Field(default_factory=dict)
 
 
+class StreamRetry(_Frozen):
+    type: Literal["retry"] = "retry"
+    attempt: int
+    delay_s: float
+    reason: str
+    status: int | None = None
+
+
 class StreamEnd(_Frozen):
     type: Literal["stream_end"] = "stream_end"
     stop_reason: StopReason
     error: str | None = None
 
 
-StreamEvent = ItemStarted | ItemDelta | ItemDone | UsageReport | StreamEnd
+StreamEvent = ItemStarted | ItemDelta | ItemDone | UsageReport | StreamRetry | StreamEnd
 
 
 class Provider(Protocol):

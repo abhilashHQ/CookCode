@@ -103,6 +103,15 @@ class ModelRequestFinished(_Body):
     raw_ref: str | None = None
 
 
+class ProviderRetry(_Body):
+    type: Literal["provider_retry"] = "provider_retry"
+    request_id: str
+    attempt: int
+    delay_s: float
+    reason: str
+    status: int | None = None
+
+
 class ToolCallStarted(_Body):
     type: Literal["tool_call_started"] = "tool_call_started"
     call_id: str
@@ -203,7 +212,7 @@ EVENT_TYPES = frozenset({
     "item", "model_request_finished", "tool_call_started", "tool_call_finished",
     "approval_requested", "approval_resolved", "checkpoint_created", "checkpoint_restored",
     "compaction_applied", "interrupted", "repaired", "budget_exceeded", "error",
-    "session_finished",
+    "session_finished", "provider_retry",
 })
 
 EventBody = Annotated[
@@ -214,6 +223,7 @@ EventBody = Annotated[
     | Annotated[ModelRequestStarted, Tag("model_request_started")]
     | Annotated[ItemEvent, Tag("item")]
     | Annotated[ModelRequestFinished, Tag("model_request_finished")]
+    | Annotated[ProviderRetry, Tag("provider_retry")]
     | Annotated[ToolCallStarted, Tag("tool_call_started")]
     | Annotated[ToolCallFinished, Tag("tool_call_finished")]
     | Annotated[ApprovalRequested, Tag("approval_requested")]

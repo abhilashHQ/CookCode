@@ -11,6 +11,7 @@ from harness.core.events import (
     ItemEvent,
     ModelRequestFinished,
     ModelRequestStarted,
+    ProviderRetry,
     Repaired,
     RunConfig,
     RunStarted,
@@ -41,6 +42,7 @@ def all_bodies() -> list[EventBody]:
         ModelRequestFinished(
             request_id="r1", stop_reason="tool_use", usage=Usage(input=1000, output=50)
         ),
+        ProviderRetry(request_id="r1", attempt=1, delay_s=2.0, reason="HTTP 429", status=429),
         ToolCallStarted(
             call_id="c1", tool="bash", arguments={"cmd": "ls"}, side_effect="read_only"
         ),

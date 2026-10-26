@@ -35,6 +35,7 @@ from harness.core.events import (
     Limits,
     ModelRequestFinished,
     ModelRequestStarted,
+    ProviderRetry,
     RunConfig,
     RunStarted,
     SessionFinished,
@@ -49,7 +50,14 @@ from harness.core.ids import new_id
 from harness.core.items import ToolCall, ToolResult, ToolResultStatus
 from harness.core.usage import StopReason, Usage
 from harness.env.base import Environment
-from harness.providers.base import ItemDone, ModelRequest, Provider, StreamEnd, UsageReport
+from harness.providers.base import (
+    ItemDone,
+    ModelRequest,
+    Provider,
+    StreamEnd,
+    StreamRetry,
+    UsageReport,
+)
 from harness.store.base import CheckpointStore, SessionLog
 
 RunStatus = Literal["done", "error", "budget_exceeded", "interrupted"]
@@ -368,6 +376,16 @@ class Agent:
                         calls.append(event.item)
                 elif isinstance(event, UsageReport):
                     usage, raw_usage = event.usage, event.raw
+                elif isinstance(event, StreamRetry):
+                    self._log.append(
+                        ProviderRetry(
+                            request_id=request_id,
+                            attempt=event.attempt,
+                            delay_s=event.delay_s,
+                            reason=event.reason,
+                            status=event.status,
+                        )
+                    )
                 elif isinstance(event, StreamEnd):
                     stop_reason, error = event.stop_reason, event.error
                     break
@@ -398,6 +416,11 @@ class Agent:
         if tool is None:
             available = ", ".join(self._tools.names()) or "none"
             return f"unknown tool {tool_call.name!r}. Available tools: {available}."
+        if tool_call.raw_arguments is not None:
+            return (
+                f"invalid arguments for {tool_call.name}: not a JSON object: "
+                f"{tool_call.raw_arguments[:200]!r}. Send the arguments as one JSON object."
+            )
         try:
             args = tool.args_model.model_validate(tool_call.arguments)
         except ValidationError as exc:

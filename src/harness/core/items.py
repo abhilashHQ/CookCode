@@ -45,6 +45,7 @@ class ToolCall(_Frozen):
     provider_item_id: str | None = None
     name: str
     arguments: dict[str, Any]
+    raw_arguments: str | None = None
 
 
 class ToolResult(_Frozen):
