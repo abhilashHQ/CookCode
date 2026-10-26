@@ -238,7 +238,7 @@ The context builder turns the log into a `ModelRequest`. It is pure: the same lo
 
 ## 10. Evaluation
 
-- Harbor adapter (M4): `BaseAgent` subclass that runs our loop on the host with `HarborEnvironment` wrapping `environment.exec`. It reports usage and trajectory as ATIF (current `schema_version` "ATIF-v1.7", spec at docs.harborframework.com/agents/atif.md).
+- Harbor adapter (M4): `BaseAgent` subclass that runs our loop on the host with `HarborEnvironment` wrapping `environment.exec`. It reports usage and trajectory as ATIF (`schema_version` "ATIF-v1.8" as of Harbor 0.25.0, spec at docs.harborframework.com/agents/atif.md; see decision 0029).
   - Top level: `agent`, `steps`, `session_id`, `trajectory_id`, `final_metrics`, `subagent_trajectories`, `extra`.
   - Per step: `step_id`, `source`, `message`, `tool_calls` (`tool_call_id`, `function_name`, `arguments`), `observation.results` (`source_call_id`, `content`), `metrics`.
   - ATIF's pydantic models reject undeclared fields, so anything of ours goes under `extra`.
@@ -307,7 +307,7 @@ Locked now:
 9. Bash runs as a fresh process per call. The working directory is tracked as logged state, and environment changes don't persist (the tool says so).
 10. Unknown outcomes after a crash: interactive mode asks the user, unattended runs hand the call to the model with a "verify before retrying" instruction.
 11. Agents write the code. Ownership comes from the decision records, walkthroughs and cross-questions in every milestone's definition of done.
-12. Development runs in WSL Ubuntu with Docker Engine installed inside it, and WSL memory raised to 10 to 12 GB.
+12. Development runs in WSL Ubuntu. Docker comes from Docker Desktop's WSL integration (revised at M4, decision 0031), with about 7.6 GB available.
 
 Deferred to gates: listed in the milestone table.
 

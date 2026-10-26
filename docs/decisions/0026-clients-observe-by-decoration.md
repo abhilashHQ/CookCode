@@ -12,7 +12,7 @@ The plain CLI has to show streaming text, tool calls, results, retries and the f
 - Wrap the two interfaces the core already depends on: `DisplayProvider` passes stream events through to a sink, and `ObservedLog` calls a sink after each successful `append`.
 
 ## Decision
-Decoration, in `cli/terminal.py`. Both wrappers satisfy the existing protocols, so `Agent` cannot tell them from the real thing. Each sink sits behind `_Observer`, which calls it, and on its first exception disables it and keeps the error. The append or the stream event still goes through. A broken pipe on stdout or a rendering bug can therefore never make `append` raise after the event is already on disk, which the loop would read as a failed write.
+Decoration, in `cli/observe.py` (moved out of `cli/terminal.py` in M4 so the headless client needs no terminal code). Both wrappers satisfy the existing protocols, so `Agent` cannot tell them from the real thing. Each sink sits behind `_Observer`, which calls it, and on its first exception disables it and keeps the error. The append or the stream event still goes through. A broken pipe on stdout or a rendering bug can therefore never make `append` raise after the event is already on disk, which the loop would read as a failed write.
 
 ## Consequences
 - Zero core changes for M3's client. The headless JSONL client (M4) is an `ObservedLog` whose sink writes JSON lines.

@@ -14,5 +14,13 @@ Run the agent from inside a repo with `NVIDIA_API_KEY` set (NVIDIA NIM, the defa
 `--max-turns` override the defaults. Sessions live under `$HARNESS_HOME`
 (default `~/.local/share/harness`).
 
+Headless: `uv run harness -p "<task>" --json` writes every event as one JSON line
+(`--policy file.json` for allow and deny rules, `--approvals stdin` to answer the rest).
+`uv run harness schema` prints the event schema, and `uv run harness export <session>` writes
+the session as ATIF.
+
+Terminal-Bench through Harbor (Docker required):
+`uv run harbor run -d terminal-bench@2.0 -i <task> -a harness.harbor.agent:HarnessAgent -m nim/minimaxai/minimax-m3.1-flash`.
+
 Tests replay recorded provider traffic from `tests/cassettes/`. To re-record against OpenRouter:
 `HARNESS_RECORD=1 uv run pytest tests/test_cassettes.py -k openrouter` (or `-k nim`).
