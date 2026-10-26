@@ -1,6 +1,6 @@
 # 0017. Snapshot method and undo
 
-Status: proposed (M2 gate)
+Status: accepted (M2 gate, 2026-10-26)
 Date: 2026-10-26
 
 ## Context
@@ -12,7 +12,7 @@ A user who sees a bad edit wants the files back. The harness needs the old bytes
 - A git shadow repository: one commit per turn with a separate `GIT_DIR`. It covers every file in the tree, bash side effects included. It needs git in the environment, a rule for ignored and untracked files, and a full-tree walk each turn.
 
 ## Decision
-**Gate:** Left for the gate.
+**Gate:** Accepted at the M2 gate on 2026-10-26: snapshots are file copies stored host-side by a CheckpointStore. Bash side effects stay uncovered.
 
 Recommendation: file copies behind a `CheckpointStore`. The code implements it. Snapshotting is deliberately not an `Environment` method, a change from the spec sketch, so the environment protocol stays at exec, read, write and remove.
 

@@ -1,6 +1,6 @@
 # 0016. grep and glob placement
 
-Status: proposed (M2 gate)
+Status: accepted (M2 gate, 2026-10-26)
 Date: 2026-10-26
 
 ## Context
@@ -12,7 +12,7 @@ Searching a tree is the most frequent read the model does. ripgrep is the best e
 - Search in Python through `read_file`: no dependency on binaries in the environment, but walking a tree costs a round trip per file against a remote environment.
 
 ## Decision
-**Gate:** Left for the gate.
+**Gate:** Accepted at the M2 gate on 2026-10-26: grep and glob stay tools over env.exec, preferring rg with a grep and find fallback.
 
 Recommendation: tools built on `env.exec`. The code implements it (`src/harness/tools/search.py`).
 
