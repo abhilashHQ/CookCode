@@ -65,7 +65,7 @@ Experiments (each published with task set version, harness commit, model, effort
 - One headline Terminal-Bench run on a pinned version against Terminus 2 on the same model.
 - A failure-analysis write-up built from traces.
 
-Models: free tiers (OpenRouter, Gemini) for development and smoke tests, never with private code. Ablations run on one cheap open-weight model, and numbers only count once they're rerun on a pinned model with paid credits (Azure, when available).
+Models: free tiers (OpenRouter, Gemini) for development and smoke tests. Ablations run on one cheap open-weight model, and numbers only count once they're rerun on a pinned model with paid credits (Azure, when available).
 
 Tasks: our own suite of 30 to 40 small deterministic tasks on fixture repos (long-session tasks for context, real bugs for verification), plus a fixed, published Terminal-Bench slice.
 
