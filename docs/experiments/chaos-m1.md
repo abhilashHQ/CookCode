@@ -57,3 +57,12 @@ Each point runs the scenario in a subprocess that SIGKILLs itself, either right 
 ## Caveat
 
 SIGKILL ends the process but does not drop the operating system page cache, so every byte written before the kill survives. This experiment therefore does not test fsync behavior under power loss or a kernel crash. It tests the repair rules against process death at every event boundary and after every side effect. The scenario provider is deterministic and goal-driven, so the numbers describe the repair logic, not model behavior. Crashes are injected only into the first run, never into the resume itself, and there is one scenario shape.
+
+## Interpretation
+
+This section is written by hand and is lost when the report is regenerated.
+
+- Safety separates naive from the other two arms. Naive duplicates exactly where a side effect ran and its result was not logged: after `tool_call_finished`, or right after the exec. A crash right after `tool_call_started` causes no duplicate, because the effect had not run yet.
+- Cost separates the two safe arms. The conservative arm has no write-ahead records, so it must also verify calls that were emitted but never started. Write-ahead saves those 6 requests (59 against 65). It also survives registry drift, because repair reads the side-effect class from `tool_call_started`.
+- Against naive, the three-state repair pays 5 extra requests, the verify reads after `unknown`. That is the price of never duplicating.
+- Limits: SIGKILL keeps the page cache, so fsync under power loss is untested. The scenario model is a deterministic policy, not an LLM. There is one scenario shape, and crashes are injected only into the first run. Naive lost no lines, so duplication is its only failure mode here.
