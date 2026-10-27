@@ -11,10 +11,14 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from harness import __version__
 from harness.agent.approval import Approver, Decision, PolicyOnlyApprover, Risk
 from harness.agent.context import (
+    SUMMARIZE_VIEW,
     build_request,
     dropped_reasoning,
     estimate_tokens,
     items_sha256,
+    summary_cut,
+    token_ledger,
+    transcript,
 )
 from harness.agent.gate import (
     Mode,
@@ -33,6 +37,7 @@ from harness.core.events import (
     ApprovalResolved,
     BudgetExceeded,
     CheckpointCreated,
+    CompactionApplied,
     ErrorEvent,
     Event,
     Interrupted,
@@ -52,7 +57,8 @@ from harness.core.events import (
     UserMessage,
 )
 from harness.core.ids import new_id
-from harness.core.items import ToolCall, ToolResult, ToolResultStatus
+from harness.core.items import Message, ToolCall, ToolResult, ToolResultStatus, text_message
+from harness.core.strategy import Strategy
 from harness.core.usage import StopReason, Usage
 from harness.env.base import Environment
 from harness.providers.base import (
@@ -69,6 +75,16 @@ RunStatus = Literal["done", "error", "budget_exceeded", "interrupted"]
 Phase = Literal["streaming", "tool", "idle"]
 
 WALL_CLOCK = "wall_clock"
+SUMMARIZER_SYSTEM = (
+    "You compress the history of a coding agent's session so it can keep working with less "
+    "context. Write for the agent itself, not for a user."
+)
+SUMMARIZER_PROMPT = (
+    "Summarize the session below. Keep: the task and any constraints, files read or changed and "
+    "what changed, commands run and what they showed, errors and how they were resolved, what "
+    "is done, and what remains. Keep exact paths, names and values. Drop pleasantries and "
+    "anything superseded. Plain text, no preamble.\n\n"
+)
 KILLED_READ_ONLY = (
     "[killed by an interrupt before it finished. It is read-only, so it is safe to retry.]"
 )
@@ -99,6 +115,7 @@ class AgentConfig(BaseModel):
     cwd: str = "."
     mode: Mode = "ask"
     policy: Policy = Policy()
+    strategy: Strategy = Strategy()
 
 
 class RunOutcome(BaseModel):
@@ -131,6 +148,7 @@ class _Response:
     raw_usage: dict[str, Any]
     error: str | None
     calls: list[ToolCall]
+    text: str = ""
 
 
 @dataclass(frozen=True)
@@ -221,6 +239,10 @@ class Agent:
         self._log = log
         self._provider = provider
         self._env = env
+        if config.strategy.masks and tools.get("recall") is None:
+            raise ValueError(
+                f"strategy {config.strategy.label} masks tool outputs and needs a recall tool"
+            )
         self._tools = tools
         self._config = config
         self._harness_version = harness_version
@@ -304,6 +326,7 @@ class Agent:
                 *(f"allow {rule.display}" for rule in self._config.policy.allow),
                 *(f"deny {rule.display}" for rule in self._config.policy.deny),
             ),
+            strategy=self._config.strategy,
         )
 
     def _current_cwd(self) -> str:
@@ -313,24 +336,82 @@ class Agent:
         while self._steering:
             self._log.append(SteerMessage(text=self._steering.popleft()))
 
-    async def _step(self, run: _RunState) -> RunOutcome | None:
-        events = self._log.read()
-        provider, model = self._provider.name, self._config.model
-        request = build_request(
+    def _build(self, events: Sequence[Event]) -> ModelRequest:
+        return build_request(
             events,
-            model=model,
+            model=self._config.model,
             system=self._config.system_prompt,
             tools=self._tools.schemas(),
-            provider=provider,
+            provider=self._provider.name,
+            strategy=self._config.strategy,
+        )
+
+    async def _summarize_if_needed(self, run: _RunState) -> None:
+        """Summarize older steps when the request would pass the trigger. The summary is
+        logged in `compaction_applied`, so the builder stays a pure function of the log."""
+        strategy = self._config.strategy
+        events = self._log.read()
+        before = estimate_tokens(self._build(events))
+        if not strategy.summarizes or before <= strategy.trigger_tokens:
+            return
+        cut = summary_cut(events, strategy.keep_steps)
+        if cut is None:
+            return
+        request = ModelRequest(
+            model=self._config.model,
+            system=SUMMARIZER_SYSTEM,
+            items=(text_message("user", SUMMARIZER_PROMPT + transcript(events, *cut)),),
         )
         request_id = new_id()
         self._log.append(
             ModelRequestStarted(
                 request_id=request_id,
-                view="raw",
+                view=SUMMARIZE_VIEW,
+                token_estimate=estimate_tokens(request),
+            )
+        )
+        response = await self._stream(run, request, request_id, log_items=False)
+        self._log.append(
+            ModelRequestFinished(
+                request_id=request_id,
+                stop_reason=response.stop_reason,
+                usage=response.usage,
+                raw_usage=response.raw_usage,
+            )
+        )
+        run.usage = run.usage + response.usage
+        if response.stop_reason != "end_turn" or not response.text.strip():
+            return
+        draft = CompactionApplied(
+            strategy=strategy.label,
+            from_seq=cut[0],
+            to_seq=cut[1],
+            tokens_before=before,
+            tokens_after=0,
+            summary=response.text.strip(),
+        )
+        probe = Event(
+            seq=events[-1].seq + 2, id=new_id(), ts=events[-1].ts, layer="internal", body=draft
+        )
+        after = estimate_tokens(self._build([*self._log.read(), probe]))
+        self._log.append(draft.model_copy(update={"tokens_after": after}))
+
+    async def _step(self, run: _RunState) -> RunOutcome | None:
+        await self._summarize_if_needed(run)
+        if run.cancelled():
+            return self._end_cancelled(run, "streaming", ())
+        events = self._log.read()
+        provider, model = self._provider.name, self._config.model
+        request = self._build(events)
+        request_id = new_id()
+        self._log.append(
+            ModelRequestStarted(
+                request_id=request_id,
+                view=self._config.strategy.label,
                 token_estimate=estimate_tokens(request),
                 items_sha256=items_sha256(request.items),
                 reasoning_dropped=dropped_reasoning(events, provider=provider, model=model),
+                ledger=token_ledger(request),
             )
         )
         run.turns += 1
@@ -361,8 +442,11 @@ class Agent:
             return None
         return self._finish(run, "done")
 
-    async def _stream(self, run: _RunState, request: ModelRequest, request_id: str) -> _Response:
+    async def _stream(
+        self, run: _RunState, request: ModelRequest, request_id: str, *, log_items: bool = True
+    ) -> _Response:
         calls: list[ToolCall] = []
+        text: list[str] = []
         usage = Usage()
         raw_usage: dict[str, Any] = {}
         stop_reason: StopReason | None = None
@@ -383,9 +467,12 @@ class Agent:
                     stop_reason, error = "error", f"{type(exc).__name__}: {exc}"
                     break
                 if isinstance(event, ItemDone):
-                    self._log.append(ItemEvent(item=event.item, request_id=request_id))
+                    if log_items:
+                        self._log.append(ItemEvent(item=event.item, request_id=request_id))
                     if isinstance(event.item, ToolCall):
                         calls.append(event.item)
+                    elif isinstance(event.item, Message):
+                        text.append(event.item.text)
                 elif isinstance(event, UsageReport):
                     usage, raw_usage = event.usage, event.raw
                 elif isinstance(event, StreamRetry):
@@ -411,7 +498,12 @@ class Agent:
         if stop_reason is None:
             stop_reason, error = "error", "stream ended without a stop reason"
         return _Response(
-            stop_reason=stop_reason, usage=usage, raw_usage=raw_usage, error=error, calls=calls
+            stop_reason=stop_reason,
+            usage=usage,
+            raw_usage=raw_usage,
+            error=error,
+            calls=calls,
+            text="".join(text),
         )
 
     def _close_out_not_executed(self, calls: Sequence[ToolCall]) -> None:
@@ -635,6 +727,7 @@ class Agent:
                 cwd=cwd,
                 timeout_s=self._config.tool_timeout_s,
                 max_output_bytes=self._config.max_tool_output_bytes,
+                history=self._log.read,
             )
             started = time.monotonic()
             try:

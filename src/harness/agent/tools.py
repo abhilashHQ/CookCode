@@ -1,12 +1,12 @@
 import posixpath
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Awaitable, Callable, Iterable, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
 from harness.core.cancel import CancelToken
-from harness.core.events import SideEffect
+from harness.core.events import Event, SideEffect
 from harness.env.base import Environment
 from harness.providers.base import ToolSchema
 
@@ -31,6 +31,7 @@ class ToolContext:
     cwd: str
     timeout_s: float
     max_output_bytes: int
+    history: Callable[[], Sequence[Event]] | None = None
 
 
 class ToolOutput(BaseModel):

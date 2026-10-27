@@ -27,6 +27,7 @@ from harness.cli.terminal import (
 from harness.core.cancel import CancelToken
 from harness.core.events import Event, Limits, RunConfig, RunStarted, SessionStarted
 from harness.core.ids import new_id
+from harness.core.strategy import Strategy
 from harness.env.local import LocalEnvironment
 from harness.providers.base import Provider, StreamEvent
 from harness.providers.gemini import GEMINI_BASE_URL, GeminiProvider
@@ -167,6 +168,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--api-key-env")
     parser.add_argument("--mode", choices=("ask", "auto-edit", "yolo"), default="ask")
     parser.add_argument("--max-turns", type=int, default=50)
+    parser.add_argument(
+        "--strategy",
+        type=Strategy.parse,
+        default=Strategy(),
+        help="context strategy: raw, mask, mask_batched, summarize or hybrid, with options "
+        "like mask:k6 or hybrid:k6:b8:t48000",
+    )
     parser.add_argument("--once", action="store_true", help="exit after the first run")
     parser.add_argument("--resume", metavar="SESSION", help="continue an existing session")
     parser.add_argument(
@@ -273,12 +281,13 @@ class Runtime:
             cwd=self.cwd,
             mode=self.args.mode,
             policy=self.policy,
+            strategy=self.args.strategy,
         )
         return Agent(
             log=self.log,
             provider=provider,
             env=self.env,
-            tools=ToolRegistry(default_tools()),
+            tools=ToolRegistry(default_tools(recall=self.args.strategy.masks)),
             config=config,
             approver=approver,
             checkpoints=self.checkpoints,

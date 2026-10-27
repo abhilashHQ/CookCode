@@ -16,6 +16,7 @@ from pydantic import (
 from harness.core._union import tag_or_fallback
 from harness.core.ids import new_id, utc_now
 from harness.core.items import Item
+from harness.core.strategy import Strategy
 from harness.core.usage import StopReason, Usage
 
 SCHEMA_VERSION = 1
@@ -45,6 +46,7 @@ class RunConfig(_Frozen):
     limits: Limits = Limits()
     mode: str | None = None
     policy: tuple[str, ...] = ()
+    strategy: Strategy = Strategy()
 
 
 def compute_config_id(config: RunConfig) -> str:
@@ -95,6 +97,7 @@ class ModelRequestStarted(_Body):
     token_estimate: int
     items_sha256: str | None = None
     reasoning_dropped: int = 0
+    ledger: dict[str, int] | None = None
 
 
 class ItemEvent(_Body):
@@ -177,6 +180,7 @@ class CompactionApplied(_Body):
     to_seq: int
     tokens_before: int
     tokens_after: int
+    summary: str | None = None
 
 
 class Interrupted(_Body):

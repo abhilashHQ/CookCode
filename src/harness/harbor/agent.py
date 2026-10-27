@@ -20,6 +20,7 @@ from harness.agent.tools import ToolRegistry
 from harness.cli.app import BASE_PROMPT, PRESETS, SECRET_ENV, UNATTENDED, make_provider
 from harness.core.events import Event, Limits, ModelRequestFinished, SessionFinished
 from harness.core.ids import new_id
+from harness.core.strategy import Strategy
 from harness.core.usage import Usage
 from harness.env.harbor import HarborEnvironment
 from harness.export.atif import AGENT_NAME, to_atif
@@ -57,11 +58,13 @@ class HarnessAgent(BaseAgent):
         self,
         *args: Any,
         max_turns: int | str = 50,
+        strategy: str = "raw",
         provider: Provider | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, skip_model_parsing=True, **kwargs)
         self.max_turns = int(max_turns)
+        self.strategy = Strategy.parse(strategy)
         self.provider = provider
 
     @staticmethod
@@ -91,7 +94,7 @@ class HarnessAgent(BaseAgent):
         )
         session_id = new_id()
         log = store.open(session_id, create=True)
-        tools = ToolRegistry(default_tools())
+        tools = ToolRegistry(default_tools(recall=self.strategy.masks))
         try:
             instructions = await load_instructions(env, ".")
             agent = Agent(
@@ -107,6 +110,7 @@ class HarnessAgent(BaseAgent):
                     ),
                     limits=Limits(max_turns=self.max_turns),
                     mode="yolo",
+                    strategy=self.strategy,
                 ),
                 checkpoints=FileCheckpointStore(self.logs_dir / "checkpoints"),
             )

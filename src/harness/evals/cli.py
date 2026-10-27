@@ -9,6 +9,9 @@ from pathlib import Path
 from pydantic import TypeAdapter, ValidationError
 
 from harness.cli.app import PRESETS, data_dir
+from harness.core.strategy import Strategy
+from harness.evals.context import ContextCost, session_cost
+from harness.evals.context import render as render_context
 from harness.evals.runner import AttemptResult, Mode, run_suite
 from harness.evals.stats import (
     Price,
@@ -106,6 +109,7 @@ def _run(args: argparse.Namespace) -> int:
                 model=args.model or default_model,
                 attempts=args.attempts,
                 concurrency=args.concurrency,
+                strategy=args.strategy,
                 on_result=show,
             )
         )
@@ -141,6 +145,30 @@ def _report(args: argparse.Namespace) -> int:
     return 0
 
 
+def _context(args: argparse.Namespace) -> int:
+    try:
+        strategies = [Strategy.parse(text) for text in args.strategies.split(",")]
+    except ValueError as exc:
+        print(f"harness: {exc}", file=sys.stderr)
+        return 1
+    logs = [log for target in args.runs for log in session_files(Path(target))]
+    if not logs:
+        print("harness: no session logs found", file=sys.stderr)
+        return 1
+    sessions = [read_session(log) for log in logs]
+    rows: list[tuple[str, ContextCost]] = []
+    for strategy in strategies:
+        try:
+            cost = sum((session_cost(events, strategy) for events in sessions), ContextCost())
+        except ValueError as exc:
+            print(f"harness: {exc}", file=sys.stderr)
+            return 1
+        rows.append((strategy.label, cost))
+    print(f"{len(sessions)} sessions, logged trajectories replayed under each strategy")
+    print(render_context(rows))
+    return 0
+
+
 def eval_command(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="harness eval", description="Run and report evals.")
     sub = parser.add_subparsers(dest="action", required=True)
@@ -158,8 +186,17 @@ def eval_command(argv: list[str]) -> int:
     run.add_argument("--concurrency", type=int, default=1)
     run.add_argument("--provider", choices=tuple(PRESETS), default="nim")
     run.add_argument("--model")
+    run.add_argument("--strategy", type=Strategy.parse, default=Strategy())
     run.add_argument("-o", "--output", help="run directory (default under $HARNESS_HOME/runs)")
     report = sub.add_parser("report", help="variance summary and stats of runs")
     report.add_argument("runs", nargs="+", help="suite run directories or Harbor job directories")
+    context = sub.add_parser(
+        "context", help="rebuild logged requests under other strategies (no API calls)"
+    )
+    context.add_argument("runs", nargs="+", help="directories with session logs")
+    context.add_argument(
+        "--strategies", default="raw,mask:k4,mask:k8,mask_batched:k4:b8,mask_batched:k8:b8"
+    )
     args = parser.parse_args(argv)
-    return _run(args) if args.action == "run" else _report(args)
+    actions = {"run": _run, "report": _report, "context": _context}
+    return actions[args.action](args)

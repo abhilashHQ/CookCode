@@ -204,6 +204,18 @@
           "title": "Strategy",
           "type": "string"
         },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Summary"
+        },
         "to_seq": {
           "title": "To Seq",
           "type": "integer"
@@ -503,6 +515,21 @@
           "default": null,
           "title": "Items Sha256"
         },
+        "ledger": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ledger"
+        },
         "reasoning_dropped": {
           "default": 0,
           "title": "Reasoning Dropped",
@@ -750,6 +777,15 @@
           "title": "Provider",
           "type": "string"
         },
+        "strategy": {
+          "$ref": "#/$defs/Strategy",
+          "default": {
+            "batch_steps": 8,
+            "keep_steps": 6,
+            "name": "raw",
+            "trigger_tokens": 48000
+          }
+        },
         "system_prompt_sha256": {
           "default": "",
           "title": "System Prompt Sha256",
@@ -869,6 +905,44 @@
         "text"
       ],
       "title": "SteerMessage",
+      "type": "object"
+    },
+    "Strategy": {
+      "additionalProperties": false,
+      "description": "How the context builder shrinks history (spec section 7). Recorded in the run config so\nreplay rebuilds each request under the strategy that built it.",
+      "properties": {
+        "batch_steps": {
+          "default": 8,
+          "minimum": 1,
+          "title": "Batch Steps",
+          "type": "integer"
+        },
+        "keep_steps": {
+          "default": 6,
+          "minimum": 1,
+          "title": "Keep Steps",
+          "type": "integer"
+        },
+        "name": {
+          "default": "raw",
+          "enum": [
+            "raw",
+            "mask",
+            "mask_batched",
+            "summarize",
+            "hybrid"
+          ],
+          "title": "Name",
+          "type": "string"
+        },
+        "trigger_tokens": {
+          "default": 48000,
+          "minimum": 1,
+          "title": "Trigger Tokens",
+          "type": "integer"
+        }
+      },
+      "title": "Strategy",
       "type": "object"
     },
     "TextPart": {

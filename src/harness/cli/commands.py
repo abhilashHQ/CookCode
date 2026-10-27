@@ -6,7 +6,7 @@ from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
-from harness.agent.context import build_request, items_sha256
+from harness.agent.context import SUMMARIZE_VIEW, build_request, items_sha256
 from harness.cli.app import SESSION_ERRORS, data_dir, main, session_config, session_error
 from harness.core.events import (
     Event,
@@ -142,11 +142,11 @@ def sessions_command(argv: list[str]) -> int:
 def replay_command(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(
         prog="harness replay",
-        description="Rebuild every logged model request from the log before it and check its "
-        "items hash.",
+        description="Rebuild every logged model request from the log before it, under the "
+        "strategy its run recorded, and check its items hash. For other strategies, see "
+        "harness eval context.",
     )
     parser.add_argument("session")
-    parser.add_argument("--strategy", choices=("raw",), default="raw")
     args = parser.parse_args(argv)
     try:
         events = _store().read(args.session)
@@ -159,13 +159,14 @@ def replay_command(argv: list[str]) -> int:
         body = event.body
         if isinstance(body, SessionStarted | RunStarted):
             config = body.config
-        elif isinstance(body, ModelRequestStarted):
+        elif isinstance(body, ModelRequestStarted) and body.view != SUMMARIZE_VIEW:
             request = build_request(
                 events[:index],
                 model=config.model if config is not None else "",
                 system="",
                 tools=(),
                 provider=config.provider if config is not None else None,
+                strategy=config.strategy if config is not None else None,
             )
             if body.items_sha256 is None:
                 verdict = "unverified"

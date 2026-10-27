@@ -47,6 +47,13 @@ class Stats(BaseModel):
     tool_s: float = 0.0
     wall_s: float = 0.0
     cost_usd: float = 0.0
+    estimated_input: int = 0
+    measured_input: int = 0
+
+    @property
+    def calibration(self) -> float:
+        """Provider-reported input tokens per estimated token, over requests that have both."""
+        return self.measured_input / self.estimated_input if self.estimated_input else 0.0
 
     @property
     def cache_read_share(self) -> float:
@@ -70,6 +77,8 @@ class Stats(BaseModel):
             tool_s=self.tool_s + other.tool_s,
             wall_s=self.wall_s + other.wall_s,
             cost_usd=self.cost_usd + other.cost_usd,
+            estimated_input=self.estimated_input + other.estimated_input,
+            measured_input=self.measured_input + other.measured_input,
         )
 
 
@@ -103,6 +112,7 @@ def session_stats(events: Sequence[Event], prices: dict[str, Price] | None = Non
     usage = Usage()
     requests = retries = tool_calls = tool_errors = 0
     model_s = tool_s = cost_usd = 0.0
+    estimated = measured = 0
     for event in events:
         body = event.body
         if isinstance(body, RunStarted | SessionStarted):
@@ -116,6 +126,9 @@ def session_stats(events: Sequence[Event], prices: dict[str, Price] | None = Non
             begin = started.get(body.request_id)
             if begin is not None:
                 model_s += (event.ts - begin.ts).total_seconds()
+                if isinstance(begin.body, ModelRequestStarted) and body.usage.total_input:
+                    estimated += begin.body.token_estimate
+                    measured += body.usage.total_input
         elif isinstance(body, ProviderRetry):
             retries += 1
         elif isinstance(body, ToolCallFinished):
@@ -143,6 +156,8 @@ def session_stats(events: Sequence[Event], prices: dict[str, Price] | None = Non
         tool_s=tool_s,
         wall_s=wall_s,
         cost_usd=cost_usd,
+        estimated_input=estimated,
+        measured_input=measured,
     )
 
 
@@ -176,5 +191,6 @@ def render(stats: Stats) -> str:
             f"time            {stats.wall_s:.0f}s wall, {stats.model_s:.0f}s model, "
             f"{stats.tool_s:.0f}s tools",
             f"cost            ${stats.cost_usd:.4f}",
+            f"estimate scale  x{stats.calibration:.2f} (reported input / chars-over-4 estimate)",
         ]
     )
