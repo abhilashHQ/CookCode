@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Usage: evals/run_tb.sh cookcode|terminus-2 ATTEMPTS [task ...]
 # Both agents get the same endpoint, model and turn cap. Defaults to the slice in tb-slice.txt.
+# TB_FEATURES turns on cookcode features (core/features.py), e.g. TB_FEATURES=jobs.
 set -euo pipefail
 agent=$1
 attempts=$2
@@ -23,7 +24,7 @@ done
 case $agent in
     cookcode)
         uv run harbor run "${args[@]}" -a cookcode.harbor.agent:CookCodeAgent \
-            -m "nim/$model" --ak max_turns=50
+            -m "nim/$model" --ak max_turns=50 --ak "features=${TB_FEATURES:-base}"
         ;;
     terminus-2)
         OPENAI_API_KEY=$NVIDIA_API_KEY uv run harbor run "${args[@]}" -a terminus-2 \

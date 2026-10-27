@@ -184,7 +184,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--features",
         type=Features.parse,
         help="optional features to turn on, comma separated: jobs, verify_first, notes, facts, "
-        "subagents, skills, hooks",
+        "subagents, skills, hooks, mcp",
     )
     parser.add_argument("--tui", action="store_true", help="full-screen interface")
     parser.add_argument("--once", action="store_true", help="exit after the first run")
