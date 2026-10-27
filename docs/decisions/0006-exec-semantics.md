@@ -12,7 +12,7 @@ The agent's main tool is running shell commands. Commands hang, spawn background
 - Reading stdout through `asyncio.subprocess.PIPE`: the obvious choice, but on Python 3.12 `proc.wait()` does not resolve until every holder of that pipe closes it. A backgrounded child (`sleep 30 &`) holds it, so `wait()` blocks until the timeout.
 
 ## Decision
-`LocalEnvironment.exec` (`src/harness/env/local.py`) runs `bash -c cmd` with `start_new_session=True`, stdin on `/dev/null`, and stderr merged into stdout. It creates its own `os.pipe()`, hands the write end to the child, closes it in the parent, and reads the read end with `connect_read_pipe`. The subprocess object then owns no pipe, so `proc.wait()` returns when bash exits.
+`LocalEnvironment.exec` (`src/cookcode/env/local.py`) runs `bash -c cmd` with `start_new_session=True`, stdin on `/dev/null`, and stderr merged into stdout. It creates its own `os.pipe()`, hands the write end to the child, closes it in the parent, and reads the read end with `connect_read_pipe`. The subprocess object then owns no pipe, so `proc.wait()` returns when bash exits.
 
 Cleanup runs in `finally`: kill the process group with `SIGKILL`, cancel the cancel-waiter, await `wait()`, drain the pump for at most five seconds, close the transport. This runs after normal exit too, so background children never outlive the call. It also runs when the awaiting task is cancelled, for example by a `TaskGroup` tearing down, so cancellation cannot orphan a process group.
 

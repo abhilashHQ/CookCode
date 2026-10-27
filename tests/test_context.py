@@ -1,12 +1,12 @@
 from collections.abc import Sequence
 
-from harness.agent.context import (
+from cookcode.agent.context import (
     build_request,
     dropped_reasoning,
     estimate_tokens,
     items_sha256,
 )
-from harness.core.events import (
+from cookcode.core.events import (
     CheckpointRestored,
     Event,
     EventBody,
@@ -19,9 +19,9 @@ from harness.core.events import (
     UserMessage,
     make_event,
 )
-from harness.core.items import Item, Reasoning, ToolCall, ToolResult, text_message
-from harness.providers.base import ToolSchema
-from harness.providers.fake import call, say
+from cookcode.core.items import Item, Reasoning, ToolCall, ToolResult, text_message
+from cookcode.providers.base import ToolSchema
+from cookcode.providers.fake import call, say
 
 TOOLS = (ToolSchema(name="read", description="Read.", parameters={"type": "object"}),)
 

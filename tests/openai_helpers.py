@@ -5,9 +5,9 @@ from typing import Any
 
 import httpx
 
-from harness.core.cancel import CancelToken
-from harness.providers.base import ModelRequest, StreamEvent
-from harness.providers.openai_compat import OpenAICompatProvider
+from cookcode.core.cancel import CancelToken
+from cookcode.providers.base import ModelRequest, StreamEvent
+from cookcode.providers.openai_compat import OpenAICompatProvider
 
 MODEL = "vendor/model-a"
 URL = "https://example.test/v1/chat/completions"

@@ -4,22 +4,22 @@ from pathlib import Path
 import pytest
 
 from agent_helpers import Rig, RigFactory, bodies, echo_tool, results
-from harness.agent.context import build_request, items_sha256
-from harness.agent.hooks import Hook, HookContext
-from harness.core.events import (
+from cookcode.agent.context import build_request, items_sha256
+from cookcode.agent.hooks import Hook, HookContext
+from cookcode.core.events import (
     Event,
     HookBlocked,
     ModelRequestStarted,
     SessionStarted,
     ToolCallStarted,
 )
-from harness.core.features import Features
-from harness.core.items import Message, ToolCall
-from harness.core.strategy import Strategy
-from harness.env.local import LocalEnvironment
-from harness.providers.fake import FakeTurn, call, say
-from harness.tools.files import edit_tool, write_tool
-from harness.tools.verify import registered, repro_tool, verify_first_hook
+from cookcode.core.features import Features
+from cookcode.core.items import Message, ToolCall
+from cookcode.core.strategy import Strategy
+from cookcode.env.local import LocalEnvironment
+from cookcode.providers.fake import FakeTurn, call, say
+from cookcode.tools.files import edit_tool, write_tool
+from cookcode.tools.verify import registered, repro_tool, verify_first_hook
 from tool_helpers import make_kit
 
 CHECK = "grep -q good state.txt"

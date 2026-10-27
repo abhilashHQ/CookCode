@@ -12,11 +12,11 @@ from agent_helpers import (
     kinds,
     results,
 )
-from harness.core.events import CheckpointCreated, ToolCallStarted
-from harness.core.items import ToolResult
-from harness.providers.fake import FakeTurn, call, say
-from harness.store.checkpoints import FileCheckpointStore
-from harness.tools.files import edit_tool, read_tool, write_tool
+from cookcode.core.events import CheckpointCreated, ToolCallStarted
+from cookcode.core.items import ToolResult
+from cookcode.providers.fake import FakeTurn, call, say
+from cookcode.store.checkpoints import FileCheckpointStore
+from cookcode.tools.files import edit_tool, read_tool, write_tool
 
 
 @pytest.fixture

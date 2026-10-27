@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from harness.core.features import Features
-from harness.tools import default_tools
-from harness.tools.jobs import job_tools
+from cookcode.core.features import Features
+from cookcode.tools import default_tools
+from cookcode.tools.jobs import job_tools
 from tool_helpers import make_ctx, run_tool
 
 START, CHECK = job_tools()

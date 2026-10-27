@@ -19,10 +19,10 @@ from agent_helpers import (
     wait_cancel_tool,
     wait_until,
 )
-from harness.agent.repair import NOT_EXECUTED
-from harness.agent.tools import Tool, ToolContext, ToolOutput
-from harness.core.cancel import CancelToken
-from harness.core.events import (
+from cookcode.agent.repair import NOT_EXECUTED
+from cookcode.agent.tools import Tool, ToolContext, ToolOutput
+from cookcode.core.cancel import CancelToken
+from cookcode.core.events import (
     BudgetExceeded,
     Interrupted,
     Limits,
@@ -32,9 +32,9 @@ from harness.core.events import (
     ToolCallFinished,
     ToolCallStarted,
 )
-from harness.core.items import Message, ToolResult
-from harness.core.usage import Usage
-from harness.providers.fake import FakeTurn, call, say
+from cookcode.core.items import Message, ToolResult
+from cookcode.core.usage import Usage
+from cookcode.providers.fake import FakeTurn, call, say
 
 
 @pytest.fixture

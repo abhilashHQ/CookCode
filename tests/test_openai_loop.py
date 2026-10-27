@@ -4,11 +4,11 @@ from pathlib import Path
 import pytest
 
 from agent_helpers import assert_every_call_resolved, bodies, echo_tool, kinds, results
-from harness.agent.loop import Agent, AgentConfig
-from harness.agent.tools import ToolRegistry
-from harness.core.events import ModelRequestFinished, ProviderRetry
-from harness.env.local import LocalEnvironment
-from harness.store.jsonl import JsonlSessionLog, JsonlSessionStore
+from cookcode.agent.loop import Agent, AgentConfig
+from cookcode.agent.tools import ToolRegistry
+from cookcode.core.events import ModelRequestFinished, ProviderRetry
+from cookcode.env.local import LocalEnvironment
+from cookcode.store.jsonl import JsonlSessionLog, JsonlSessionStore
 from openai_helpers import MODEL, Script, delta, ok, provider, sse, status, text_stream, tool_stream
 
 

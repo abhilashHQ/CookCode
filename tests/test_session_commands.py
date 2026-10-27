@@ -3,10 +3,10 @@ from pathlib import Path
 import pytest
 
 from agent_helpers import bodies
-from harness.cli.app import main
-from harness.core.events import ItemEvent, ModelRequestStarted, Repaired
-from harness.core.items import ToolCall
-from harness.providers.fake import FakeProvider, FakeTurn, call, say
+from cookcode.cli.app import main
+from cookcode.core.events import ItemEvent, ModelRequestStarted, Repaired
+from cookcode.core.items import ToolCall
+from cookcode.providers.fake import FakeProvider, FakeTurn, call, say
 from session_helpers import (
     assert_replays,
     assert_valid,

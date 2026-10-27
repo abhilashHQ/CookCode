@@ -1,4 +1,4 @@
-from harness.core.usage import Usage
+from cookcode.core.usage import Usage
 
 
 def test_add_sums_every_field() -> None:

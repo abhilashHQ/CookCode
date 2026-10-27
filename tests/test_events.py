@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from harness.core.events import (
+from cookcode.core.events import (
     EVENT_TYPES,
     SCHEMA_VERSION,
     Event,
@@ -16,7 +16,7 @@ from harness.core.events import (
     make_event,
     to_json_line,
 )
-from harness.core.items import text_message
+from cookcode.core.items import text_message
 from sample_events import all_bodies
 
 

@@ -7,12 +7,12 @@ from pathlib import Path
 import pytest
 
 from agent_helpers import RigFactory, assert_every_call_resolved, bodies, results
-from harness.core.cancel import CancelToken
-from harness.core.events import ToolCallFinished
-from harness.core.items import ToolResult
-from harness.providers.fake import FakeTurn, call, say
-from harness.tools import default_tools
-from harness.tools.bash import bash_tool
+from cookcode.core.cancel import CancelToken
+from cookcode.core.events import ToolCallFinished
+from cookcode.core.items import ToolResult
+from cookcode.providers.fake import FakeTurn, call, say
+from cookcode.tools import default_tools
+from cookcode.tools.bash import bash_tool
 from test_local_env_exec import _live_with_token  # pyright: ignore[reportPrivateUsage]
 from tool_helpers import make_ctx, run_tool
 

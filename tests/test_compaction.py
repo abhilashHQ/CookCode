@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from agent_helpers import RigFactory, echo_tool
-from harness.agent.context import (
+from cookcode.agent.context import (
     SUMMARIZE_VIEW,
     SUMMARY_HEADER,
     build_request,
@@ -13,7 +13,7 @@ from harness.agent.context import (
     summary_cut,
     token_ledger,
 )
-from harness.core.events import (
+from cookcode.core.events import (
     CompactionApplied,
     Event,
     EventBody,
@@ -22,11 +22,11 @@ from harness.core.events import (
     UserMessage,
     make_event,
 )
-from harness.core.items import Item, Message, ToolCall, ToolResult, text_message
-from harness.core.strategy import Strategy
-from harness.providers.base import ModelRequest, ToolSchema
-from harness.providers.fake import FakeTurn, call, say
-from harness.tools.recall import recall_tool
+from cookcode.core.items import Item, Message, ToolCall, ToolResult, text_message
+from cookcode.core.strategy import Strategy
+from cookcode.providers.base import ModelRequest, ToolSchema
+from cookcode.providers.fake import FakeTurn, call, say
+from cookcode.tools.recall import recall_tool
 
 LONG = "x" * 300
 
@@ -234,7 +234,7 @@ async def test_summarize_logs_the_summary_and_the_builder_uses_it(rigs: RigFacto
 
 
 def test_counterfactual_costs_compare_strategies_on_one_trajectory() -> None:
-    from harness.evals.context import session_cost
+    from cookcode.evals.context import session_cost
 
     events = session(10)
     raw = session_cost(events, Strategy())

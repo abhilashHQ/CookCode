@@ -8,17 +8,17 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
-from harness.agent.approval import Approver, PolicyOnlyApprover
-from harness.agent.hooks import Hook
-from harness.agent.loop import Agent, AgentConfig
-from harness.agent.repair import RepairAction, plan_repairs, unresolved_calls
-from harness.agent.tools import Tool, ToolContext, ToolOutput, ToolRegistry
-from harness.core.events import Event, ItemEvent, Limits, SideEffect
-from harness.core.items import Item, ToolCall, ToolResult
-from harness.env.local import LocalEnvironment
-from harness.providers.fake import FakeProvider, FakeTurn
-from harness.store.base import CheckpointStore
-from harness.store.jsonl import JsonlSessionLog, JsonlSessionStore
+from cookcode.agent.approval import Approver, PolicyOnlyApprover
+from cookcode.agent.hooks import Hook
+from cookcode.agent.loop import Agent, AgentConfig
+from cookcode.agent.repair import RepairAction, plan_repairs, unresolved_calls
+from cookcode.agent.tools import Tool, ToolContext, ToolOutput, ToolRegistry
+from cookcode.core.events import Event, ItemEvent, Limits, SideEffect
+from cookcode.core.items import Item, ToolCall, ToolResult
+from cookcode.env.local import LocalEnvironment
+from cookcode.providers.fake import FakeProvider, FakeTurn
+from cookcode.store.base import CheckpointStore
+from cookcode.store.jsonl import JsonlSessionLog, JsonlSessionStore
 
 SESSION = "s1"
 

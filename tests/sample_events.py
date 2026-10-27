@@ -1,4 +1,4 @@
-from harness.core.events import (
+from cookcode.core.events import (
     ApprovalRequested,
     ApprovalResolved,
     BudgetExceeded,
@@ -23,8 +23,8 @@ from harness.core.events import (
     ToolCallStarted,
     UserMessage,
 )
-from harness.core.items import ToolCall
-from harness.core.usage import Usage
+from cookcode.core.items import ToolCall
+from cookcode.core.usage import Usage
 
 
 def all_bodies() -> list[EventBody]:

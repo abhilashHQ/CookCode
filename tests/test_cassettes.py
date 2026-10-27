@@ -6,9 +6,9 @@ from pathlib import Path
 import httpx
 import pytest
 
-from harness.core.cancel import CancelToken
-from harness.core.items import Item, Reasoning, ToolCall, ToolResult, text_message
-from harness.providers.base import (
+from cookcode.core.cancel import CancelToken
+from cookcode.core.items import Item, Reasoning, ToolCall, ToolResult, text_message
+from cookcode.providers.base import (
     ItemDone,
     ModelRequest,
     StreamEnd,
@@ -16,25 +16,25 @@ from harness.providers.base import (
     ToolSchema,
     UsageReport,
 )
-from harness.providers.cassette import (
+from cookcode.providers.cassette import (
     Cassette,
     CassetteMismatch,
     RecordingTransport,
     ReplayTransport,
     first_difference,
 )
-from harness.providers.gemini import FOREIGN_SIGNATURE, GEMINI_BASE_URL, GeminiProvider
-from harness.providers.http import StreamingHttpProvider
-from harness.providers.openai_compat import (
+from cookcode.providers.gemini import FOREIGN_SIGNATURE, GEMINI_BASE_URL, GeminiProvider
+from cookcode.providers.http import StreamingHttpProvider
+from cookcode.providers.openai_compat import (
     NIM_BASE_URL,
     OPENROUTER_BASE_URL,
     OpenAICompatProvider,
 )
-from harness.redact import Redactor
+from cookcode.redact import Redactor
 from openai_helpers import Script, ok, provider, text_stream
 
 CASSETTES = Path(__file__).parent / "cassettes"
-RECORD = os.environ.get("HARNESS_RECORD") == "1"
+RECORD = os.environ.get("COOKCODE_RECORD") == "1"
 READ_TOOL = ToolSchema(
     name="read",
     description="Read a text file and return its contents.",
@@ -144,7 +144,7 @@ def tape(request: pytest.FixtureRequest) -> Iterator[Tape]:
         key = os.environ[key_env]
     else:
         if not path.exists():
-            pytest.fail(f"missing cassette {path.name}; record with HARNESS_RECORD=1")
+            pytest.fail(f"missing cassette {path.name}; record with COOKCODE_RECORD=1")
         cassette = Cassette.load(path)
         transport = ReplayTransport(cassette)
         key = "replay"

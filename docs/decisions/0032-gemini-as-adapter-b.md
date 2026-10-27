@@ -33,7 +33,7 @@ Wire mapping:
   - `candidatesTokenCount` excludes thoughts (86 + 32 + 70 = 188 total).
   - A text-only answer carries its signature on an empty text part.
   - A signed round trip is recorded in `tests/cassettes/test_gemini_signed_round_trip-*` and replayed in CI.
-  - The fixture task finished `done` in 8 requests, and `harness replay` matched all 8.
+  - The fixture task finished `done` in 8 requests, and `cookcode replay` matched all 8.
 - Free-tier reality: 5 requests a minute and 20 a day per model. The 20-a-day quota error named `gemini-3.6-flash` while we called `3.5-flash`, so quotas look shared or aliased. `gemini-3.8-flash` and `3.7-flash` returned 503 for high demand, and `2.5-flash` is closed to new users. The default is `gemini-3.5-flash`. Gemini is for adapter coverage and replay tests, not for long runs.
 
 ## What would change it

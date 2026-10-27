@@ -5,14 +5,14 @@ from pathlib import Path
 
 import pytest
 
-from harness.core.events import ToolCallStarted, UserMessage
-from harness.redact import Redactor
-from harness.store.base import (
+from cookcode.core.events import ToolCallStarted, UserMessage
+from cookcode.redact import Redactor
+from cookcode.store.base import (
     SessionCorruptError,
     SessionLockedError,
     SessionNotFoundError,
 )
-from harness.store.jsonl import JsonlSessionStore
+from cookcode.store.jsonl import JsonlSessionStore
 from sample_events import all_bodies
 
 
@@ -59,7 +59,7 @@ def test_fsync_only_for_write_ahead_events_or_when_asked(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     calls: list[int] = []
-    monkeypatch.setattr("harness.store.jsonl.os.fsync", lambda fd: calls.append(fd))
+    monkeypatch.setattr("cookcode.store.jsonl.os.fsync", lambda fd: calls.append(fd))
     store = JsonlSessionStore(tmp_path)
     with store.open("s1", create=True) as log:
         calls.clear()
@@ -125,7 +125,7 @@ def test_failed_append_leaves_no_trace_and_does_not_consume_seq(
     path = tmp_path / "s1.jsonl"
     with JsonlSessionStore(tmp_path).open("s1", create=True) as log:
         log.append(UserMessage(text="a"))
-        monkeypatch.setattr("harness.store.jsonl._write_all", _fail_after_partial_write)
+        monkeypatch.setattr("cookcode.store.jsonl._write_all", _fail_after_partial_write)
         with pytest.raises(OSError):
             log.append(UserMessage(text="b"))
         monkeypatch.undo()
@@ -145,7 +145,7 @@ def test_failed_fsync_rolls_back_the_durable_event(
 
     path = tmp_path / "s1.jsonl"
     with JsonlSessionStore(tmp_path).open("s1", create=True) as log:
-        monkeypatch.setattr("harness.store.jsonl.os.fsync", broken_fsync)
+        monkeypatch.setattr("cookcode.store.jsonl.os.fsync", broken_fsync)
         with pytest.raises(OSError):
             log.append(UserMessage(text="intent"), durable=True)
         monkeypatch.undo()
@@ -162,8 +162,8 @@ def test_log_is_poisoned_when_rollback_fails_and_reopen_recovers(
     store = JsonlSessionStore(tmp_path)
     with store.open("s1", create=True) as log:
         log.append(UserMessage(text="a"))
-        monkeypatch.setattr("harness.store.jsonl._write_all", _fail_after_partial_write)
-        monkeypatch.setattr("harness.store.jsonl.os.ftruncate", broken_truncate)
+        monkeypatch.setattr("cookcode.store.jsonl._write_all", _fail_after_partial_write)
+        monkeypatch.setattr("cookcode.store.jsonl.os.ftruncate", broken_truncate)
         with pytest.raises(OSError):
             log.append(UserMessage(text="b"))
         monkeypatch.undo()

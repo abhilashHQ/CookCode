@@ -11,7 +11,7 @@ M4 accepts when the oracle run passes and one real task runs end to end in WSL2.
 - Run on the host as a `BaseAgent` subclass: one install, the key stays on the host, and every action goes through `HarborEnvironment` (0030).
 
 ## Decision
-`harness.harbor.agent:HarnessAgent` runs the normal loop on the host in `yolo` mode (the container is the sandbox). The model is given as `<preset>/<model>`, for example `nim/minimaxai/minimax-m3.1-flash`. Model parsing is skipped, because LiteLLM does not know the NIM presets. The workspace root is the container's working directory. The session log and checkpoints go in the trial's `logs_dir`, `trajectory.json` is written in a `finally` (so a Harbor timeout still leaves one), and `AgentContext` gets input (including cache), cache and output token counts.
+`cookcode.harbor.agent:CookCodeAgent` runs the normal loop on the host in `yolo` mode (the container is the sandbox). The model is given as `<preset>/<model>`, for example `nim/minimaxai/minimax-m3.1-flash`. Model parsing is skipped, because LiteLLM does not know the NIM presets. The workspace root is the container's working directory. The session log and checkpoints go in the trial's `logs_dir`, `trajectory.json` is written in a `finally` (so a Harbor timeout still leaves one), and `AgentContext` gets input (including cache), cache and output token counts.
 
 Pinned: dataset `terminal-bench@2.0` (89 tasks), Harbor `0.25.0`, ATIF `v1.8`. Harbor is an optional extra (`harness[harbor]`) and a dev dependency.
 

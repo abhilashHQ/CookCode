@@ -8,13 +8,13 @@ from pathlib import Path
 import pytest
 
 from agent_helpers import bodies, kinds, results
-from harness.agent.approval import PolicyOnlyApprover
-from harness.agent.repair import MUTATING_LOST, NOT_EXECUTED, READ_ONLY_LOST
-from harness.cli.app import PRESETS, Runtime, main, parse_args, run_cli
-from harness.cli.headless import run_headless
-from harness.cli.terminal import Terminal
-from harness.core.cancel import CancelToken
-from harness.core.events import (
+from cookcode.agent.approval import PolicyOnlyApprover
+from cookcode.agent.repair import MUTATING_LOST, NOT_EXECUTED, READ_ONLY_LOST
+from cookcode.cli.app import PRESETS, Runtime, main, parse_args, run_cli
+from cookcode.cli.headless import run_headless
+from cookcode.cli.terminal import Terminal
+from cookcode.core.cancel import CancelToken
+from cookcode.core.events import (
     BudgetExceeded,
     Event,
     Interrupted,
@@ -24,9 +24,9 @@ from harness.core.events import (
     ToolCallStarted,
     UserMessage,
 )
-from harness.core.items import Message
-from harness.providers.fake import FakeProvider, FakeTurn, call, say
-from harness.providers.openai_compat import OPENROUTER_BASE_URL
+from cookcode.core.items import Message
+from cookcode.providers.fake import FakeProvider, FakeTurn, call, say
+from cookcode.providers.openai_compat import OPENROUTER_BASE_URL
 from session_helpers import (
     assert_replays,
     assert_valid,
@@ -228,7 +228,7 @@ async def test_unknown_or_locked_session_is_refused(
     workspace: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     assert await headless(["--resume", "nope", "-p", "x"], FakeProvider([])) == 1
-    assert "harness: no session nope" in capsys.readouterr().err
+    assert "cookcode: no session nope" in capsys.readouterr().err
     assert await headless(["-p", "one"], answer("a")) == 0
     session = only_session(tmp_path)
     before = store(tmp_path).read(session)

@@ -6,18 +6,18 @@ from pathlib import Path
 import pytest
 
 from agent_helpers import assert_every_call_resolved, tool_calls
-from harness.agent.loop import Agent, AgentConfig
-from harness.agent.repair import MUTATING_LOST, NOT_EXECUTED, RepairAction, plan_repairs
-from harness.agent.tools import ToolContext, ToolRegistry
-from harness.chaos import experiment
-from harness.chaos.scenario import (
+from cookcode.agent.loop import Agent, AgentConfig
+from cookcode.agent.repair import MUTATING_LOST, NOT_EXECUTED, RepairAction, plan_repairs
+from cookcode.agent.tools import ToolContext, ToolRegistry
+from cookcode.chaos import experiment
+from cookcode.chaos.scenario import (
     ScenarioProvider,
     chaos_tools,
     conservative_plan_repairs,
     naive_plan_repairs,
 )
-from harness.core.cancel import CancelToken
-from harness.core.events import (
+from cookcode.core.cancel import CancelToken
+from cookcode.core.events import (
     Event,
     EventBody,
     ItemEvent,
@@ -29,11 +29,11 @@ from harness.core.events import (
     ToolCallStarted,
     make_event,
 )
-from harness.core.items import Item, Message, ToolCall, ToolResult, ToolResultStatus, text_message
-from harness.env.local import LocalEnvironment
-from harness.providers.base import ItemDone, ModelRequest, StreamEnd, StreamEvent, UsageReport
-from harness.providers.fake import DEFAULT_CAPS
-from harness.store.jsonl import JsonlSessionLog, JsonlSessionStore
+from cookcode.core.items import Item, Message, ToolCall, ToolResult, ToolResultStatus, text_message
+from cookcode.env.local import LocalEnvironment
+from cookcode.providers.base import ItemDone, ModelRequest, StreamEnd, StreamEvent, UsageReport
+from cookcode.providers.fake import DEFAULT_CAPS
+from cookcode.store.jsonl import JsonlSessionLog, JsonlSessionStore
 
 TARGET = "out.txt"
 LINES = ("L1", "L2", "L3")

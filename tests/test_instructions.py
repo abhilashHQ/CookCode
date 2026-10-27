@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from harness.agent.instructions import load_instructions, render_system
-from harness.env.local import LocalEnvironment
+from cookcode.agent.instructions import load_instructions, render_system
+from cookcode.env.local import LocalEnvironment
 
 
 async def test_root_files_come_first_then_the_working_directory(tmp_path: Path) -> None:

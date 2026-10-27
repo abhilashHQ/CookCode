@@ -12,7 +12,7 @@ Logs outlive the code that wrote them. A session recorded today must load after 
 - Typed union with a catch-all variant: known types are validated, unknown ones are kept as data. This is what Codex does with its `Other` variant.
 
 ## Decision
-Every line is an `Event` envelope with `seq`, `id`, `ts`, `schema_version`, `layer` and `body`. `layer` is `"model"` or `"internal"` and comes from the body class (`ClassVar LAYER`); a model validator in `Event` rejects a mismatch. The body and item unions use `tag_or_fallback` (`src/harness/core/_union.py`) as the pydantic discriminator: a `type` tag outside the known set routes to `OtherEvent` or `UnknownItem`, both declared with `extra="allow"`, so unknown fields survive a read and rewrite.
+Every line is an `Event` envelope with `seq`, `id`, `ts`, `schema_version`, `layer` and `body`. `layer` is `"model"` or `"internal"` and comes from the body class (`ClassVar LAYER`); a model validator in `Event` rejects a mismatch. The body and item unions use `tag_or_fallback` (`src/cookcode/core/_union.py`) as the pydantic discriminator: a `type` tag outside the known set routes to `OtherEvent` or `UnknownItem`, both declared with `extra="allow"`, so unknown fields survive a read and rewrite.
 
 ## Consequences
 - Old code reads new logs. It sees unknown events as opaque `OtherEvent` objects and can skip or forward them.

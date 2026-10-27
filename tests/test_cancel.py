@@ -1,6 +1,6 @@
 import asyncio
 
-from harness.core.cancel import CancelToken
+from cookcode.core.cancel import CancelToken
 
 
 def test_starts_uncancelled() -> None:

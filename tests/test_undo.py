@@ -4,15 +4,15 @@ from pathlib import Path
 import pytest
 
 from agent_helpers import Rig, RigFactory, assert_every_call_resolved, bodies
-from harness.agent.undo import undo
-from harness.core.events import CheckpointCreated, CheckpointRestored, ItemEvent
-from harness.core.items import Message, ToolCall
-from harness.env.local import LocalEnvironment
-from harness.providers.base import ModelRequest
-from harness.providers.fake import FakeTurn, call, say
-from harness.store.checkpoints import FileCheckpointStore
-from harness.tools.bash import bash_tool
-from harness.tools.files import edit_tool, write_tool
+from cookcode.agent.undo import undo
+from cookcode.core.events import CheckpointCreated, CheckpointRestored, ItemEvent
+from cookcode.core.items import Message, ToolCall
+from cookcode.env.local import LocalEnvironment
+from cookcode.providers.base import ModelRequest
+from cookcode.providers.fake import FakeTurn, call, say
+from cookcode.store.checkpoints import FileCheckpointStore
+from cookcode.tools.bash import bash_tool
+from cookcode.tools.files import edit_tool, write_tool
 
 UNDO_TURN_2 = (
     "[undo] Restored b.py to their state before turn 2. File edits made in turns 2 are gone."

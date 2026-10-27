@@ -6,10 +6,10 @@ from pathlib import Path
 import pytest
 
 from agent_helpers import assert_every_call_resolved
-from harness.agent.context import build_request, items_sha256
-from harness.cli.app import main, parse_args
-from harness.cli.headless import run_headless
-from harness.core.events import (
+from cookcode.agent.context import build_request, items_sha256
+from cookcode.cli.app import main, parse_args
+from cookcode.cli.headless import run_headless
+from cookcode.core.events import (
     Event,
     EventBody,
     ItemEvent,
@@ -22,10 +22,10 @@ from harness.core.events import (
     ToolCallStarted,
     UserMessage,
 )
-from harness.core.items import ToolCall, ToolResult
-from harness.core.usage import Usage
-from harness.providers.fake import FakeProvider
-from harness.store.jsonl import JsonlSessionStore
+from cookcode.core.items import ToolCall, ToolResult
+from cookcode.core.usage import Usage
+from cookcode.providers.fake import FakeProvider
+from cookcode.store.jsonl import JsonlSessionStore
 
 FAKE_CONFIG = RunConfig(provider="fake", model="fake-1", harness_version="0.0.1")
 
@@ -34,8 +34,8 @@ def make_workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     work = tmp_path / "repo"
     work.mkdir()
     monkeypatch.chdir(work)
-    monkeypatch.setenv("HARNESS_HOME", str(tmp_path / "home"))
-    for name in ("GIT_DIR", "HARNESS_PROVIDER", "HARNESS_MODEL", "HARNESS_BASE_URL"):
+    monkeypatch.setenv("COOKCODE_HOME", str(tmp_path / "home"))
+    for name in ("GIT_DIR", "COOKCODE_PROVIDER", "COOKCODE_MODEL", "COOKCODE_BASE_URL"):
         monkeypatch.delenv(name, raising=False)
     return work
 

@@ -3,9 +3,9 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from harness.agent.tools import Tool, ToolContext, ToolOutput, ToolRegistry, workspace_path
-from harness.core.cancel import CancelToken
-from harness.env.local import LocalEnvironment
+from cookcode.agent.tools import Tool, ToolContext, ToolOutput, ToolRegistry, workspace_path
+from cookcode.core.cancel import CancelToken
+from cookcode.env.local import LocalEnvironment
 
 
 class ReadArgs(BaseModel):

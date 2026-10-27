@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from harness.redact import Redactor
+from cookcode.redact import Redactor
 
 FAKES = {
     "anthropic_key": "sk-ant-" + "a1B2" * 10,

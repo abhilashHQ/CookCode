@@ -4,16 +4,16 @@ import pytest
 
 pytest.importorskip("textual")
 
-from harness.cli.app import parse_args
-from harness.cli.tui import ApprovalScreen, CookApp
-from harness.providers.fake import FakeProvider, FakeTurn, call, say
+from cookcode.cli.app import parse_args
+from cookcode.cli.tui import ApprovalScreen, CookApp
+from cookcode.providers.fake import FakeProvider, FakeTurn, call, say
 
 
 @pytest.fixture
 def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     work = tmp_path / "repo"
     work.mkdir()
-    monkeypatch.setenv("HARNESS_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("COOKCODE_HOME", str(tmp_path / "home"))
     monkeypatch.chdir(work)
     return work
 

@@ -482,6 +482,58 @@ wheels = [
 ]
 
 [[package]]
+name = "cookcode"
+version = "0.0.1"
+source = { editable = "." }
+dependencies = [
+    { name = "httpx" },
+    { name = "pydantic" },
+]
+
+[package.optional-dependencies]
+harbor = [
+    { name = "harbor" },
+]
+mcp = [
+    { name = "mcp" },
+]
+tui = [
+    { name = "textual" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "harbor" },
+    { name = "mcp" },
+    { name = "pyright" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "ruff" },
+    { name = "textual" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "harbor", marker = "extra == 'harbor'", specifier = "==0.25.0" },
+    { name = "httpx", specifier = ">=0.27,<1" },
+    { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.10" },
+    { name = "pydantic", specifier = ">=2.9,<3" },
+    { name = "textual", marker = "extra == 'tui'", specifier = ">=0.80" },
+]
+provides-extras = ["harbor", "mcp", "tui"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "harbor", specifier = "==0.25.0" },
+    { name = "mcp", specifier = ">=1.10" },
+    { name = "pyright", specifier = ">=1.1.390" },
+    { name = "pytest", specifier = ">=8.3" },
+    { name = "pytest-asyncio", specifier = ">=0.24" },
+    { name = "ruff", specifier = ">=0.7" },
+    { name = "textual", specifier = ">=0.80" },
+]
+
+[[package]]
 name = "cryptography"
 version = "50.0.2"
 source = { registry = "https://pypi.org/simple" }
@@ -797,54 +849,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/b5/8f/624ed4b2763565d50c78e9278d2800037c9147d56ee977d3b8ed6c5b81b1/harbor-0.25.0.tar.gz", hash = "sha256:a66543a223539cd853889ee0eea77d15a3e5222963418a87c0f079b63dadb4b2", size = 2309418, upload-time = "2026-10-25T20:27:27.643Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/90/72/2ead84b6d43e4737682dd489b107be9d828bf5ae4869d0d4f2aa72243149/harbor-0.25.0-py3-none-any.whl", hash = "sha256:51923ac567fc57b03279e93468b105f689628bcac2cd3d541d4e44aa5c0ec309", size = 2535481, upload-time = "2026-10-25T20:27:25.575Z" },
-]
-
-[[package]]
-name = "harness"
-version = "0.0.1"
-source = { editable = "." }
-dependencies = [
-    { name = "httpx" },
-    { name = "pydantic" },
-]
-
-[package.optional-dependencies]
-harbor = [
-    { name = "harbor" },
-]
-mcp = [
-    { name = "mcp" },
-]
-tui = [
-    { name = "textual" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "harbor" },
-    { name = "pyright" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "harbor", marker = "extra == 'harbor'", specifier = "==0.25.0" },
-    { name = "httpx", specifier = ">=0.27,<1" },
-    { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.10" },
-    { name = "pydantic", specifier = ">=2.9,<3" },
-    { name = "textual", marker = "extra == 'tui'", specifier = ">=0.80" },
-]
-provides-extras = ["harbor", "mcp", "tui"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "harbor", specifier = "==0.25.0" },
-    { name = "pyright", specifier = ">=1.1.390" },
-    { name = "pytest", specifier = ">=8.3" },
-    { name = "pytest-asyncio", specifier = ">=0.24" },
-    { name = "ruff", specifier = ">=0.7" },
 ]
 
 [[package]]

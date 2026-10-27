@@ -6,9 +6,9 @@ import pytest
 from harbor.models.agent.context import AgentContext
 from harbor.models.trajectories import Trajectory
 
-from harness.core.usage import Usage
-from harness.harbor.agent import HarnessAgent, split_model
-from harness.providers.fake import FakeProvider, FakeTurn, call, say
+from cookcode.core.usage import Usage
+from cookcode.harbor.agent import CookCodeAgent, split_model
+from cookcode.providers.fake import FakeProvider, FakeTurn, call, say
 from test_harbor_env import LocalContainer
 
 
@@ -35,7 +35,7 @@ async def test_run_acts_in_the_container_and_reports_atif(
     )
     logs = tmp_path / "logs"
     logs.mkdir()
-    agent = HarnessAgent(logs_dir=logs, model_name="nim/some/model", provider=fake)
+    agent = CookCodeAgent(logs_dir=logs, model_name="nim/some/model", provider=fake)
     context = AgentContext()
     await agent.run("write out.txt", cast(Any, LocalContainer()), context)
 
@@ -49,7 +49,7 @@ async def test_run_acts_in_the_container_and_reports_atif(
     )
     assert context.metadata is not None and context.metadata["status"] == "done"
     trajectory = Trajectory.model_validate(json.loads((logs / "trajectory.json").read_text()))
-    assert trajectory.agent.name == "harness"
+    assert trajectory.agent.name == "cookcode"
     assert trajectory.agent.tool_definitions is not None
     assert [s.source for s in trajectory.steps] == ["user", "agent", "agent"]
 

@@ -15,7 +15,7 @@ The model changes existing files through a tool. The format decides how often an
 ## Decision
 **Gate:** Accepted at the M2 gate on 2026-10-26: exact string replacement. Revisit with a patch format if M6 measures a high failed-edit rate.
 
-Recommendation: exact string replacement, with `write` for new files. The code implements it (`src/harness/tools/files.py`), so choosing another option means writing a second tool.
+Recommendation: exact string replacement, with `write` for new files. The code implements it (`src/cookcode/tools/files.py`), so choosing another option means writing a second tool.
 
 What the implementation does:
 - `edit` reads the file as UTF-8, checks the call, and writes only after every check passes. `LocalEnvironment.write_file` replaces the file atomically, so a failed edit leaves it byte-identical.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Usage: evals/run_tb.sh harness|terminus-2 ATTEMPTS [task ...]
+# Usage: evals/run_tb.sh cookcode|terminus-2 ATTEMPTS [task ...]
 # Both agents get the same endpoint, model and turn cap. Defaults to the slice in tb-slice.txt.
 set -euo pipefail
 agent=$1
@@ -21,8 +21,8 @@ for task in "${tasks[@]}"; do
     args+=(-i "$task")
 done
 case $agent in
-    harness)
-        uv run harbor run "${args[@]}" -a harness.harbor.agent:HarnessAgent \
+    cookcode)
+        uv run harbor run "${args[@]}" -a cookcode.harbor.agent:CookCodeAgent \
             -m "nim/$model" --ak max_turns=50
         ;;
     terminus-2)

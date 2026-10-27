@@ -12,7 +12,7 @@ The loop turns the log into model requests, runs tools and writes the outcome ba
 - The step as the unit, with checks at its boundaries: one fixed place for outside input. A running step can only be shortened by cancellation.
 
 ## Decision
-`Agent` (`src/harness/agent/loop.py`) runs steps. At each boundary it drains steering, checks the cancel token, then checks the turn and token budgets. A step then:
+`Agent` (`src/cookcode/agent/loop.py`) runs steps. At each boundary it drains steering, checks the cancel token, then checks the turn and token budgets. A step then:
 
 1. builds the request from the log (`build_request`),
 2. appends `model_request_started`,

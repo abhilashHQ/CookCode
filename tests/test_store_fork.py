@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from harness.core.events import UserMessage
-from harness.store.jsonl import JsonlSessionStore
+from cookcode.core.events import UserMessage
+from cookcode.store.jsonl import JsonlSessionStore
 
 
 def _store_with_five(tmp_path: Path) -> JsonlSessionStore:

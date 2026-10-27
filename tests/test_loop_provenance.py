@@ -5,10 +5,10 @@ import pytest
 from pydantic import BaseModel
 
 from agent_helpers import RigFactory, bodies, echo_tool, kinds
-from harness.agent.gate import Policy, Rule
-from harness.agent.loop import Agent, AgentConfig
-from harness.agent.tools import Tool, ToolContext, ToolOutput, ToolRegistry
-from harness.core.events import (
+from cookcode.agent.gate import Policy, Rule
+from cookcode.agent.loop import Agent, AgentConfig
+from cookcode.agent.tools import Tool, ToolContext, ToolOutput, ToolRegistry
+from cookcode.core.events import (
     ItemEvent,
     ModelRequestFinished,
     ModelRequestStarted,
@@ -19,9 +19,9 @@ from harness.core.events import (
     UserMessage,
     compute_config_id,
 )
-from harness.core.usage import Usage
-from harness.env.local import LocalEnvironment
-from harness.providers.fake import FakeProvider, FakeTurn, call, say
+from cookcode.core.usage import Usage
+from cookcode.env.local import LocalEnvironment
+from cookcode.providers.fake import FakeProvider, FakeTurn, call, say
 
 
 @pytest.fixture

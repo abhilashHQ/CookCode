@@ -14,7 +14,7 @@ Searching a tree is the most frequent read the model does. ripgrep is the best e
 ## Decision
 **Gate:** Accepted at the M2 gate on 2026-10-26: grep and glob stay tools over env.exec, preferring rg with a grep and find fallback.
 
-Recommendation: tools built on `env.exec`. The code implements it (`src/harness/tools/search.py`).
+Recommendation: tools built on `env.exec`. The code implements it (`src/cookcode/tools/search.py`).
 
 - `grep` runs one command: `if command -v rg ...; then rg ...; else grep ...; fi`. Pattern, glob and path go in as shell-quoted arguments after `-e` and `--`. Exit code 1 means `no matches`, any other non-zero exit is an error result with the tool's output. Results over `max_results` (default 200) are cut with a count of the rest.
 - `glob` first runs `cd <path>`, then `rg --files --glob=<pattern>` or a `find` fallback. A missing directory is an error result.

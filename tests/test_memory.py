@@ -6,15 +6,15 @@ from pathlib import Path
 import pytest
 
 from agent_helpers import Rig, RigFactory
-from harness.agent.context import MEMORY_VIEW, build_request, items_sha256
-from harness.core.events import Event, ModelRequestStarted
-from harness.core.features import Features
-from harness.core.strategy import Strategy
-from harness.env.local import LocalEnvironment
-from harness.kit import Toolkit
-from harness.memory.layer import fresh, memory_parts, parse_facts, repo_key
-from harness.memory.store import FactStore
-from harness.providers.fake import FakeTurn, call, say
+from cookcode.agent.context import MEMORY_VIEW, build_request, items_sha256
+from cookcode.core.events import Event, ModelRequestStarted
+from cookcode.core.features import Features
+from cookcode.core.strategy import Strategy
+from cookcode.env.local import LocalEnvironment
+from cookcode.kit import Toolkit
+from cookcode.memory.layer import fresh, memory_parts, parse_facts, repo_key
+from cookcode.memory.store import FactStore
+from cookcode.providers.fake import FakeTurn, call, say
 from tool_helpers import make_ctx, make_kit, run_tool
 
 FACT = '{"fact": "Tests run with sh check.sh.", "paths": ["check.sh"], "updates": null}'

@@ -6,21 +6,21 @@ from pathlib import Path
 
 import pytest
 
-from harness.agent.approval import Risk
-from harness.cli.app import parse_args, run_cli
-from harness.cli.observe import ObservedLog
-from harness.cli.terminal import (
+from cookcode.agent.approval import Risk
+from cookcode.cli.app import parse_args, run_cli
+from cookcode.cli.observe import ObservedLog
+from cookcode.cli.terminal import (
     Terminal,
     TerminalApprover,
     always_rule,
     call_diff,
     describe_call,
 )
-from harness.core.cancel import CancelToken
-from harness.core.events import Event, UserMessage
-from harness.core.items import ToolCall
-from harness.providers.fake import FakeProvider, FakeTurn, call, say
-from harness.store.jsonl import JsonlSessionStore
+from cookcode.core.cancel import CancelToken
+from cookcode.core.events import Event, UserMessage
+from cookcode.core.items import ToolCall
+from cookcode.providers.fake import FakeProvider, FakeTurn, call, say
+from cookcode.store.jsonl import JsonlSessionStore
 
 
 @pytest.fixture
@@ -28,7 +28,7 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     work = tmp_path / "repo"
     work.mkdir()
     monkeypatch.chdir(work)
-    monkeypatch.setenv("HARNESS_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("COOKCODE_HOME", str(tmp_path / "home"))
     monkeypatch.delenv("GIT_DIR", raising=False)
     return work
 
@@ -141,7 +141,7 @@ async def test_stdin_from_dev_null_reads_eof_without_a_selector_error() -> None:
 
 
 def test_provider_presets_fill_url_key_and_model(monkeypatch: pytest.MonkeyPatch) -> None:
-    for name in ("HARNESS_PROVIDER", "HARNESS_MODEL", "HARNESS_BASE_URL"):
+    for name in ("COOKCODE_PROVIDER", "COOKCODE_MODEL", "COOKCODE_BASE_URL"):
         monkeypatch.delenv(name, raising=False)
     nim = parse_args([])
     assert (nim.provider, nim.api_key_env, nim.model) == (

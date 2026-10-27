@@ -2,8 +2,8 @@ import inspect
 
 import pytest
 
-from harness.agent.repair import RepairAction, plan_repairs, repair_bodies, unresolved_calls
-from harness.core.events import (
+from cookcode.agent.repair import RepairAction, plan_repairs, repair_bodies, unresolved_calls
+from cookcode.core.events import (
     Event,
     EventBody,
     ItemEvent,
@@ -16,7 +16,7 @@ from harness.core.events import (
     make_event,
     to_json_line,
 )
-from harness.core.items import ToolCall, ToolResult
+from cookcode.core.items import ToolCall, ToolResult
 
 NOT_EXECUTED = "not executed: the session stopped before this call ran. Safe to issue again."
 READ_ONLY_LOST = (

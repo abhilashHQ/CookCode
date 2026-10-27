@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from harness.tools import default_tools
-from harness.tools.files import edit_tool, read_tool, write_tool
+from cookcode.tools import default_tools
+from cookcode.tools.files import edit_tool, read_tool, write_tool
 from tool_helpers import make_ctx, run_tool
 
 

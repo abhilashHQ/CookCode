@@ -13,7 +13,7 @@ The harness needs one place that defines what happened in a session. Everything 
 - SQLite: good queries and transactions, but binary, needs migrations, and hides the data from plain tools.
 
 ## Decision
-One append-only JSONL file per session, written through `JsonlSessionLog` in `src/harness/store/jsonl.py`. Each line is one `Event` (`src/harness/core/events.py`). Nothing else in the system holds authoritative session state.
+One append-only JSONL file per session, written through `JsonlSessionLog` in `src/cookcode/store/jsonl.py`. Each line is one `Event` (`src/cookcode/core/events.py`). Nothing else in the system holds authoritative session state.
 
 ## Consequences
 - The model context, resume state, replay, exports and Flagship 2 checkpoints are all projections of the event list. A bug in a projection is fixed by recomputing it, not by repairing data.

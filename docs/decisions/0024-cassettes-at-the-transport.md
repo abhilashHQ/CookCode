@@ -14,7 +14,7 @@ Spec section 2 asks for recorded provider streams that replay in CI, so adapter 
 ## Decision
 `providers/cassette.py`. `RecordingTransport` wraps the real transport and tees the response stream as it flows, so streaming and cancellation behave the same while recording. The recording keeps the method, URL, request JSON, status, `content-type`, `retry-after` and the body. It never keeps request headers, so the API key is never written. `Cassette.save` runs everything through the `Redactor`. `ReplayTransport` serves interactions in order and raises `CassetteMismatch` with the first differing JSON path (`$.messages[1].content: expected 'first', got 'second'`). `assert_exhausted` fails if a recorded request was never made.
 
-Tests replay by default. `HARNESS_RECORD=1` with `OPENROUTER_API_KEY` set records fresh tapes into `tests/cassettes/`. CI runs ruff, pyright and pytest on every push (`.github/workflows/ci.yml`).
+Tests replay by default. `COOKCODE_RECORD=1` with `OPENROUTER_API_KEY` set records fresh tapes into `tests/cassettes/`. CI runs ruff, pyright and pytest on every push (`.github/workflows/ci.yml`).
 
 ## Consequences
 - A recorded test exercises SSE framing, chunk assembly, usage mapping, reasoning capture and the request mapping of the second turn against real bytes from two backends.

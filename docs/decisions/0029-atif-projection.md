@@ -18,7 +18,7 @@ Required, from the models: top level `schema_version`, `agent` (`name`, `version
 
 The join key is the provider call id: `tool_call_id` and `source_call_id` are `provider_call_id`, and our internal id stays internal (spec section 10). Unparseable arguments go out as `{}`, with the raw text under `extra.raw_arguments`, because ATIF arguments must be an object.
 
-`harness export <session> --format atif` and the Harbor adapter both call it. Tests validate its output with harbor's `Trajectory` model, so harbor is a dev dependency and an optional extra, never a core import.
+`cookcode export <session> --format atif` and the Harbor adapter both call it. Tests validate its output with harbor's `Trajectory` model, so harbor is a dev dependency and an optional extra, never a core import.
 
 ## Consequences
 - The trajectory can be rebuilt from the log at any time, including after a Harbor timeout cancelled the run.

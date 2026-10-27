@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from harness.core.cancel import CancelToken
-from harness.tools.search import glob_tool, grep_tool
+from cookcode.core.cancel import CancelToken
+from cookcode.tools.search import glob_tool, grep_tool
 from tool_helpers import make_ctx, run_tool
 
 BOTH = pytest.mark.parametrize("prefer_rg", [True, False], ids=["rg", "fallback"])

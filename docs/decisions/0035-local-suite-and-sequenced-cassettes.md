@@ -14,7 +14,7 @@ Spec section 10 asks for 20 to 40 small tasks that run in minutes on every chang
 
 ## Decision
 - 24 tasks, 6 each of bugfix, feature, refactor and investigate, in `evals/suite/<id>/`. Each has `task.toml` (kind, prompt, turn and wall-clock caps), `repo/`, a hidden `check.py` (`python check.py WORKDIR ANSWER_FILE`) and a `solution.sh` oracle. Checks embed their own tests, so a run that deletes or weakens the repo's tests fails. Investigate tasks are judged on the final reply, and the repo must stay unchanged.
-- `harness eval run` copies a task's repo into a fresh git repo, runs the agent unattended (yolo, the task's caps), saves the final reply, runs the check, and writes `run.json` (suite hash, harness commit, provider, model, mode, attempts) plus one `results.jsonl` row per attempt.
+- `cookcode eval run` copies a task's repo into a fresh git repo, runs the agent unattended (yolo, the task's caps), saves the final reply, runs the check, and writes `run.json` (suite hash, harness commit, provider, model, mode, attempts) plus one `results.jsonl` row per attempt.
 - Modes: `oracle` (the solutions, no model), `replay` (the default, no network), `record` (live, saves each task's cassette), `live`.
 - Suite cassettes are sequenced (`ReplayTransport(strict=False)`). Adapter cassettes stay strict, since there the request body is the thing under test.
 - Work directories live at a fixed path (`$TMPDIR/harness-suite/<task>/<attempt>`), so the workspace path in the system prompt matches between record and replay. A recorded run replays with no drift (tested).

@@ -3,10 +3,10 @@ from pathlib import Path
 
 import pytest
 
-CORE = Path(__file__).parents[1] / "src" / "harness" / "core"
+CORE = Path(__file__).parents[1] / "src" / "cookcode" / "core"
 FORBIDDEN_MODULES = {"subprocess", "socket", "http", "urllib", "sys", "httpx", "requests"}
 FORBIDDEN_CALLS = {"print", "input", "open"}
-ALLOWED_HARNESS_IMPORTS = {"harness.core"}
+ALLOWED_COOKCODE_IMPORTS = {"cookcode.core"}
 
 
 def _core_files() -> list[Path]:
@@ -36,10 +36,10 @@ def test_core_imports_no_io_modules() -> None:
 def test_core_imports_only_core_from_harness() -> None:
     for path in _core_files():
         for module in _imported_modules(ast.parse(path.read_text())):
-            if module.split(".")[0] == "harness":
+            if module.split(".")[0] == "cookcode":
                 assert any(
                     module == allowed or module.startswith(allowed + ".")
-                    for allowed in ALLOWED_HARNESS_IMPORTS
+                    for allowed in ALLOWED_COOKCODE_IMPORTS
                 ), f"{path.name} imports {module}"
 
 
@@ -52,21 +52,21 @@ def test_core_never_calls_print_input_open_or_reads_environ() -> None:
                 assert node.attr != "environ", f"{path.name} reads os.environ"
 
 
-AGENT = Path(__file__).parents[1] / "src" / "harness" / "agent"
-TOOLS = Path(__file__).parents[1] / "src" / "harness" / "tools"
+AGENT = Path(__file__).parents[1] / "src" / "cookcode" / "agent"
+TOOLS = Path(__file__).parents[1] / "src" / "cookcode" / "tools"
 AGENT_ALLOWED_HARNESS = (
-    "harness.core",
-    "harness.agent",
-    "harness.store.base",
-    "harness.providers.base",
-    "harness.env.base",
+    "cookcode.core",
+    "cookcode.agent",
+    "cookcode.store.base",
+    "cookcode.providers.base",
+    "cookcode.env.base",
 )
 TOOLS_ALLOWED_HARNESS = (
-    "harness.core",
-    "harness.agent.tools",
-    "harness.agent.hooks",
-    "harness.env.base",
-    "harness.tools",
+    "cookcode.core",
+    "cookcode.agent.tools",
+    "cookcode.agent.hooks",
+    "cookcode.env.base",
+    "cookcode.tools",
 )
 
 
@@ -74,7 +74,7 @@ def _import_violation(module: str, allowed_harness: tuple[str, ...]) -> bool:
     root = module.split(".")[0]
     if root in FORBIDDEN_MODULES:
         return True
-    if root != "harness" or module == "harness":
+    if root != "cookcode" or module == "cookcode":
         return False
     return not any(
         module == allowed or module.startswith(allowed + ".") for allowed in allowed_harness
@@ -93,9 +93,9 @@ def _scan_source(source: str, package: list[str], allowed_harness: tuple[str, ..
                 imported = [".".join([*base, node.module])]
             else:
                 imported = [".".join([*base, alias.name]) for alias in node.names]
-        elif isinstance(node, ast.ImportFrom) and node.module == "harness":
+        elif isinstance(node, ast.ImportFrom) and node.module == "cookcode":
             imported = [
-                "harness" if alias.name == "__version__" else f"harness.{alias.name}"
+                "cookcode" if alias.name == "__version__" else f"cookcode.{alias.name}"
                 for alias in node.names
             ]
         elif isinstance(node, ast.ImportFrom) and node.module:
@@ -110,21 +110,21 @@ def _scan_source(source: str, package: list[str], allowed_harness: tuple[str, ..
 
 
 def scan_agent_source(source: str) -> list[str]:
-    return _scan_source(source, ["harness", "agent"], AGENT_ALLOWED_HARNESS)
+    return _scan_source(source, ["cookcode", "agent"], AGENT_ALLOWED_HARNESS)
 
 
 def scan_tools_source(source: str) -> list[str]:
-    return _scan_source(source, ["harness", "tools"], TOOLS_ALLOWED_HARNESS)
+    return _scan_source(source, ["cookcode", "tools"], TOOLS_ALLOWED_HARNESS)
 
 
 def test_agent_scan_accepts_allowed_imports() -> None:
     source = (
-        "from harness import __version__\n"
-        "from harness.core.events import Event\n"
-        "from harness.agent.tools import Tool\n"
-        "from harness.store.base import SessionLog\n"
-        "from harness.providers.base import Provider\n"
-        "from harness.env.base import Environment\n"
+        "from cookcode import __version__\n"
+        "from cookcode.core.events import Event\n"
+        "from cookcode.agent.tools import Tool\n"
+        "from cookcode.store.base import SessionLog\n"
+        "from cookcode.providers.base import Provider\n"
+        "from cookcode.env.base import Environment\n"
         "from .tools import Tool\n"
         "from ..core.events import Event\n"
         "import asyncio\n"
@@ -135,22 +135,22 @@ def test_agent_scan_accepts_allowed_imports() -> None:
 @pytest.mark.parametrize(
     "source",
     [
-        "from harness.store.jsonl import JsonlSessionStore",
-        "from harness.providers.fake import FakeProvider",
-        "from harness.env.local import LocalEnvironment",
-        "import harness.chaos",
-        "from harness.chaos.scenario import ScenarioProvider",
-        "from harness.store import jsonl",
-        "from harness import chaos",
+        "from cookcode.store.jsonl import JsonlSessionStore",
+        "from cookcode.providers.fake import FakeProvider",
+        "from cookcode.env.local import LocalEnvironment",
+        "import cookcode.chaos",
+        "from cookcode.chaos.scenario import ScenarioProvider",
+        "from cookcode.store import jsonl",
+        "from cookcode import chaos",
         "from ..store.jsonl import JsonlSessionStore",
         "from .. import chaos",
         "from ..providers import fake",
-        "import harness.tools",
-        "from harness.tools.files import read_tool",
-        "from harness import tools",
+        "import cookcode.tools",
+        "from cookcode.tools.files import read_tool",
+        "from cookcode import tools",
         "from ..tools import files",
-        "from harness.store.checkpoints import FileCheckpointStore",
-        "from harness.store import checkpoints",
+        "from cookcode.store.checkpoints import FileCheckpointStore",
+        "from cookcode.store import checkpoints",
         "import subprocess",
         "import socket",
         "from http import client",
@@ -175,10 +175,10 @@ def test_agent_package_respects_boundaries() -> None:
 
 def test_tools_scan_accepts_allowed_imports() -> None:
     source = (
-        "from harness.core.items import ToolCall\n"
-        "from harness.agent.tools import Tool, ToolContext, ToolOutput\n"
-        "from harness.env.base import Environment\n"
-        "from harness.tools.files import read_tool\n"
+        "from cookcode.core.items import ToolCall\n"
+        "from cookcode.agent.tools import Tool, ToolContext, ToolOutput\n"
+        "from cookcode.env.base import Environment\n"
+        "from cookcode.tools.files import read_tool\n"
         "from .files import read_tool\n"
         "from . import files\n"
         "import shlex\n"
@@ -189,15 +189,15 @@ def test_tools_scan_accepts_allowed_imports() -> None:
 @pytest.mark.parametrize(
     "source",
     [
-        "from harness.env.local import LocalEnvironment",
-        "from harness.env import local",
-        "from harness import env",
-        "from harness.agent.loop import Agent",
-        "from harness.agent import loop",
-        "from harness.agent.gate import decide",
-        "from harness.store.jsonl import JsonlSessionStore",
-        "from harness.providers.base import Provider",
-        "from harness.chaos import scenario",
+        "from cookcode.env.local import LocalEnvironment",
+        "from cookcode.env import local",
+        "from cookcode import env",
+        "from cookcode.agent.loop import Agent",
+        "from cookcode.agent import loop",
+        "from cookcode.agent.gate import decide",
+        "from cookcode.store.jsonl import JsonlSessionStore",
+        "from cookcode.providers.base import Provider",
+        "from cookcode.chaos import scenario",
         "from ..agent.loop import Agent",
         "from ..env.local import LocalEnvironment",
         "import subprocess",

@@ -4,19 +4,19 @@ from pathlib import Path
 import pytest
 
 from agent_helpers import RigFactory, bodies, echo_tool, results
-from harness.agent.gate import Policy
-from harness.agent.loop import Agent, AgentConfig
-from harness.agent.tools import ToolRegistry
-from harness.config import Settings, load_settings, parse_settings
-from harness.core.events import HookBlocked, Limits
-from harness.core.features import Features
-from harness.core.strategy import Strategy
-from harness.env.local import LocalEnvironment
-from harness.kit import toolkit
-from harness.providers.fake import FakeProvider, FakeTurn, call, say
-from harness.skills import load_skills, parse_skill, skill_tool, skills_profile
-from harness.subagents import Spawner, missing_sections
-from harness.userhooks import user_hooks
+from cookcode.agent.gate import Policy
+from cookcode.agent.loop import Agent, AgentConfig
+from cookcode.agent.tools import ToolRegistry
+from cookcode.config import Settings, load_settings, parse_settings
+from cookcode.core.events import HookBlocked, Limits
+from cookcode.core.features import Features
+from cookcode.core.strategy import Strategy
+from cookcode.env.local import LocalEnvironment
+from cookcode.kit import toolkit
+from cookcode.providers.fake import FakeProvider, FakeTurn, call, say
+from cookcode.skills import load_skills, parse_skill, skill_tool, skills_profile
+from cookcode.subagents import Spawner, missing_sections
+from cookcode.userhooks import user_hooks
 from tool_helpers import make_ctx, run_tool
 
 REPORT = (
@@ -78,8 +78,8 @@ async def test_a_stop_hook_sees_the_last_message(rigs: RigFactory) -> None:
 
 
 def test_repo_settings_go_on_top_of_the_user_settings(tmp_path: Path) -> None:
-    (tmp_path / "repo" / ".harness").mkdir(parents=True)
-    (tmp_path / "repo" / ".harness" / "settings.toml").write_text(
+    (tmp_path / "repo" / ".cookcode").mkdir(parents=True)
+    (tmp_path / "repo" / ".cookcode" / "settings.toml").write_text(
         'model = "repo-model"\nallow = ["bash:pytest *"]\n'
         '[mcp.servers.docs]\ncommand = "repo-docs"\n'
         + settings('point = "stop"\ncommand = "true"'))
@@ -123,8 +123,8 @@ def test_parse_skill_needs_a_name_and_a_description() -> None:
 
 async def test_repo_skills_win_and_the_tool_loads_bodies(tmp_path: Path) -> None:
     repo, user = tmp_path / "repo", tmp_path / "user"
-    write_skill(repo / ".harness" / "skills", "release", "Cut a release", "Tag, then push.")
-    (repo / ".harness" / "skills" / "release" / "checklist.md").write_text("- tag\n")
+    write_skill(repo / ".cookcode" / "skills", "release", "Cut a release", "Tag, then push.")
+    (repo / ".cookcode" / "skills" / "release" / "checklist.md").write_text("- tag\n")
     write_skill(user, "release", "old user version")
     write_skill(user, "review", "Review a diff")
     skills = await load_skills(LocalEnvironment(repo), user)
@@ -137,7 +137,7 @@ async def test_repo_skills_win_and_the_tool_loads_bodies(tmp_path: Path) -> None
     tool = skill_tool(skills)
     out = await run_tool(tool, make_ctx(repo), name="release")
     assert out.content.startswith("Tag, then push.")
-    assert out.content.endswith(".harness/skills/release/checklist.md")
+    assert out.content.endswith(".cookcode/skills/release/checklist.md")
     missing = await run_tool(tool, make_ctx(repo), name="nope")
     assert missing.status == "error" and "release, review" in missing.content
 
@@ -202,29 +202,30 @@ async def test_subagents_need_a_spawner(tmp_path: Path) -> None:
 def test_cli_flags_beat_env_beats_repo_beats_user(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from harness.cli.app import parse_args
+    from cookcode.cli.app import parse_args
 
     home, repo = tmp_path / "home", tmp_path / "repo"
-    (repo / ".harness").mkdir(parents=True)
+    (repo / ".cookcode").mkdir(parents=True)
     home.mkdir()
     (home / "settings.toml").write_text(
         'model = "user-model"\nmode = "auto-edit"\nmax_turns = 7\nfeatures = "jobs"\n')
-    (repo / ".harness" / "settings.toml").write_text('model = "repo-model"\nstrategy = "mask:k4"\n')
-    monkeypatch.setenv("HARNESS_HOME", str(home))
-    for name in ("HARNESS_PROVIDER", "HARNESS_MODEL", "HARNESS_BASE_URL"):
+    (repo / ".cookcode" / "settings.toml").write_text(
+        'model = "repo-model"\nstrategy = "mask:k4"\n')
+    monkeypatch.setenv("COOKCODE_HOME", str(home))
+    for name in ("COOKCODE_PROVIDER", "COOKCODE_MODEL", "COOKCODE_BASE_URL"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.chdir(repo)
     args = parse_args([])
     assert (args.provider, args.model, args.mode, args.max_turns) == (
         "nim", "repo-model", "auto-edit", 7)
     assert args.strategy.label == "mask:k4" and args.features.label == "jobs"
-    monkeypatch.setenv("HARNESS_MODEL", "env-model")
+    monkeypatch.setenv("COOKCODE_MODEL", "env-model")
     assert parse_args([]).model == "env-model"
     flagged = parse_args(["--model", "flag-model", "--mode", "yolo", "--features", "base"])
     assert (flagged.model, flagged.mode, flagged.features.label) == ("flag-model", "yolo", "base")
     (home / "settings.toml").write_text('provider = "gemini"\nmodel = "gemini-model"\n')
-    (repo / ".harness" / "settings.toml").write_text("")
-    monkeypatch.delenv("HARNESS_MODEL")
+    (repo / ".cookcode" / "settings.toml").write_text("")
+    monkeypatch.delenv("COOKCODE_MODEL")
     other = parse_args(["--provider", "nim"])
     assert (other.provider, other.model) == ("nim", "minimaxai/minimax-m3.1-flash")
 
@@ -232,11 +233,11 @@ def test_cli_flags_beat_env_beats_repo_beats_user(
 def test_settings_rules_join_a_policy_given_to_the_runtime(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from harness.cli.app import Runtime, parse_args
+    from cookcode.cli.app import Runtime, parse_args
 
     (tmp_path / "home").mkdir()
     (tmp_path / "home" / "settings.toml").write_text('allow = ["bash:pytest *"]\n')
-    monkeypatch.setenv("HARNESS_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("COOKCODE_HOME", str(tmp_path / "home"))
     monkeypatch.chdir(tmp_path)
     runtime = Runtime(parse_args([]), lambda event: None, policy=Policy())
     try:

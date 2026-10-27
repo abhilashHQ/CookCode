@@ -11,7 +11,7 @@ Providers return more than assistant text. OpenAI Responses and Codex treat reas
 - Items: a flat sequence of typed records. Anthropic blocks map onto items one for one.
 
 ## Decision
-`src/harness/core/items.py` defines `Message`, `Reasoning`, `ToolCall`, `ToolResult`, `OtherItem` and the fallback `UnknownItem`, all frozen pydantic models joined by the `Item` union.
+`src/cookcode/core/items.py` defines `Message`, `Reasoning`, `ToolCall`, `ToolResult`, `OtherItem` and the fallback `UnknownItem`, all frozen pydantic models joined by the `Item` union.
 
 - `Reasoning.payload` is stored verbatim. `Reasoning.replayable_to(provider, model_family)` returns true only when both match, because signatures and encrypted content cannot be translated between providers or model families.
 - `ToolCall` has our `id`, a `provider_call_id`, and an optional `provider_item_id`. OpenAI uses two identifiers (`call_id` and the item `id`) and Anthropic uses one. `ToolResult.call_id` refers to our `id`.

@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-from harness.cli.app import make_provider
-from harness.core.events import (
+from cookcode.cli.app import make_provider
+from cookcode.core.events import (
     Event,
     EventBody,
     ItemEvent,
@@ -18,16 +18,16 @@ from harness.core.events import (
     RunStarted,
     ToolCallFinished,
 )
-from harness.core.items import ToolCall, ToolResult
-from harness.core.usage import Usage
-from harness.evals import runner
-from harness.evals.cli import eval_command, stats_command
-from harness.evals.runner import AttemptResult, run_suite
-from harness.evals.stats import Price, cost, repeat_streaks, session_stats
-from harness.evals.suite import chains, load_suite, suite_sha256
-from harness.evals.variance import Trial, harbor_trials, summarize
-from harness.providers.base import Provider
-from harness.providers.cassette import Cassette, RecordingTransport, ReplayTransport
+from cookcode.core.items import ToolCall, ToolResult
+from cookcode.core.usage import Usage
+from cookcode.evals import runner
+from cookcode.evals.cli import eval_command, stats_command
+from cookcode.evals.runner import AttemptResult, run_suite
+from cookcode.evals.stats import Price, cost, repeat_streaks, session_stats
+from cookcode.evals.suite import chains, load_suite, suite_sha256
+from cookcode.evals.variance import Trial, harbor_trials, summarize
+from cookcode.providers.base import Provider
+from cookcode.providers.cassette import Cassette, RecordingTransport, ReplayTransport
 from openai_helpers import Script, ok, provider, text_stream, tool_stream
 
 T0 = datetime(2026, 10, 26, tzinfo=UTC)
@@ -175,9 +175,9 @@ def test_infrastructure_failures_are_excluded_and_reruns_merge_by_agent(tmp_path
 
 
 async def test_sequenced_replay_serves_a_drifted_request_and_notes_where() -> None:
-    from harness.core.cancel import CancelToken
-    from harness.core.items import text_message
-    from harness.providers.base import ModelRequest, StreamEnd
+    from cookcode.core.cancel import CancelToken
+    from cookcode.core.items import text_message
+    from cookcode.providers.base import ModelRequest, StreamEnd
 
     cassette = Cassette()
     recorder = RecordingTransport(cassette, Script([ok(text_stream("x"))]).transport)
@@ -315,7 +315,7 @@ def test_prepared_fixtures_are_byte_and_time_identical(tmp_path: Path) -> None:
 
 
 def test_drift_in_a_long_string_shows_where_it_starts() -> None:
-    from harness.providers.cassette import first_difference
+    from cookcode.providers.cassette import first_difference
 
     before, after = "x" * 300 + "abc", "x" * 300 + "abd"
     assert first_difference(before, after) == (
@@ -412,9 +412,9 @@ async def test_stats_command_totals_every_session_under_a_directory(
 
 
 async def test_a_verify_first_run_is_judged_against_fixture_and_solution(tmp_path: Path) -> None:
-    from harness.core.features import Features
-    from harness.evals.repro import judge
-    from harness.evals.repro import render as render_repro
+    from cookcode.core.features import Features
+    from cookcode.evals.repro import judge
+    from cookcode.evals.repro import render as render_repro
 
     suite = make_suite(tmp_path)
     tasks = load_suite(suite)

@@ -15,7 +15,7 @@
 - All commands run inside WSL Ubuntu, from the repo root `~/code/flagship-1`. Linux only: the code uses `fcntl.flock` and `os.killpg`.
 - Python `>=3.12`. The only runtime dependency in M0 is `pydantic>=2.9,<3`.
 - The package is named `harness` as a placeholder until the codename gate at the end of M0.
-- `src/harness/core/` never imports I/O modules (`subprocess`, `socket`, `http`, `urllib`, `sys`) and never calls `print`, `input` or `open`. `tests/test_boundaries.py` enforces this.
+- `src/cookcode/core/` never imports I/O modules (`subprocess`, `socket`, `http`, `urllib`, `sys`) and never calls `print`, `input` or `open`. `tests/test_boundaries.py` enforces this.
 - All serializable types are frozen pydantic models.
 - No filler comments. No em dashes in docs or code.
 - Every commit message ends with the trailer line `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
@@ -27,25 +27,25 @@
 pyproject.toml                 project, deps, ruff, pyright, pytest config
 .gitignore
 README.md
-src/harness/__init__.py        __version__
-src/harness/py.typed
-src/harness/core/__init__.py
-src/harness/core/ids.py        new_id(), utc_now()
-src/harness/core/cancel.py     CancelToken
-src/harness/core/usage.py      Usage, StopReason
-src/harness/core/_union.py     tag_or_fallback() discriminator helper
-src/harness/core/items.py      Message, Reasoning, ToolCall, ToolResult, OtherItem, UnknownItem, Item
-src/harness/core/events.py     all event bodies, Event envelope, make_event, JSON line helpers
-src/harness/redact.py          Redactor
-src/harness/store/__init__.py
-src/harness/store/base.py      SessionLog, SessionStore protocols, errors
-src/harness/store/jsonl.py     JsonlSessionStore, JsonlSessionLog
-src/harness/providers/__init__.py
-src/harness/providers/base.py  ModelRequest, ModelCaps, ToolSchema, stream events, Provider
-src/harness/providers/fake.py  FakeProvider, FakeTurn, say(), call()
-src/harness/env/__init__.py
-src/harness/env/base.py        ExecResult, Environment
-src/harness/env/local.py       LocalEnvironment, _CappedBuffer
+src/cookcode/__init__.py        __version__
+src/cookcode/py.typed
+src/cookcode/core/__init__.py
+src/cookcode/core/ids.py        new_id(), utc_now()
+src/cookcode/core/cancel.py     CancelToken
+src/cookcode/core/usage.py      Usage, StopReason
+src/cookcode/core/_union.py     tag_or_fallback() discriminator helper
+src/cookcode/core/items.py      Message, Reasoning, ToolCall, ToolResult, OtherItem, UnknownItem, Item
+src/cookcode/core/events.py     all event bodies, Event envelope, make_event, JSON line helpers
+src/cookcode/redact.py          Redactor
+src/cookcode/store/__init__.py
+src/cookcode/store/base.py      SessionLog, SessionStore protocols, errors
+src/cookcode/store/jsonl.py     JsonlSessionStore, JsonlSessionLog
+src/cookcode/providers/__init__.py
+src/cookcode/providers/base.py  ModelRequest, ModelCaps, ToolSchema, stream events, Provider
+src/cookcode/providers/fake.py  FakeProvider, FakeTurn, say(), call()
+src/cookcode/env/__init__.py
+src/cookcode/env/base.py        ExecResult, Environment
+src/cookcode/env/local.py       LocalEnvironment, _CappedBuffer
 tests/sample_events.py         one instance of every event body
 tests/test_*.py                one test file per module
 docs/decisions/                decision records (Task 11)
@@ -57,19 +57,19 @@ docs/walkthroughs/m0.md        walkthrough and cross-questions (Task 11)
 ### Task 1: Repo skeleton, tooling and the core boundary test
 
 **Files:**
-- Create: `pyproject.toml`, `.gitignore`, `README.md`, `src/harness/__init__.py`, `src/harness/py.typed`, `src/harness/core/__init__.py`, `src/harness/store/__init__.py`, `src/harness/providers/__init__.py`, `src/harness/env/__init__.py`
+- Create: `pyproject.toml`, `.gitignore`, `README.md`, `src/cookcode/__init__.py`, `src/cookcode/py.typed`, `src/cookcode/core/__init__.py`, `src/cookcode/store/__init__.py`, `src/cookcode/providers/__init__.py`, `src/cookcode/env/__init__.py`
 - Test: `tests/test_package.py`, `tests/test_boundaries.py`
 
 **Interfaces:**
 - Consumes: nothing
-- Produces: importable package `harness` with `harness.__version__ == "0.0.1"`; the boundary test that every later task must keep green
+- Produces: importable package `harness` with `cookcode.__version__ == "0.0.1"`; the boundary test that every later task must keep green
 
 - [ ] **Step 1: Create the repo and bring the design docs in**
 
 ```bash
 mkdir -p ~/code/flagship-1 && cd ~/code/flagship-1
 git init -b main
-mkdir -p docs src/harness/core src/harness/store src/harness/providers src/harness/env tests
+mkdir -p docs src/cookcode/core src/cookcode/store src/cookcode/providers src/cookcode/env tests
 cp -r "/mnt/c/Users/abhii/Batcave/new projects/flagship 1/docs/." docs/
 cp -r "/mnt/c/Users/abhii/Batcave/new projects/flagship 1/reports" .
 cp -r "/mnt/c/Users/abhii/Batcave/new projects/flagship 1/research_notes" .
@@ -93,7 +93,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/harness"]
+packages = ["src/cookcode"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -144,22 +144,22 @@ Development runs in WSL Ubuntu: `uv sync`, then `uv run pytest -q`.
 
 - [ ] **Step 4: Write the package files**
 
-`src/harness/__init__.py`:
+`src/cookcode/__init__.py`:
 ```python
 __version__ = "0.0.1"
 ```
 
-`src/harness/py.typed`, `src/harness/core/__init__.py`, `src/harness/store/__init__.py`, `src/harness/providers/__init__.py`, `src/harness/env/__init__.py`: empty files.
+`src/cookcode/py.typed`, `src/cookcode/core/__init__.py`, `src/cookcode/store/__init__.py`, `src/cookcode/providers/__init__.py`, `src/cookcode/env/__init__.py`: empty files.
 
 - [ ] **Step 5: Write the failing tests**
 
 `tests/test_package.py`:
 ```python
-import harness
+import cookcode
 
 
 def test_version() -> None:
-    assert harness.__version__ == "0.0.1"
+    assert cookcode.__version__ == "0.0.1"
 ```
 
 `tests/test_boundaries.py`:
@@ -167,10 +167,10 @@ def test_version() -> None:
 import ast
 from pathlib import Path
 
-CORE = Path(__file__).parents[1] / "src" / "harness" / "core"
+CORE = Path(__file__).parents[1] / "src" / "cookcode" / "core"
 FORBIDDEN_MODULES = {"subprocess", "socket", "http", "urllib", "sys", "httpx", "requests"}
 FORBIDDEN_CALLS = {"print", "input", "open"}
-ALLOWED_HARNESS_IMPORTS = {"harness.core"}
+ALLOWED_COOKCODE_IMPORTS = {"cookcode.core"}
 
 
 def _core_files() -> list[Path]:
@@ -203,7 +203,7 @@ def test_core_imports_only_core_from_harness() -> None:
             if module.split(".")[0] == "harness":
                 assert any(
                     module == allowed or module.startswith(allowed + ".")
-                    for allowed in ALLOWED_HARNESS_IMPORTS
+                    for allowed in ALLOWED_COOKCODE_IMPORTS
                 ), f"{path.name} imports {module}"
 
 
@@ -238,16 +238,16 @@ git commit -m "chore: repo skeleton, tooling and core boundary test" -m "Co-Auth
 ### Task 2: IDs, cancellation token and usage
 
 **Files:**
-- Create: `src/harness/core/ids.py`, `src/harness/core/cancel.py`, `src/harness/core/usage.py`
+- Create: `src/cookcode/core/ids.py`, `src/cookcode/core/cancel.py`, `src/cookcode/core/usage.py`
 - Test: `tests/test_ids.py`, `tests/test_cancel.py`, `tests/test_usage.py`
 
 **Interfaces:**
 - Consumes: nothing
 - Produces:
-  - `harness.core.ids.new_id() -> str` (32 hex chars), `utc_now() -> datetime` (tz-aware UTC)
-  - `harness.core.cancel.CancelToken` with `.cancelled: bool`, `.reason: str | None`, `.cancel(reason: str = "user") -> None`, `async .wait() -> None`
-  - `harness.core.usage.Usage` (frozen; `input`, `cache_read`, `cache_write`, `output`, `reasoning`, all `int = 0`; `__add__`; `total_input` property)
-  - `harness.core.usage.StopReason = Literal["end_turn", "tool_use", "max_tokens", "refusal", "aborted", "error"]`
+  - `cookcode.core.ids.new_id() -> str` (32 hex chars), `utc_now() -> datetime` (tz-aware UTC)
+  - `cookcode.core.cancel.CancelToken` with `.cancelled: bool`, `.reason: str | None`, `.cancel(reason: str = "user") -> None`, `async .wait() -> None`
+  - `cookcode.core.usage.Usage` (frozen; `input`, `cache_read`, `cache_write`, `output`, `reasoning`, all `int = 0`; `__add__`; `total_input` property)
+  - `cookcode.core.usage.StopReason = Literal["end_turn", "tool_use", "max_tokens", "refusal", "aborted", "error"]`
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -255,7 +255,7 @@ git commit -m "chore: repo skeleton, tooling and core boundary test" -m "Co-Auth
 ```python
 from datetime import UTC
 
-from harness.core.ids import new_id, utc_now
+from cookcode.core.ids import new_id, utc_now
 
 
 def test_new_id_is_unique_hex() -> None:
@@ -272,7 +272,7 @@ def test_utc_now_is_timezone_aware() -> None:
 ```python
 import asyncio
 
-from harness.core.cancel import CancelToken
+from cookcode.core.cancel import CancelToken
 
 
 def test_starts_uncancelled() -> None:
@@ -304,7 +304,7 @@ async def test_wait_returns_after_cancel_from_another_task() -> None:
 
 `tests/test_usage.py`:
 ```python
-from harness.core.usage import Usage
+from cookcode.core.usage import Usage
 
 
 def test_add_sums_every_field() -> None:
@@ -320,11 +320,11 @@ def test_total_input_counts_cached_tokens() -> None:
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_ids.py tests/test_cancel.py tests/test_usage.py -q`
-Expected: FAIL with `ModuleNotFoundError: No module named 'harness.core.ids'` (and the same for cancel and usage)
+Expected: FAIL with `ModuleNotFoundError: No module named 'cookcode.core.ids'` (and the same for cancel and usage)
 
 - [ ] **Step 3: Implement**
 
-`src/harness/core/ids.py`:
+`src/cookcode/core/ids.py`:
 ```python
 import uuid
 from datetime import UTC, datetime
@@ -338,7 +338,7 @@ def utc_now() -> datetime:
     return datetime.now(UTC)
 ```
 
-`src/harness/core/cancel.py`:
+`src/cookcode/core/cancel.py`:
 ```python
 import asyncio
 
@@ -365,7 +365,7 @@ class CancelToken:
         await self._event.wait()
 ```
 
-`src/harness/core/usage.py`:
+`src/cookcode/core/usage.py`:
 ```python
 from typing import Literal
 
@@ -414,14 +414,14 @@ git commit -m "feat(core): ids, cancel token, usage" -m "Co-Authored-By: Claude 
 ### Task 3: Item model with a fallback for unknown types
 
 **Files:**
-- Create: `src/harness/core/_union.py`, `src/harness/core/items.py`
+- Create: `src/cookcode/core/_union.py`, `src/cookcode/core/items.py`
 - Test: `tests/test_items.py`
 
 **Interfaces:**
 - Consumes: nothing from earlier tasks
 - Produces:
-  - `harness.core._union.tag_or_fallback(known: frozenset[str], fallback: str) -> Callable[[Any], str]`
-  - `harness.core.items`: `TextPart`, `Message(role, parts)` with `.text` property, `Reasoning(provider, model_family, payload, summary_text)` with `.replayable_to(provider, model_family) -> bool`, `ToolCall(id, provider_call_id, provider_item_id, name, arguments)`, `ToolResultStatus`, `ToolResult(call_id, status, content)`, `OtherItem(provider, raw)`, `UnknownItem(type, **extra)`, `Item` (annotated union), `ITEM_TYPES: frozenset[str]`, `ITEM_ADAPTER: TypeAdapter[Item]`, `text_message(role, text) -> Message`
+  - `cookcode.core._union.tag_or_fallback(known: frozenset[str], fallback: str) -> Callable[[Any], str]`
+  - `cookcode.core.items`: `TextPart`, `Message(role, parts)` with `.text` property, `Reasoning(provider, model_family, payload, summary_text)` with `.replayable_to(provider, model_family) -> bool`, `ToolCall(id, provider_call_id, provider_item_id, name, arguments)`, `ToolResultStatus`, `ToolResult(call_id, status, content)`, `OtherItem(provider, raw)`, `UnknownItem(type, **extra)`, `Item` (annotated union), `ITEM_TYPES: frozenset[str]`, `ITEM_ADAPTER: TypeAdapter[Item]`, `text_message(role, text) -> Message`
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -429,7 +429,7 @@ git commit -m "feat(core): ids, cancel token, usage" -m "Co-Authored-By: Claude 
 ```python
 import pytest
 
-from harness.core.items import (
+from cookcode.core.items import (
     ITEM_ADAPTER,
     ITEM_TYPES,
     Item,
@@ -493,11 +493,11 @@ def test_items_are_frozen() -> None:
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_items.py -q`
-Expected: FAIL with `ModuleNotFoundError: No module named 'harness.core.items'`
+Expected: FAIL with `ModuleNotFoundError: No module named 'cookcode.core.items'`
 
 - [ ] **Step 3: Implement the discriminator helper**
 
-`src/harness/core/_union.py`:
+`src/cookcode/core/_union.py`:
 ```python
 from collections.abc import Callable
 from typing import Any, cast
@@ -516,13 +516,13 @@ def tag_or_fallback(known: frozenset[str], fallback: str) -> Callable[[Any], str
 
 - [ ] **Step 4: Implement the items**
 
-`src/harness/core/items.py`:
+`src/cookcode/core/items.py`:
 ```python
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Discriminator, Tag, TypeAdapter
 
-from harness.core._union import tag_or_fallback
+from cookcode.core._union import tag_or_fallback
 
 Role = Literal["user", "assistant", "system"]
 ToolResultStatus = Literal["ok", "error", "interrupted", "denied", "unknown"]
@@ -622,7 +622,7 @@ git commit -m "feat(core): provider-neutral item model with unknown-type fallbac
 ### Task 4: Event bodies, envelope and run config
 
 **Files:**
-- Create: `src/harness/core/events.py`, `tests/sample_events.py`
+- Create: `src/cookcode/core/events.py`, `tests/sample_events.py`
 - Test: `tests/test_events.py`
 
 **Interfaces:**
@@ -640,7 +640,7 @@ git commit -m "feat(core): provider-neutral item model with unknown-type fallbac
 
 `tests/sample_events.py`:
 ```python
-from harness.core.events import (
+from cookcode.core.events import (
     ApprovalRequested,
     ApprovalResolved,
     BudgetExceeded,
@@ -661,8 +661,8 @@ from harness.core.events import (
     ToolCallStarted,
     UserMessage,
 )
-from harness.core.items import ToolCall
-from harness.core.usage import Usage
+from cookcode.core.items import ToolCall
+from cookcode.core.usage import Usage
 
 
 def all_bodies() -> list[EventBody]:
@@ -704,7 +704,7 @@ import pytest
 from pydantic import ValidationError
 from sample_events import all_bodies
 
-from harness.core.events import (
+from cookcode.core.events import (
     EVENT_TYPES,
     SCHEMA_VERSION,
     Event,
@@ -719,7 +719,7 @@ from harness.core.events import (
     make_event,
     to_json_line,
 )
-from harness.core.items import text_message
+from cookcode.core.items import text_message
 
 
 def test_samples_cover_every_event_type() -> None:
@@ -781,11 +781,11 @@ def test_negative_seq_is_rejected() -> None:
 - [ ] **Step 3: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_events.py -q`
-Expected: FAIL with `ModuleNotFoundError: No module named 'harness.core.events'`
+Expected: FAIL with `ModuleNotFoundError: No module named 'cookcode.core.events'`
 
 - [ ] **Step 4: Implement**
 
-`src/harness/core/events.py`:
+`src/cookcode/core/events.py`:
 ```python
 import hashlib
 import json
@@ -794,10 +794,10 @@ from typing import Annotated, Any, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Discriminator, Field, Tag, model_validator
 
-from harness.core._union import tag_or_fallback
-from harness.core.ids import new_id, utc_now
-from harness.core.items import Item
-from harness.core.usage import StopReason, Usage
+from cookcode.core._union import tag_or_fallback
+from cookcode.core.ids import new_id, utc_now
+from cookcode.core.items import Item
+from cookcode.core.usage import StopReason, Usage
 
 SCHEMA_VERSION = 1
 
@@ -1040,12 +1040,12 @@ git commit -m "feat(core): typed event log envelope with schema-evolution fallba
 ### Task 5: Redaction
 
 **Files:**
-- Create: `src/harness/redact.py`
+- Create: `src/cookcode/redact.py`
 - Test: `tests/test_redact.py`
 
 **Interfaces:**
 - Consumes: nothing
-- Produces: `harness.redact.JSONValue` (type alias), `Redactor(secret_values: Iterable[str] = (), min_secret_len: int = 8)` with `.redact_text(text: str) -> str`, `.redact(value: JSONValue) -> JSONValue`, `Redactor.from_env(names: Iterable[str], environ: Mapping[str, str]) -> Redactor`. Replacement format: `[REDACTED:<kind>]`.
+- Produces: `cookcode.redact.JSONValue` (type alias), `Redactor(secret_values: Iterable[str] = (), min_secret_len: int = 8)` with `.redact_text(text: str) -> str`, `.redact(value: JSONValue) -> JSONValue`, `Redactor.from_env(names: Iterable[str], environ: Mapping[str, str]) -> Redactor`. Replacement format: `[REDACTED:<kind>]`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1055,7 +1055,7 @@ Fake secrets are built by concatenation so secret scanners don't flag the test f
 ```python
 import pytest
 
-from harness.redact import Redactor
+from cookcode.redact import Redactor
 
 FAKES = {
     "anthropic_key": "sk-ant-" + "a1B2" * 10,
@@ -1122,11 +1122,11 @@ def test_redaction_is_idempotent() -> None:
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_redact.py -q`
-Expected: FAIL with `ModuleNotFoundError: No module named 'harness.redact'`
+Expected: FAIL with `ModuleNotFoundError: No module named 'cookcode.redact'`
 
 - [ ] **Step 3: Implement**
 
-`src/harness/redact.py`:
+`src/cookcode/redact.py`:
 ```python
 import re
 from collections.abc import Iterable, Mapping
@@ -1192,14 +1192,14 @@ git commit -m "feat: secret redaction applied before anything is persisted" -m "
 ### Task 6: JSONL session store: append, read, lock, fsync policy, torn tail
 
 **Files:**
-- Create: `src/harness/store/base.py`, `src/harness/store/jsonl.py`
+- Create: `src/cookcode/store/base.py`, `src/cookcode/store/jsonl.py`
 - Test: `tests/test_store.py`
 
 **Interfaces:**
 - Consumes: `Event`, `EventBody`, `make_event`, `from_json_line` (Task 4); `Redactor` (Task 5)
 - Produces:
-  - `harness.store.base`: `SessionLockedError`, `SessionNotFoundError`, `SessionLog` protocol (`session_id`, `next_seq`, `append(body, *, durable=False) -> Event`, `read(from_seq=0) -> list[Event]`, `close()`), `SessionStore` protocol (`open(session_id, *, create=False) -> SessionLog`, `read(session_id, from_seq=0) -> list[Event]`, `fork(session_id, at_seq, new_session_id) -> None`, `list_sessions() -> list[str]`)
-  - `harness.store.jsonl`: `DURABLE_TYPES = frozenset({"tool_call_started"})`, `JsonlSessionStore(root: Path, redactor: Redactor | None = None)`, `JsonlSessionLog` (context manager)
+  - `cookcode.store.base`: `SessionLockedError`, `SessionNotFoundError`, `SessionLog` protocol (`session_id`, `next_seq`, `append(body, *, durable=False) -> Event`, `read(from_seq=0) -> list[Event]`, `close()`), `SessionStore` protocol (`open(session_id, *, create=False) -> SessionLog`, `read(session_id, from_seq=0) -> list[Event]`, `fork(session_id, at_seq, new_session_id) -> None`, `list_sessions() -> list[str]`)
+  - `cookcode.store.jsonl`: `DURABLE_TYPES = frozenset({"tool_call_started"})`, `JsonlSessionStore(root: Path, redactor: Redactor | None = None)`, `JsonlSessionLog` (context manager)
   - On disk: `<root>/<session_id>.jsonl` and `<root>/<session_id>.lock`
 
 - [ ] **Step 1: Write the failing tests**
@@ -1212,10 +1212,10 @@ from pathlib import Path
 import pytest
 from sample_events import all_bodies
 
-from harness.core.events import ToolCallStarted, UserMessage
-from harness.redact import Redactor
-from harness.store.base import SessionLockedError, SessionNotFoundError
-from harness.store.jsonl import JsonlSessionStore
+from cookcode.core.events import ToolCallStarted, UserMessage
+from cookcode.redact import Redactor
+from cookcode.store.base import SessionLockedError, SessionNotFoundError
+from cookcode.store.jsonl import JsonlSessionStore
 
 
 def test_append_assigns_sequential_seq_and_reads_back(tmp_path: Path) -> None:
@@ -1261,7 +1261,7 @@ def test_fsync_only_for_write_ahead_events_or_when_asked(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     calls: list[int] = []
-    monkeypatch.setattr("harness.store.jsonl.os.fsync", lambda fd: calls.append(fd))
+    monkeypatch.setattr("cookcode.store.jsonl.os.fsync", lambda fd: calls.append(fd))
     store = JsonlSessionStore(tmp_path)
     with store.open("s1", create=True) as log:
         log.append(UserMessage(text="no fsync"))
@@ -1314,15 +1314,15 @@ def test_lock_file_descriptor_is_released_on_close(tmp_path: Path) -> None:
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_store.py -q`
-Expected: FAIL with `ModuleNotFoundError: No module named 'harness.store.base'`
+Expected: FAIL with `ModuleNotFoundError: No module named 'cookcode.store.base'`
 
 - [ ] **Step 3: Implement the protocols**
 
-`src/harness/store/base.py`:
+`src/cookcode/store/base.py`:
 ```python
 from typing import Protocol
 
-from harness.core.events import Event, EventBody
+from cookcode.core.events import Event, EventBody
 
 
 class SessionLockedError(Exception):
@@ -1359,16 +1359,16 @@ class SessionStore(Protocol):
 
 - [ ] **Step 4: Implement the JSONL store**
 
-`src/harness/store/jsonl.py`:
+`src/cookcode/store/jsonl.py`:
 ```python
 import fcntl
 import os
 from pathlib import Path
 from types import TracebackType
 
-from harness.core.events import Event, EventBody, from_json_line, make_event
-from harness.redact import Redactor
-from harness.store.base import SessionLockedError, SessionNotFoundError
+from cookcode.core.events import Event, EventBody, from_json_line, make_event
+from cookcode.redact import Redactor
+from cookcode.store.base import SessionLockedError, SessionNotFoundError
 
 DURABLE_TYPES = frozenset({"tool_call_started"})
 
@@ -1478,7 +1478,7 @@ class JsonlSessionStore:
 - [ ] **Step 5: Run tests to verify they pass**
 
 Run: `uv run pytest -q && uv run ruff check && uv run pyright`
-Expected: all pass. If pyright flags `self._redactor.redact(event.model_dump(mode="json"))` because `dict[str, Any]` isn't seen as `JSONValue`, wrap the argument in `cast("JSONValue", ...)` (import `cast` from `typing` and `JSONValue` from `harness.redact`).
+Expected: all pass. If pyright flags `self._redactor.redact(event.model_dump(mode="json"))` because `dict[str, Any]` isn't seen as `JSONValue`, wrap the argument in `cast("JSONValue", ...)` (import `cast` from `typing` and `JSONValue` from `cookcode.redact`).
 
 - [ ] **Step 6: Commit**
 
@@ -1492,7 +1492,7 @@ git commit -m "feat(store): crash-safe JSONL session log with single-writer lock
 ### Task 7: Fork and list sessions
 
 **Files:**
-- Modify: `src/harness/store/jsonl.py` (add `fork` and `list_sessions` to `JsonlSessionStore`)
+- Modify: `src/cookcode/store/jsonl.py` (add `fork` and `list_sessions` to `JsonlSessionStore`)
 - Test: `tests/test_store_fork.py`
 
 **Interfaces:**
@@ -1507,8 +1507,8 @@ from pathlib import Path
 
 import pytest
 
-from harness.core.events import UserMessage
-from harness.store.jsonl import JsonlSessionStore
+from cookcode.core.events import UserMessage
+from cookcode.store.jsonl import JsonlSessionStore
 
 
 def _store_with_five(tmp_path: Path) -> JsonlSessionStore:
@@ -1556,7 +1556,7 @@ Expected: FAIL with `AttributeError: 'JsonlSessionStore' object has no attribute
 
 - [ ] **Step 3: Implement**
 
-Add these methods to `JsonlSessionStore` in `src/harness/store/jsonl.py`:
+Add these methods to `JsonlSessionStore` in `src/cookcode/store/jsonl.py`:
 ```python
     def fork(self, session_id: str, at_seq: int, new_session_id: str) -> None:
         prefix = [event for event in self.read(session_id) if event.seq <= at_seq]
@@ -1594,14 +1594,14 @@ git commit -m "feat(store): fork a session at any seq, list sessions" -m "Co-Aut
 ### Task 8: Provider contract and the scripted FakeProvider
 
 **Files:**
-- Create: `src/harness/providers/base.py`, `src/harness/providers/fake.py`
+- Create: `src/cookcode/providers/base.py`, `src/cookcode/providers/fake.py`
 - Test: `tests/test_fake_provider.py`
 
 **Interfaces:**
 - Consumes: `Item`, `Message`, `ToolCall`, `text_message` (Task 3); `Usage`, `StopReason`, `CancelToken`, `new_id` (Task 2)
 - Produces:
-  - `harness.providers.base`: `ToolSchema(name, description, parameters)`, `ModelRequest(model, system, tools, items, max_output_tokens)`, `ModelCaps(context_window, parallel_tool_calls, reasoning, prompt_caching)`, stream events `ItemStarted(index, kind)`, `ItemDelta(index, text)`, `ItemDone(index, item)`, `UsageReport(usage, raw)`, `StreamEnd(stop_reason, error)`, `StreamEvent` union, `Provider` protocol (`name: str`, `capabilities(model) -> ModelCaps`, `stream(request, cancel) -> AsyncIterator[StreamEvent]`)
-  - `harness.providers.fake`: `FakeTurn(items, usage, stop_reason, fail_with)`, `FakeScriptExhausted`, `FakeProvider(script, *, chunk_size=8, event_delay_s=0.0, caps=None)` with `.requests: list[ModelRequest]`, helpers `say(text) -> Message`, `call(name, provider_call_id=None, **arguments) -> ToolCall`
+  - `cookcode.providers.base`: `ToolSchema(name, description, parameters)`, `ModelRequest(model, system, tools, items, max_output_tokens)`, `ModelCaps(context_window, parallel_tool_calls, reasoning, prompt_caching)`, stream events `ItemStarted(index, kind)`, `ItemDelta(index, text)`, `ItemDone(index, item)`, `UsageReport(usage, raw)`, `StreamEnd(stop_reason, error)`, `StreamEvent` union, `Provider` protocol (`name: str`, `capabilities(model) -> ModelCaps`, `stream(request, cancel) -> AsyncIterator[StreamEvent]`)
+  - `cookcode.providers.fake`: `FakeTurn(items, usage, stop_reason, fail_with)`, `FakeScriptExhausted`, `FakeProvider(script, *, chunk_size=8, event_delay_s=0.0, caps=None)` with `.requests: list[ModelRequest]`, helpers `say(text) -> Message`, `call(name, provider_call_id=None, **arguments) -> ToolCall`
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1609,10 +1609,10 @@ git commit -m "feat(store): fork a session at any seq, list sessions" -m "Co-Aut
 ```python
 import pytest
 
-from harness.core.cancel import CancelToken
-from harness.core.items import text_message
-from harness.core.usage import Usage
-from harness.providers.base import (
+from cookcode.core.cancel import CancelToken
+from cookcode.core.items import text_message
+from cookcode.core.usage import Usage
+from cookcode.providers.base import (
     ItemDelta,
     ItemDone,
     ItemStarted,
@@ -1621,7 +1621,7 @@ from harness.providers.base import (
     StreamEvent,
     UsageReport,
 )
-from harness.providers.fake import FakeProvider, FakeScriptExhausted, FakeTurn, call, say
+from cookcode.providers.fake import FakeProvider, FakeScriptExhausted, FakeTurn, call, say
 
 REQUEST = ModelRequest(model="fake-1", system="be brief", items=(text_message("user", "hi"),))
 
@@ -1700,20 +1700,20 @@ def test_call_helper_builds_distinct_ids() -> None:
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_fake_provider.py -q`
-Expected: FAIL with `ModuleNotFoundError: No module named 'harness.providers.base'`
+Expected: FAIL with `ModuleNotFoundError: No module named 'cookcode.providers.base'`
 
 - [ ] **Step 3: Implement the contract**
 
-`src/harness/providers/base.py`:
+`src/cookcode/providers/base.py`:
 ```python
 from collections.abc import AsyncIterator
 from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from harness.core.cancel import CancelToken
-from harness.core.items import Item
-from harness.core.usage import StopReason, Usage
+from cookcode.core.cancel import CancelToken
+from cookcode.core.items import Item
+from cookcode.core.usage import StopReason, Usage
 
 
 class _Frozen(BaseModel):
@@ -1784,7 +1784,7 @@ class Provider(Protocol):
 
 - [ ] **Step 4: Implement the FakeProvider**
 
-`src/harness/providers/fake.py`:
+`src/cookcode/providers/fake.py`:
 ```python
 import asyncio
 from collections.abc import AsyncIterator, Iterable
@@ -1792,11 +1792,11 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
-from harness.core.cancel import CancelToken
-from harness.core.ids import new_id
-from harness.core.items import Item, Message, ToolCall, text_message
-from harness.core.usage import StopReason, Usage
-from harness.providers.base import (
+from cookcode.core.cancel import CancelToken
+from cookcode.core.ids import new_id
+from cookcode.core.items import Item, Message, ToolCall, text_message
+from cookcode.core.usage import StopReason, Usage
+from cookcode.providers.base import (
     ItemDelta,
     ItemDone,
     ItemStarted,
@@ -1912,14 +1912,14 @@ git commit -m "feat(providers): streaming provider contract and scripted FakePro
 ### Task 9: Environment contract and local file I/O
 
 **Files:**
-- Create: `src/harness/env/base.py`, `src/harness/env/local.py`
+- Create: `src/cookcode/env/base.py`, `src/cookcode/env/local.py`
 - Test: `tests/test_local_env_files.py`
 
 **Interfaces:**
 - Consumes: `CancelToken`, `new_id` (Task 2)
 - Produces:
-  - `harness.env.base`: `ExecResult(exit_code: int | None, output: str, output_bytes: int, duration_s: float, timed_out=False, cancelled=False, truncated=False)`, `Environment` protocol (`exec(cmd, *, cwd=".", timeout_s, max_output_bytes, cancel) -> ExecResult`, `read_file(path) -> bytes`, `write_file(path, data) -> None`)
-  - `harness.env.local.LocalEnvironment(root: Path)` with `read_file` and `write_file` (atomic, creates parents, keeps the file mode). `exec` arrives in Task 10.
+  - `cookcode.env.base`: `ExecResult(exit_code: int | None, output: str, output_bytes: int, duration_s: float, timed_out=False, cancelled=False, truncated=False)`, `Environment` protocol (`exec(cmd, *, cwd=".", timeout_s, max_output_bytes, cancel) -> ExecResult`, `read_file(path) -> bytes`, `write_file(path, data) -> None`)
+  - `cookcode.env.local.LocalEnvironment(root: Path)` with `read_file` and `write_file` (atomic, creates parents, keeps the file mode). `exec` arrives in Task 10.
   - The spec's `Environment.snapshot()` is deliberately left out. It lands in M2 together with undo, where its first consumer is.
 
 - [ ] **Step 1: Write the failing tests**
@@ -1931,7 +1931,7 @@ from pathlib import Path
 
 import pytest
 
-from harness.env.local import LocalEnvironment
+from cookcode.env.local import LocalEnvironment
 
 
 async def test_write_then_read_relative_path(tmp_path: Path) -> None:
@@ -1972,17 +1972,17 @@ async def test_reading_a_missing_file_raises(tmp_path: Path) -> None:
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_local_env_files.py -q`
-Expected: FAIL with `ModuleNotFoundError: No module named 'harness.env.local'`
+Expected: FAIL with `ModuleNotFoundError: No module named 'cookcode.env.local'`
 
 - [ ] **Step 3: Implement the contract**
 
-`src/harness/env/base.py`:
+`src/cookcode/env/base.py`:
 ```python
 from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict
 
-from harness.core.cancel import CancelToken
+from cookcode.core.cancel import CancelToken
 
 
 class ExecResult(BaseModel):
@@ -2015,14 +2015,14 @@ class Environment(Protocol):
 
 - [ ] **Step 4: Implement file I/O**
 
-`src/harness/env/local.py`:
+`src/cookcode/env/local.py`:
 ```python
 import asyncio
 import os
 import shutil
 from pathlib import Path
 
-from harness.core.ids import new_id
+from cookcode.core.ids import new_id
 
 
 class LocalEnvironment:
@@ -2067,7 +2067,7 @@ git commit -m "feat(env): environment contract, atomic local file I/O" -m "Co-Au
 ### Task 10: Local exec: process groups, output caps, timeout and cancel
 
 **Files:**
-- Modify: `src/harness/env/local.py` (add `_CappedBuffer`, `_kill_group`, `LocalEnvironment.exec`)
+- Modify: `src/cookcode/env/local.py` (add `_CappedBuffer`, `_kill_group`, `LocalEnvironment.exec`)
 - Test: `tests/test_local_env_exec.py`
 
 **Interfaces:**
@@ -2082,9 +2082,9 @@ import asyncio
 import time
 from pathlib import Path
 
-from harness.core.cancel import CancelToken
-from harness.env.base import Environment
-from harness.env.local import LocalEnvironment, _CappedBuffer
+from cookcode.core.cancel import CancelToken
+from cookcode.env.base import Environment
+from cookcode.env.local import LocalEnvironment, _CappedBuffer
 
 
 def _is_dead(pid: int) -> bool:
@@ -2207,11 +2207,11 @@ async def test_already_cancelled_never_spawns(tmp_path: Path) -> None:
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_local_env_exec.py -q`
-Expected: FAIL with `ImportError: cannot import name '_CappedBuffer' from 'harness.env.local'`
+Expected: FAIL with `ImportError: cannot import name '_CappedBuffer' from 'cookcode.env.local'`
 
 - [ ] **Step 3: Implement**
 
-Add to `src/harness/env/local.py`. The imports at the top become:
+Add to `src/cookcode/env/local.py`. The imports at the top become:
 ```python
 import asyncio
 import os
@@ -2220,9 +2220,9 @@ import signal
 import time
 from pathlib import Path
 
-from harness.core.cancel import CancelToken
-from harness.core.ids import new_id
-from harness.env.base import ExecResult
+from cookcode.core.cancel import CancelToken
+from cookcode.core.ids import new_id
+from cookcode.env.base import ExecResult
 
 _READ_CHUNK = 65536
 _PUMP_DRAIN_TIMEOUT_S = 5.0
@@ -2470,7 +2470,7 @@ git commit -m "docs: M0 decision records, walkthrough and cross-questions" -m "C
 - [ ] **Codename decision:** pick the package name. Rename:
 
 ```bash
-git mv src/harness src/<name>
+git mv src/cookcode src/<name>
 grep -rl "harness" src tests pyproject.toml README.md | xargs sed -i "s/\bharness\b/<name>/g"
 uv sync && uv run pytest -q && uv run ruff check && uv run pyright
 git commit -am "chore: rename package to <name>" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"

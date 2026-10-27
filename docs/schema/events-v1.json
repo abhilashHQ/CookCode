@@ -1275,7 +1275,7 @@
       "type": "object"
     }
   },
-  "$id": "harness-events-v1",
+  "$id": "cookcode-events-v1",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "properties": {
     "body": {

@@ -13,12 +13,12 @@ from agent_helpers import (
     bodies,
     results,
 )
-from harness.agent.approval import NO_APPROVER, Decision, Risk, ScriptedApprover
-from harness.agent.gate import Policy, Rule
-from harness.agent.repair import NOT_EXECUTED
-from harness.agent.tools import Tool, ToolContext, ToolOutput
-from harness.core.cancel import CancelToken
-from harness.core.events import (
+from cookcode.agent.approval import NO_APPROVER, Decision, Risk, ScriptedApprover
+from cookcode.agent.gate import Policy, Rule
+from cookcode.agent.repair import NOT_EXECUTED
+from cookcode.agent.tools import Tool, ToolContext, ToolOutput
+from cookcode.core.cancel import CancelToken
+from cookcode.core.events import (
     ApprovalRequested,
     ApprovalResolved,
     Event,
@@ -33,11 +33,11 @@ from harness.core.events import (
     ToolCallStarted,
     UserMessage,
 )
-from harness.core.items import ToolCall, ToolResult
-from harness.core.usage import Usage
-from harness.providers.fake import FakeTurn, call, say
-from harness.tools.bash import bash_tool
-from harness.tools.files import edit_tool, read_tool, write_tool
+from cookcode.core.items import ToolCall, ToolResult
+from cookcode.core.usage import Usage
+from cookcode.providers.fake import FakeTurn, call, say
+from cookcode.tools.bash import bash_tool
+from cookcode.tools.files import edit_tool, read_tool, write_tool
 
 
 @pytest.fixture

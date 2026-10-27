@@ -5,14 +5,14 @@ from typing import Any
 import httpx
 import pytest
 
-from harness.agent.loop import Agent, AgentConfig
-from harness.agent.tools import ToolRegistry
-from harness.core.cancel import CancelToken
-from harness.core.events import ModelRequestStarted
-from harness.core.items import Message, Reasoning, ToolCall, ToolResult, text_message
-from harness.core.usage import Usage
-from harness.env.local import LocalEnvironment
-from harness.providers.base import (
+from cookcode.agent.loop import Agent, AgentConfig
+from cookcode.agent.tools import ToolRegistry
+from cookcode.core.cancel import CancelToken
+from cookcode.core.events import ModelRequestStarted
+from cookcode.core.items import Message, Reasoning, ToolCall, ToolResult, text_message
+from cookcode.core.usage import Usage
+from cookcode.env.local import LocalEnvironment
+from cookcode.providers.base import (
     ItemDelta,
     ItemDone,
     ModelRequest,
@@ -22,16 +22,16 @@ from harness.providers.base import (
     ToolSchema,
     UsageReport,
 )
-from harness.providers.gemini import (
+from cookcode.providers.gemini import (
     FOREIGN_SIGNATURE,
     GeminiProvider,
     GeminiStreamAssembler,
     build_body,
     to_contents,
 )
-from harness.redact import Redactor
-from harness.store.jsonl import JsonlSessionStore
-from harness.tools import default_tools
+from cookcode.redact import Redactor
+from cookcode.store.jsonl import JsonlSessionStore
+from cookcode.tools import default_tools
 from openai_helpers import Script, ok
 
 MODEL = "gemini-test"

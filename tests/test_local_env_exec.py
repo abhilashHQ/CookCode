@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from harness.core.cancel import CancelToken
-from harness.env.base import Environment
-from harness.env.local import LocalEnvironment, _CappedBuffer
+from cookcode.core.cancel import CancelToken
+from cookcode.env.base import Environment
+from cookcode.env.local import LocalEnvironment, _CappedBuffer
 
 
 def _is_dead(pid: int) -> bool:

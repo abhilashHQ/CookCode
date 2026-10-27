@@ -1,6 +1,6 @@
 import pytest
 
-from harness.core.items import (
+from cookcode.core.items import (
     ITEM_ADAPTER,
     ITEM_TYPES,
     Item,

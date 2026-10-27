@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from harness.env.local import LocalEnvironment
+from cookcode.env.local import LocalEnvironment
 
 
 async def test_write_then_read_relative_path(tmp_path: Path) -> None:

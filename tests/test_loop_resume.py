@@ -14,15 +14,15 @@ from agent_helpers import (
     results,
     wait_cancel_tool,
 )
-from harness.agent.repair import (
+from cookcode.agent.repair import (
     MUTATING_LOST,
     NOT_EXECUTED,
     READ_ONLY_LOST,
     RepairAction,
     unresolved_calls,
 )
-from harness.core.cancel import CancelToken
-from harness.core.events import (
+from cookcode.core.cancel import CancelToken
+from cookcode.core.events import (
     Event,
     EventBody,
     ItemEvent,
@@ -36,10 +36,10 @@ from harness.core.events import (
     ToolCallStarted,
     UserMessage,
 )
-from harness.core.items import ToolCall, ToolResult
-from harness.core.usage import Usage
-from harness.providers.fake import FakeTurn, call, say
-from harness.store.jsonl import JsonlSessionLog
+from cookcode.core.items import ToolCall, ToolResult
+from cookcode.core.usage import Usage
+from cookcode.providers.fake import FakeTurn, call, say
+from cookcode.store.jsonl import JsonlSessionLog
 
 
 @pytest.fixture

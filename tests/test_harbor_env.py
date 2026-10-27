@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from harness.core.cancel import CancelToken
-from harness.env.harbor import HarborEnvironment
-from harness.env.local import LocalEnvironment
+from cookcode.core.cancel import CancelToken
+from cookcode.env.harbor import HarborEnvironment
+from cookcode.env.local import LocalEnvironment
 
 
 @dataclass(frozen=True)

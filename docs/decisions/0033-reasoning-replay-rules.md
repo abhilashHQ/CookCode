@@ -29,7 +29,7 @@ The boundary rule was corrected after a live run. A session started on NIM was r
 ## Consequences
 - Switching model mid-session works on every adapter, and the log says what the new model did not see.
 - The skip value trades away Gemini's verification of those calls. That is acceptable, because the calls were never Gemini's to verify.
-- `items_sha256` makes `harness replay` possible: the builder can be checked against the log without the system prompt text, which the log stores only as a hash.
+- `items_sha256` makes `cookcode replay` possible: the builder can be checked against the log without the system prompt text, which the log stores only as a hash.
 
 ## What would change it
 A provider that accepts another model's reasoning as useful input, or Google removing the skip value.

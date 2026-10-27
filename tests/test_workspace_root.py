@@ -4,15 +4,15 @@ from pathlib import Path
 import pytest
 
 from agent_helpers import RigFactory, assert_every_call_resolved, bodies, results
-from harness.agent.approval import Decision, ScriptedApprover
-from harness.agent.gate import Policy, Rule
-from harness.agent.undo import undo
-from harness.core.events import ApprovalResolved, CheckpointCreated, ToolCallFinished
-from harness.env.local import LocalEnvironment
-from harness.providers.fake import FakeTurn, call, say
-from harness.store.checkpoints import FileCheckpointStore
-from harness.tools.bash import bash_tool
-from harness.tools.files import edit_tool, read_tool, write_tool
+from cookcode.agent.approval import Decision, ScriptedApprover
+from cookcode.agent.gate import Policy, Rule
+from cookcode.agent.undo import undo
+from cookcode.core.events import ApprovalResolved, CheckpointCreated, ToolCallFinished
+from cookcode.env.local import LocalEnvironment
+from cookcode.providers.fake import FakeTurn, call, say
+from cookcode.store.checkpoints import FileCheckpointStore
+from cookcode.tools.bash import bash_tool
+from cookcode.tools.files import edit_tool, read_tool, write_tool
 
 
 @pytest.fixture

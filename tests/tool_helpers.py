@@ -3,13 +3,13 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from harness.agent.tools import Tool, ToolContext, ToolOutput
-from harness.core.cancel import CancelToken
-from harness.core.features import Features
-from harness.core.strategy import Strategy
-from harness.env.base import Environment
-from harness.env.local import LocalEnvironment
-from harness.kit import Toolkit, toolkit
+from cookcode.agent.tools import Tool, ToolContext, ToolOutput
+from cookcode.core.cancel import CancelToken
+from cookcode.core.features import Features
+from cookcode.core.strategy import Strategy
+from cookcode.env.base import Environment
+from cookcode.env.local import LocalEnvironment
+from cookcode.kit import Toolkit, toolkit
 
 
 def make_ctx(

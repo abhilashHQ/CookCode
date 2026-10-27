@@ -13,8 +13,8 @@ M7 to M9 publish ablations: compaction strategies, memory, verify-first, sub-age
 - Stats from Harbor's own fields or provider dashboards: incomplete (Harbor drops reasoning, timing and tool errors), and unavailable for local runs.
 
 ## Decision
-- `harness stats <session | dir>` reads session logs only: every `*.jsonl` inside a `sessions/` directory under the target. That covers the data directory, a suite run and a Harbor job. It reports requests and retries, input tokens with cache-read share, output and reasoning tokens, tool calls and error rate, wall time split into model time (request start to finish) and tool time, cost from an optional price file (zero on free models), and repeat streaks: 3 or more consecutive identical call-and-result pairs, the stuck-loop signal 0014 deferred to M6.
-- `harness eval report <run | job>` reads suite results or Harbor trial results and prints:
+- `cookcode stats <session | dir>` reads session logs only: every `*.jsonl` inside a `sessions/` directory under the target. That covers the data directory, a suite run and a Harbor job. It reports requests and retries, input tokens with cache-read share, output and reasoning tokens, tool calls and error rate, wall time split into model time (request start to finish) and tool time, cost from an optional price file (zero on free models), and repeat streaks: 3 or more consecutive identical call-and-result pairs, the stuck-loop signal 0014 deferred to M6.
+- `cookcode eval report <run | job>` reads suite results or Harbor trial results and prints:
   - score: the mean over tasks of each task's mean reward;
   - per-round scores: the score of attempt round r alone, which is what one single-attempt run would have reported, so min and max are the spread a reader of a one-shot table would face;
   - a 95% bootstrap CI, resampling tasks and then attempts within each task (10,000 draws, fixed seed);

@@ -1,9 +1,9 @@
 import pytest
 
-from harness.core.cancel import CancelToken
-from harness.core.items import text_message
-from harness.core.usage import Usage
-from harness.providers.base import (
+from cookcode.core.cancel import CancelToken
+from cookcode.core.items import text_message
+from cookcode.core.usage import Usage
+from cookcode.providers.base import (
     ItemDelta,
     ItemDone,
     ItemStarted,
@@ -12,7 +12,7 @@ from harness.providers.base import (
     StreamEvent,
     UsageReport,
 )
-from harness.providers.fake import FakeProvider, FakeScriptExhausted, FakeTurn, call, say
+from cookcode.providers.fake import FakeProvider, FakeScriptExhausted, FakeTurn, call, say
 
 REQUEST = ModelRequest(model="fake-1", system="be brief", items=(text_message("user", "hi"),))
 

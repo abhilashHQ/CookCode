@@ -3,8 +3,8 @@ import asyncio
 import httpx
 import pytest
 
-from harness.core.cancel import CancelToken
-from harness.core.items import (
+from cookcode.core.cancel import CancelToken
+from cookcode.core.items import (
     Message,
     OtherItem,
     Reasoning,
@@ -12,8 +12,8 @@ from harness.core.items import (
     ToolResult,
     text_message,
 )
-from harness.core.usage import Usage
-from harness.providers.base import (
+from cookcode.core.usage import Usage
+from cookcode.providers.base import (
     ItemDelta,
     ItemDone,
     ItemStarted,
@@ -23,8 +23,8 @@ from harness.providers.base import (
     ToolSchema,
     UsageReport,
 )
-from harness.providers.http import MAX_RATE_LIMIT_ATTEMPTS, SSEDecoder, StreamFailure, server_wait
-from harness.providers.openai_compat import ChatStreamAssembler, build_body, to_messages
+from cookcode.providers.http import MAX_RATE_LIMIT_ATTEMPTS, SSEDecoder, StreamFailure, server_wait
+from cookcode.providers.openai_compat import ChatStreamAssembler, build_body, to_messages
 from openai_helpers import (
     MODEL,
     Script,

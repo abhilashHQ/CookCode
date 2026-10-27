@@ -15,10 +15,10 @@ from agent_helpers import (
     results,
     tool_calls,
 )
-from harness.agent.loop import Agent, AgentConfig
-from harness.agent.tools import Tool, ToolContext, ToolOutput, ToolRegistry
-from harness.core.cancel import CancelToken
-from harness.core.events import (
+from cookcode.agent.loop import Agent, AgentConfig
+from cookcode.agent.tools import Tool, ToolContext, ToolOutput, ToolRegistry
+from cookcode.core.cancel import CancelToken
+from cookcode.core.events import (
     Event,
     EventBody,
     Interrupted,
@@ -26,16 +26,16 @@ from harness.core.events import (
     SideEffect,
     SteerMessage,
 )
-from harness.env.local import LocalEnvironment
-from harness.providers.base import (
+from cookcode.env.local import LocalEnvironment
+from cookcode.providers.base import (
     ItemDone,
     ModelCaps,
     ModelRequest,
     StreamEnd,
     StreamEvent,
 )
-from harness.providers.fake import DEFAULT_CAPS, FakeProvider, FakeTurn, call, say
-from harness.store.base import SessionLog
+from cookcode.providers.fake import DEFAULT_CAPS, FakeProvider, FakeTurn, call, say
+from cookcode.store.base import SessionLog
 
 
 @pytest.fixture

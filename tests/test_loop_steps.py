@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-import harness
+import cookcode
 from agent_helpers import (
     Rig,
     RigFactory,
@@ -24,11 +24,11 @@ from agent_helpers import (
     tool_calls,
     wait_until,
 )
-from harness.agent.loop import Agent, AgentConfig
-from harness.agent.repair import NOT_EXECUTED
-from harness.agent.tools import ToolRegistry
-from harness.core.cancel import CancelToken
-from harness.core.events import (
+from cookcode.agent.loop import Agent, AgentConfig
+from cookcode.agent.repair import NOT_EXECUTED
+from cookcode.agent.tools import ToolRegistry
+from cookcode.core.cancel import CancelToken
+from cookcode.core.events import (
     BudgetExceeded,
     ErrorEvent,
     Limits,
@@ -40,11 +40,11 @@ from harness.core.events import (
     ToolCallStarted,
     UserMessage,
 )
-from harness.core.items import ToolCall, ToolResult, text_message
-from harness.core.usage import Usage
-from harness.env.local import LocalEnvironment
-from harness.providers.base import ItemDone, ModelCaps, ModelRequest, StreamEvent
-from harness.providers.fake import FakeTurn, call, say
+from cookcode.core.items import ToolCall, ToolResult, text_message
+from cookcode.core.usage import Usage
+from cookcode.env.local import LocalEnvironment
+from cookcode.providers.base import ItemDone, ModelCaps, ModelRequest, StreamEvent
+from cookcode.providers.fake import FakeTurn, call, say
 
 
 @pytest.fixture
@@ -98,7 +98,7 @@ async def test_session_started_records_the_run_config(rigs: RigFactory) -> None:
     assert config.model == "fake-1"
     assert config.tools == ("echo", "boom")
     assert config.system_prompt_sha256 == hashlib.sha256(b"be brief").hexdigest()
-    assert config.harness_version == harness.__version__
+    assert config.harness_version == cookcode.__version__
     assert config.limits == Limits(max_turns=50)
 
 

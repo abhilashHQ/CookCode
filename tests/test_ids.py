@@ -1,6 +1,6 @@
 from datetime import UTC
 
-from harness.core.ids import new_id, utc_now
+from cookcode.core.ids import new_id, utc_now
 
 
 def test_new_id_is_unique_hex() -> None:

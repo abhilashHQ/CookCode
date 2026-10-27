@@ -6,9 +6,9 @@ from typing import Any
 import pytest
 from harbor.models.trajectories import Trajectory
 
-from harness.cli.app import main, parse_args
-from harness.cli.headless import run_headless
-from harness.core.events import (
+from cookcode.cli.app import main, parse_args
+from cookcode.cli.headless import run_headless
+from cookcode.core.events import (
     Event,
     Interrupted,
     ItemEvent,
@@ -18,12 +18,12 @@ from harness.core.events import (
     SessionStarted,
     UserMessage,
 )
-from harness.core.items import Reasoning, ToolCall, ToolResult
-from harness.core.usage import Usage
-from harness.export.atif import ATIF_VERSION, to_atif
-from harness.providers.fake import FakeProvider, FakeTurn, call, say
-from harness.redact import Redactor
-from harness.store.jsonl import JsonlSessionStore
+from cookcode.core.items import Reasoning, ToolCall, ToolResult
+from cookcode.core.usage import Usage
+from cookcode.export.atif import ATIF_VERSION, to_atif
+from cookcode.providers.fake import FakeProvider, FakeTurn, call, say
+from cookcode.redact import Redactor
+from cookcode.store.jsonl import JsonlSessionStore
 
 
 @pytest.fixture
@@ -32,7 +32,7 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     work.mkdir()
     (work / "a.txt").write_text("alpha\n")
     monkeypatch.chdir(work)
-    monkeypatch.setenv("HARNESS_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("COOKCODE_HOME", str(tmp_path / "home"))
     monkeypatch.delenv("GIT_DIR", raising=False)
     return work
 

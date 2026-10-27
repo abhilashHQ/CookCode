@@ -7,11 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from harness.agent.approval import Risk
-from harness.cli.app import main, parse_args
-from harness.cli.headless import LineReader, StdinApprover, run_headless
-from harness.core.cancel import CancelToken
-from harness.core.events import (
+from cookcode.agent.approval import Risk
+from cookcode.cli.app import main, parse_args
+from cookcode.cli.headless import LineReader, StdinApprover, run_headless
+from cookcode.core.cancel import CancelToken
+from cookcode.core.events import (
     ApprovalRequested,
     ApprovalResolved,
     Event,
@@ -20,10 +20,10 @@ from harness.core.events import (
     event_schema,
     from_json_line,
 )
-from harness.core.items import ToolCall, ToolResult
-from harness.core.usage import Usage
-from harness.providers.fake import FakeProvider, FakeTurn, call, say
-from harness.store.jsonl import JsonlSessionStore
+from cookcode.core.items import ToolCall, ToolResult
+from cookcode.core.usage import Usage
+from cookcode.providers.fake import FakeProvider, FakeTurn, call, say
+from cookcode.store.jsonl import JsonlSessionStore
 
 SCHEMA_FILE = Path(__file__).parent.parent / "docs" / "schema" / "events-v1.json"
 
@@ -33,7 +33,7 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     work = tmp_path / "repo"
     work.mkdir()
     monkeypatch.chdir(work)
-    monkeypatch.setenv("HARNESS_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("COOKCODE_HOME", str(tmp_path / "home"))
     monkeypatch.delenv("GIT_DIR", raising=False)
     return work
 
@@ -205,10 +205,10 @@ async def test_approver_reads_one_line_per_decision() -> None:
 
 def test_checked_in_schema_matches_the_models() -> None:
     expected = json.loads(SCHEMA_FILE.read_text())
-    assert expected == event_schema(), "run: uv run harness schema > docs/schema/events-v1.json"
+    assert expected == event_schema(), "run: uv run cookcode schema > docs/schema/events-v1.json"
 
 
 def test_schema_and_flag_errors_from_main(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["schema"]) == 0
-    assert json.loads(capsys.readouterr().out)["$id"] == "harness-events-v1"
+    assert json.loads(capsys.readouterr().out)["$id"] == "cookcode-events-v1"
     assert main(["--json", "hi"]) == 1

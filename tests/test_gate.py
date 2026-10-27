@@ -3,7 +3,7 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
-from harness.agent.gate import (
+from cookcode.agent.gate import (
     GateDecision,
     Mode,
     Policy,
@@ -16,8 +16,8 @@ from harness.agent.gate import (
     split_command,
     subject,
 )
-from harness.agent.tools import Tool, ToolContext, ToolOutput, workspace_path
-from harness.core.events import (
+from cookcode.agent.tools import Tool, ToolContext, ToolOutput, workspace_path
+from cookcode.core.events import (
     ApprovalRequested,
     ApprovalResolved,
     Event,
@@ -25,7 +25,7 @@ from harness.core.events import (
     UserMessage,
     make_event,
 )
-from harness.tools import default_tools
+from cookcode.tools import default_tools
 
 TOOLS = {tool.name: tool for tool in default_tools()}
 ROOT = "/ws/work"

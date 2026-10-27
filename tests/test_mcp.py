@@ -5,14 +5,14 @@ from pathlib import Path
 import pytest
 
 from agent_helpers import RigFactory, results
-from harness.agent.tools import loaded_tools
-from harness.config import Mcp, McpServer, Settings
-from harness.core.features import Features
-from harness.core.strategy import Strategy
-from harness.env.local import LocalEnvironment
-from harness.kit import toolkit
-from harness.mcp import McpHub, tool_search
-from harness.providers.fake import FakeTurn, call, say
+from cookcode.agent.tools import loaded_tools
+from cookcode.config import Mcp, McpServer, Settings
+from cookcode.core.features import Features
+from cookcode.core.strategy import Strategy
+from cookcode.env.local import LocalEnvironment
+from cookcode.kit import toolkit
+from cookcode.mcp import McpHub, tool_search
+from cookcode.providers.fake import FakeTurn, call, say
 
 SERVER = McpServer(command=sys.executable, args=(str(Path(__file__).parent / "mcp_server.py"),))
 ADD = "mcp__calc__add"
