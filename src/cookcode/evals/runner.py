@@ -43,6 +43,9 @@ WORK_ROOT = Path(tempfile.gettempdir()) / "harness-suite"
 CHECK_TIMEOUT_S = 120.0
 SOLUTION_TIMEOUT_S = 120.0
 GIT_IDENTITY = ("-c", "user.name=suite", "-c", "user.email=suite@localhost")
+# Git 2.47+ runs auto-maintenance detached after a commit, which writes into .git while the
+# fixture's mtimes are being reset.
+NO_MAINTENANCE = ("-c", "maintenance.auto=false", "-c", "gc.auto=0")
 FIXTURE_EPOCH = 1_767_225_600  # 2026-01-01T00:00:00Z
 FIXTURE_DATE = f"@{FIXTURE_EPOCH} +0000"
 
@@ -109,7 +112,7 @@ def prepare(task: SuiteTask, attempt: int) -> Path:
     env = {**os.environ, "GIT_AUTHOR_DATE": FIXTURE_DATE, "GIT_COMMITTER_DATE": FIXTURE_DATE}
     for args in (["init", "-q", "-b", "main"], ["add", "-A"], ["commit", "-q", "-m", "fixture"]):
         subprocess.run(
-            ["git", *GIT_IDENTITY, "-c", "commit.gpgsign=false", *args],
+            ["git", *GIT_IDENTITY, *NO_MAINTENANCE, "-c", "commit.gpgsign=false", *args],
             cwd=work,
             env=env,
             capture_output=True,
