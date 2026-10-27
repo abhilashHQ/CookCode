@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-labelledby="title">
+  <title id="title">CookCode</title>
+  <rect width="160" height="160" rx="34" fill="#16181d"/>
+  <g fill="#ffffff">
+    <circle cx="54" cy="66" r="22"/>
+    <circle cx="80" cy="52" r="27"/>
+    <circle cx="106" cy="66" r="22"/>
+    <rect x="40" y="62" width="80" height="36" rx="4"/>
+  </g>
+  <g stroke="#d5d9df" stroke-width="3" stroke-linecap="round">
+    <line x1="64" y1="76" x2="64" y2="96"/>
+    <line x1="80" y1="72" x2="80" y2="96"/>
+    <line x1="96" y1="76" x2="96" y2="96"/>
+  </g>
+  <rect x="38" y="96" width="84" height="32" rx="7" fill="#f97316"/>
+  <text x="80" y="119" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="21" font-weight="700" fill="#16181d">&lt;/&gt;</text>
+</svg>
