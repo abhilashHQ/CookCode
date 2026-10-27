@@ -280,6 +280,52 @@
       "title": "ErrorEvent",
       "type": "object"
     },
+    "HookBlocked": {
+      "description": "A hook stopped a tool call (its message is the call's error result) or the end of a turn\n(its message goes to the model as a note, and the loop takes another step).",
+      "properties": {
+        "call_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Call Id"
+        },
+        "hook": {
+          "title": "Hook",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "point": {
+          "enum": [
+            "tool",
+            "stop"
+          ],
+          "title": "Point",
+          "type": "string"
+        },
+        "type": {
+          "const": "hook_blocked",
+          "default": "hook_blocked",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "hook",
+        "point",
+        "message"
+      ],
+      "title": "HookBlocked",
+      "type": "object"
+    },
     "Interrupted": {
       "properties": {
         "killed": {
@@ -739,6 +785,14 @@
         "harness_version": {
           "title": "Harness Version",
           "type": "string"
+        },
+        "hooks": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Hooks",
+          "type": "array"
         },
         "limits": {
           "$ref": "#/$defs/Limits",
@@ -1270,6 +1324,9 @@
         },
         {
           "$ref": "#/$defs/CompactionApplied"
+        },
+        {
+          "$ref": "#/$defs/HookBlocked"
         },
         {
           "$ref": "#/$defs/Interrupted"

@@ -64,6 +64,7 @@ AGENT_ALLOWED_HARNESS = (
 TOOLS_ALLOWED_HARNESS = (
     "harness.core",
     "harness.agent.tools",
+    "harness.agent.hooks",
     "harness.env.base",
     "harness.tools",
 )

@@ -29,7 +29,7 @@ from harness.providers.base import Provider
 from harness.redact import Redactor
 from harness.store.checkpoints import FileCheckpointStore
 from harness.store.jsonl import JsonlSessionStore
-from harness.tools import default_tools
+from harness.tools import toolkit
 
 PROMPT = BASE_PROMPT.replace("in a local repository", "inside a task container") + UNATTENDED
 
@@ -97,9 +97,8 @@ class HarnessAgent(BaseAgent):
         )
         session_id = new_id()
         log = store.open(session_id, create=True)
-        tools = ToolRegistry(
-            default_tools(recall=self.strategy.masks, jobs=self.features.jobs)
-        )
+        kit = toolkit(self.strategy, self.features)
+        tools = kit.tools
         try:
             instructions = await load_instructions(env, ".")
             agent = Agent(
@@ -118,6 +117,7 @@ class HarnessAgent(BaseAgent):
                     strategy=self.strategy,
                 ),
                 checkpoints=FileCheckpointStore(self.logs_dir / "checkpoints"),
+                hooks=kit.hooks,
             )
             await agent.run(instruction)
         finally:

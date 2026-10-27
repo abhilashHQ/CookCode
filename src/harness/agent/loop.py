@@ -29,6 +29,7 @@ from harness.agent.gate import (
     session_rules,
     subject,
 )
+from harness.agent.hooks import Hook, HookContext
 from harness.agent.repair import NOT_EXECUTED, RepairAction, plan_repairs, repair_bodies
 from harness.agent.tools import Tool, ToolContext, ToolOutput, ToolRegistry, workspace_path
 from harness.core.cancel import CancelToken
@@ -40,6 +41,7 @@ from harness.core.events import (
     CompactionApplied,
     ErrorEvent,
     Event,
+    HookBlocked,
     Interrupted,
     ItemEvent,
     Limits,
@@ -116,6 +118,7 @@ class AgentConfig(BaseModel):
     mode: Mode = "ask"
     policy: Policy = Policy()
     strategy: Strategy = Strategy()
+    max_stop_blocks: int = Field(default=3, ge=0)
 
 
 class RunOutcome(BaseModel):
@@ -133,6 +136,7 @@ class _RunState:
     caller: CancelToken | None
     started_at: float
     turns: int = 0
+    stop_blocks: int = 0
     usage: Usage = field(default_factory=Usage)
 
     def cancelled(self) -> bool:
@@ -233,6 +237,7 @@ class Agent:
         repair_planner: Callable[[Sequence[Event]], list[RepairAction]] = plan_repairs,
         approver: Approver | None = None,
         checkpoints: CheckpointStore | None = None,
+        hooks: Sequence[Hook] = (),
     ) -> None:
         if config.limits.max_cost_usd is not None:
             raise ValueError("cost limits need pricing, which arrives in M3")
@@ -249,6 +254,7 @@ class Agent:
         self._repair_planner = repair_planner
         self._approver: Approver = approver or PolicyOnlyApprover()
         self._checkpoints = checkpoints
+        self._hooks = tuple(hooks)
         self._steering: deque[str] = deque()
         self._active = False
 
@@ -327,7 +333,46 @@ class Agent:
                 *(f"deny {rule.display}" for rule in self._config.policy.deny),
             ),
             strategy=self._config.strategy,
+            hooks=tuple(hook.name for hook in self._hooks),
         )
+
+    def _hook_context(self, run: _RunState) -> HookContext:
+        return HookContext(
+            env=self._env,
+            cancel=run.token,
+            cwd=self._current_cwd(),
+            timeout_s=self._config.tool_timeout_s,
+            max_output_bytes=self._config.max_tool_output_bytes,
+            history=self._log.read(),
+        )
+
+    async def _blocked_call(self, run: _RunState, tool_call: ToolCall) -> bool:
+        for hook in self._hooks:
+            if hook.before_tool is None:
+                continue
+            message = await hook.before_tool(tool_call, self._hook_context(run))
+            if message is not None:
+                self._log.append(
+                    HookBlocked(hook=hook.name, point="tool", message=message, call_id=tool_call.id)
+                )
+                self._append_result(tool_call.id, "error", f"blocked by {hook.name}: {message}")
+                return True
+        return False
+
+    async def _blocked_stop(self, run: _RunState) -> bool:
+        """A hook may send the model back to work instead of ending the turn, at most
+        max_stop_blocks times per run, so a check that never passes cannot loop forever."""
+        if run.stop_blocks >= self._config.max_stop_blocks:
+            return False
+        for hook in self._hooks:
+            if hook.before_stop is None:
+                continue
+            message = await hook.before_stop(self._hook_context(run))
+            if message is not None:
+                run.stop_blocks += 1
+                self._log.append(HookBlocked(hook=hook.name, point="stop", message=message))
+                return True
+        return False
 
     def _current_cwd(self) -> str:
         return _cwd(self._log.read(), self._config.cwd)
@@ -438,7 +483,7 @@ class Agent:
             if run.cancelled():
                 return self._end_cancelled(run, "tool", killed)
             return None
-        if self._steering:
+        if self._steering or await self._blocked_stop(run):
             return None
         return self._finish(run, "done")
 
@@ -537,7 +582,7 @@ class Agent:
             resolved = self._resolve(tool_call)
             if isinstance(resolved, str):
                 self._append_result(tool_call.id, "error", resolved)
-            else:
+            elif not await self._blocked_call(run, tool_call):
                 runnable.append(resolved)
         approved, ungated = await self._gate_all(run, runnable)
         if ungated:

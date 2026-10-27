@@ -47,6 +47,7 @@ class RunConfig(_Frozen):
     mode: str | None = None
     policy: tuple[str, ...] = ()
     strategy: Strategy = Strategy()
+    hooks: tuple[str, ...] = ()
 
 
 def compute_config_id(config: RunConfig) -> str:
@@ -183,6 +184,18 @@ class CompactionApplied(_Body):
     summary: str | None = None
 
 
+class HookBlocked(_Body):
+    """A hook stopped a tool call (its message is the call's error result) or the end of a turn
+    (its message goes to the model as a note, and the loop takes another step)."""
+
+    LAYER: ClassVar[Layer] = "model"
+    type: Literal["hook_blocked"] = "hook_blocked"
+    hook: str
+    point: Literal["tool", "stop"]
+    message: str
+    call_id: str | None = None
+
+
 class Interrupted(_Body):
     type: Literal["interrupted"] = "interrupted"
     phase: Literal["streaming", "tool", "idle"]
@@ -226,7 +239,7 @@ EVENT_TYPES = frozenset({
     "item", "model_request_finished", "tool_call_started", "tool_call_finished",
     "approval_requested", "approval_resolved", "checkpoint_created", "checkpoint_restored",
     "compaction_applied", "interrupted", "repaired", "budget_exceeded", "error",
-    "session_finished", "provider_retry",
+    "session_finished", "provider_retry", "hook_blocked",
 })
 
 EventBody = Annotated[
@@ -245,6 +258,7 @@ EventBody = Annotated[
     | Annotated[CheckpointCreated, Tag("checkpoint_created")]
     | Annotated[CheckpointRestored, Tag("checkpoint_restored")]
     | Annotated[CompactionApplied, Tag("compaction_applied")]
+    | Annotated[HookBlocked, Tag("hook_blocked")]
     | Annotated[Interrupted, Tag("interrupted")]
     | Annotated[Repaired, Tag("repaired")]
     | Annotated[BudgetExceeded, Tag("budget_exceeded")]

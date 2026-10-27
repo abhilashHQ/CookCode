@@ -7,6 +7,7 @@ from harness.core.events import (
     CompactionApplied,
     ErrorEvent,
     EventBody,
+    HookBlocked,
     Interrupted,
     ItemEvent,
     ModelRequestFinished,
@@ -61,6 +62,7 @@ def all_bodies() -> list[EventBody]:
         CompactionApplied(
             strategy="mask", from_seq=3, to_seq=40, tokens_before=90000, tokens_after=30000
         ),
+        HookBlocked(hook="verify-first", point="stop", message="repro still fails"),
         Interrupted(phase="tool", killed=("bash:c1",)),
         Repaired(call_id="c1", status="unknown", reason="started, never finished"),
         BudgetExceeded(limit="turns", value=50),

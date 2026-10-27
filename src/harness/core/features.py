@@ -8,6 +8,7 @@ class Features(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     jobs: bool = False
+    verify_first: bool = False
 
     @property
     def label(self) -> str:
@@ -16,7 +17,7 @@ class Features(BaseModel):
 
     @classmethod
     def parse(cls, text: str) -> "Features":
-        """`base` or a comma-separated list of feature names: `jobs`."""
+        """`base` or a comma-separated list of feature names: `jobs,verify_first`."""
         names = [name.strip() for name in text.split(",") if name.strip() not in ("", "base")]
         unknown = sorted(set(names) - set(cls.model_fields))
         if unknown:

@@ -14,7 +14,6 @@ from harness.agent.approval import Approver
 from harness.agent.gate import Policy, Rule, parse_rule
 from harness.agent.instructions import InstructionFile, load_instructions, render_system
 from harness.agent.loop import Agent, AgentConfig, RunOutcome
-from harness.agent.tools import ToolRegistry
 from harness.agent.undo import undo
 from harness.cli.observe import DisplayProvider, ObservedLog
 from harness.cli.terminal import (
@@ -45,7 +44,7 @@ from harness.store.base import (
 )
 from harness.store.checkpoints import FileCheckpointStore
 from harness.store.jsonl import JsonlSessionStore
-from harness.tools import default_tools
+from harness.tools import toolkit
 
 PRESETS = {
     "nim": (NIM_BASE_URL, "NVIDIA_API_KEY", "minimaxai/minimax-m3.1-flash"),
@@ -180,7 +179,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--features",
         type=Features.parse,
         default=Features(),
-        help="optional features to turn on, comma separated: jobs",
+        help="optional features to turn on, comma separated: jobs, verify_first",
     )
     parser.add_argument("--once", action="store_true", help="exit after the first run")
     parser.add_argument("--resume", metavar="SESSION", help="continue an existing session")
@@ -281,6 +280,7 @@ class Runtime:
         )
         if stream_sink is not None:
             provider = DisplayProvider(provider, stream_sink)
+        kit = toolkit(self.args.strategy, self.args.features)
         config = AgentConfig(
             model=self.args.model,
             system_prompt=system,
@@ -294,12 +294,11 @@ class Runtime:
             log=self.log,
             provider=provider,
             env=self.env,
-            tools=ToolRegistry(
-                default_tools(recall=self.args.strategy.masks, jobs=self.args.features.jobs)
-            ),
+            tools=kit.tools,
             config=config,
             approver=approver,
             checkpoints=self.checkpoints,
+            hooks=kit.hooks,
         )
 
 

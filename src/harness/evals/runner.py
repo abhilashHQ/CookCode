@@ -17,7 +17,6 @@ from pydantic import BaseModel, ConfigDict
 from harness import __version__
 from harness.agent.instructions import load_instructions, render_system
 from harness.agent.loop import Agent, AgentConfig
-from harness.agent.tools import ToolRegistry
 from harness.cli.app import BASE_PROMPT, PRESETS, SECRET_ENV, UNATTENDED, make_provider
 from harness.cli.headless import final_text
 from harness.core.events import Limits
@@ -31,7 +30,7 @@ from harness.providers.cassette import Cassette, RecordingTransport, ReplayTrans
 from harness.redact import Redactor
 from harness.store.checkpoints import FileCheckpointStore
 from harness.store.jsonl import JsonlSessionStore
-from harness.tools import default_tools
+from harness.tools import toolkit
 
 Mode = Literal["live", "record", "replay", "oracle"]
 
@@ -207,15 +206,15 @@ class Run:
         env = LocalEnvironment(work)
         session_id = new_id()
         log = self.store.open(session_id, create=True)
+        kit = toolkit(self.strategy, self.features)
         try:
             instructions = await load_instructions(env, ".")
             agent = Agent(
                 log=log,
                 provider=provider,
                 env=env,
-                tools=ToolRegistry(
-                    default_tools(recall=self.strategy.masks, jobs=self.features.jobs)
-                ),
+                tools=kit.tools,
+                hooks=kit.hooks,
                 config=AgentConfig(
                     model=self.model,
                     system_prompt=render_system(

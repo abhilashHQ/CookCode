@@ -9,6 +9,7 @@ from typing import Any, Literal
 from pydantic import BaseModel
 
 from harness.agent.approval import Approver, PolicyOnlyApprover
+from harness.agent.hooks import Hook
 from harness.agent.loop import Agent, AgentConfig
 from harness.agent.repair import RepairAction, plan_repairs, unresolved_calls
 from harness.agent.tools import Tool, ToolContext, ToolOutput, ToolRegistry
@@ -286,6 +287,7 @@ class RigFactory:
         repair_planner: Callable[[Sequence[Event]], list[RepairAction]] = plan_repairs,
         approver: Approver | None = None,
         checkpoints: CheckpointStore | None = None,
+        hooks: Sequence[Hook] = (),
         **config: Any,
     ) -> Rig:
         log = log or self.open_log()
@@ -306,6 +308,7 @@ class RigFactory:
             repair_planner=repair_planner,
             approver=approver or PolicyOnlyApprover(),
             checkpoints=checkpoints,
+            hooks=hooks,
         )
         return Rig(agent=agent, log=log, provider=provider, workdir=self.workdir)
 

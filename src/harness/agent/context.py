@@ -9,6 +9,7 @@ from harness.core.events import (
     CheckpointRestored,
     CompactionApplied,
     Event,
+    HookBlocked,
     ItemEvent,
     ModelRequestStarted,
     SteerMessage,
@@ -56,6 +57,9 @@ def _entries(events: Sequence[Event]) -> list[_Entry]:
                 f"{min(body.turns, default=0)}. File edits made in turns "
                 f"{', '.join(str(turn) for turn in turns)} are gone.",
             )
+            entries.append(_Entry(event.seq, step, note))
+        elif isinstance(body, HookBlocked) and body.point == "stop":
+            note = text_message("user", f"[{body.hook}] {body.message}")
             entries.append(_Entry(event.seq, step, note))
     return entries
 
