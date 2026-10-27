@@ -112,23 +112,63 @@ def test_summary_rounds_ci_and_paired_mde() -> None:
     assert summary == summarize(trials({"a": [1, 0, 1, 0], "b": [1, 1, 1, 1]}))
 
 
-def test_harbor_trials_number_attempts_by_start_and_score_exceptions_zero(
+def harbor_trial(
+    job: Path,
+    name: str,
+    task: str,
+    started: str,
+    reward: float | None,
+    *,
+    agent: str = "harness",
+    exception: tuple[str, str] | None = None,
+    session_error: str | None = None,
+) -> None:
+    (job / name).mkdir(parents=True)
+    result: dict[str, Any] = {
+        "task_name": task,
+        "started_at": started,
+        "agent_info": {"name": agent},
+        "verifier_result": None if reward is None else {"rewards": {"reward": reward}},
+        "exception_info": None
+        if exception is None
+        else {"exception_type": exception[0], "exception_message": exception[1]},
+    }
+    (job / name / "result.json").write_text(json.dumps(result))
+    (job / "result.json").write_text("{}")
+    if session_error is not None:
+        sessions = job / name / "agent" / "sessions"
+        sessions.mkdir(parents=True)
+        body = {"type": "error", "kind": "provider", "retryable": False, "message": session_error}
+        (sessions / "s.jsonl").write_text(json.dumps({"body": body}) + "\n")
+
+
+def test_harbor_trials_number_attempts_by_start_and_score_agent_exceptions_zero(
     tmp_path: Path,
 ) -> None:
-    def trial(name: str, task: str, started: str, reward: float | None) -> None:
-        (tmp_path / name).mkdir()
-        result: dict[str, Any] = {
-            "task_name": task,
-            "started_at": started,
-            "verifier_result": None if reward is None else {"rewards": {"reward": reward}},
-        }
-        (tmp_path / name / "result.json").write_text(json.dumps(result))
+    harbor_trial(tmp_path, "x__2", "x", "2026-10-26T10:05", 0.0)
+    harbor_trial(tmp_path, "x__1", "x", "2026-10-26T10:00", 1.0)
+    harbor_trial(tmp_path, "y__1", "y", "2026-10-26T10:01", None,
+                 exception=("AgentTimeoutError", "timed out after 900.0 seconds"))
+    [run] = harbor_trials(tmp_path)
+    assert run.agent == "harness" and run.excluded == {}
+    assert run.trials == [Trial("x", 1, 1.0), Trial("x", 2, 0.0), Trial("y", 1, 0.0)]
 
-    trial("x__2", "x", "2026-10-26T10:05", 0.0)
-    trial("x__1", "x", "2026-10-26T10:00", 1.0)
-    trial("y__1", "y", "2026-10-26T10:01", None)
-    (tmp_path / "result.json").write_text("{}")
-    assert harbor_trials(tmp_path) == [Trial("x", 1, 1.0), Trial("x", 2, 0.0), Trial("y", 1, 0.0)]
+
+def test_infrastructure_failures_are_excluded_and_reruns_merge_by_agent(tmp_path: Path) -> None:
+    first, rerun = tmp_path / "job1", tmp_path / "job2"
+    harbor_trial(first, "x__a", "x", "2026-10-26T10:00", 1.0,
+                 session_error="HTTP 429: busy after 10 attempts")
+    harbor_trial(first, "x__b", "x", "2026-10-26T10:01", 0.0,
+                 session_error="ConnectError: [Errno -3] Temporary failure in name resolution")
+    harbor_trial(first, "t__a", "x", "2026-10-26T10:00", None, agent="terminus-2",
+                 exception=("InternalServerError", "OpenAIException - Connection error."))
+    harbor_trial(first, "t__b", "x", "2026-10-26T10:02", 1.0, agent="terminus-2")
+    harbor_trial(rerun, "x__c", "x", "2026-10-26T12:00", 1.0)
+    harness, terminus = harbor_trials(first, rerun)
+    assert harness.agent == "harness" and harness.trials == [Trial("x", 1, 1.0)]
+    assert sorted(harness.excluded) == ["x__a", "x__b"]
+    assert "name resolution" in harness.excluded["x__b"]
+    assert terminus.trials == [Trial("x", 1, 1.0)] and list(terminus.excluded) == ["t__a"]
 
 
 # --- sequenced replay -------------------------------------------------------------------

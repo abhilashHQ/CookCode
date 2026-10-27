@@ -122,26 +122,38 @@ def _run(args: argparse.Namespace) -> int:
 
 
 def _report(args: argparse.Namespace) -> int:
+    """Suite runs report one by one. Harbor jobs are pooled and grouped by agent, so a job of
+    re-runs merges with the job whose trials it replaces."""
+    jobs: list[Path] = []
     for target in args.runs:
         path = Path(target)
         if (path / "results.jsonl").is_file():
             trials = suite_trials(path)
+            if not trials:
+                print(f"harness: no trials in {target}", file=sys.stderr)
+                return 1
             manifest = json.loads((path / "run.json").read_text())
             label = f"{path.name} ({manifest['provider']}/{manifest['model']}, {manifest['mode']})"
+            print(render_summary(summarize(trials), label))
+            logs = session_files(path)
+            if logs:
+                print(render(total(session_stats(read_session(log)) for log in logs)))
+            print()
         elif (path / "result.json").is_file():
-            trials = harbor_trials(path)
-            label = f"{path.name} (harbor)"
+            jobs.append(path)
         else:
             print(f"harness: {target} is neither a suite run nor a Harbor job", file=sys.stderr)
             return 1
-        if not trials:
-            print(f"harness: no trials in {target}", file=sys.stderr)
-            return 1
-        print(render_summary(summarize(trials), label))
-        logs = session_files(path)
-        if logs:
-            print(render(total(session_stats(read_session(log)) for log in logs)))
+    for run in harbor_trials(*jobs):
+        if run.trials:
+            print(render_summary(summarize(run.trials), f"{run.agent} (harbor)"))
+        print(f"  excluded     {len(run.excluded)} infrastructure failures")
+        for trial, reason in run.excluded.items():
+            print(f"    {trial:<40} {reason}")
         print()
+    logs = [log for job in jobs for log in session_files(job)]
+    if logs:
+        print(render(total(session_stats(read_session(log)) for log in logs)))
     return 0
 
 

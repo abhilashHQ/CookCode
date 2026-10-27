@@ -129,20 +129,59 @@ def suite_trials(run_dir: Path) -> list[Trial]:
     return trials
 
 
-def harbor_trials(job_dir: Path) -> list[Trial]:
-    """One Trial per Harbor trial; attempts are numbered per task by start time. A trial that
-    raised before the verifier ran scores 0, as Harbor's own mean does."""
-    rows: list[tuple[str, str, float]] = []
-    for path in job_dir.glob("*/result.json"):
-        data = cast(dict[str, Any], json.loads(path.read_text()))
-        verifier = cast(dict[str, Any] | None, data.get("verifier_result")) or {}
-        rewards = cast(dict[str, Any], verifier.get("rewards") or {})
-        reward = rewards.get("reward")
-        rows.append((data["task_name"], data["started_at"] or "", float(reward or 0.0)))
-    rows.sort()
-    counts: dict[str, int] = defaultdict(int)
-    trials: list[Trial] = []
-    for task, _, reward in rows:
-        counts[task] += 1
-        trials.append(Trial(task, counts[task], reward))
-    return trials
+INFRA_EXCEPTIONS = ("RateLimitError", "APIConnectionError", "CancelledError")
+INFRA_MARKERS = ("HTTP 429", "ConnectError", "name resolution", "Connection error")
+
+
+def infra_failure(data: dict[str, Any], trial_dir: Path) -> str | None:
+    """Why a trial says nothing about the agent: the provider was unavailable (rate limit past
+    the retry budget, DNS or connection failure) or the run was cancelled. None otherwise."""
+    exception = cast(dict[str, Any] | None, data.get("exception_info")) or {}
+    kind = str(exception.get("exception_type") or "")
+    message = str(exception.get("exception_message") or "")
+    if kind in INFRA_EXCEPTIONS or any(marker in message for marker in INFRA_MARKERS):
+        return f"{kind}: {message[:120]}".strip(": ")
+    for log in (trial_dir / "agent" / "sessions").glob("*.jsonl"):
+        for line in log.read_text().splitlines():
+            body = cast(dict[str, Any], json.loads(line)).get("body", {})
+            if body.get("type") == "error" and body.get("kind") == "provider":
+                text = str(body.get("message", ""))
+                if any(marker in text for marker in INFRA_MARKERS):
+                    return text[:120]
+    return None
+
+
+@dataclass(frozen=True)
+class HarborRun:
+    agent: str
+    trials: list[Trial]
+    excluded: dict[str, str]
+
+
+def harbor_trials(*job_dirs: Path) -> list[HarborRun]:
+    """Trials from one or more Harbor jobs, grouped by agent, so re-runs of excluded trials
+    merge with the original job. Attempts are numbered per task by start time. A trial that
+    raised for an agent-side reason (a timeout, a crash) scores 0, as Harbor's own mean does;
+    an infrastructure failure is excluded and named, so it can be re-run."""
+    rows: dict[str, list[tuple[str, str, float]]] = defaultdict(list)
+    excluded: dict[str, dict[str, str]] = defaultdict(dict)
+    for job_dir in job_dirs:
+        for path in job_dir.glob("*/result.json"):
+            data = cast(dict[str, Any], json.loads(path.read_text()))
+            agent = str((cast(dict[str, Any] | None, data.get("agent_info")) or {}).get("name"))
+            reason = infra_failure(data, path.parent)
+            if reason is not None:
+                excluded[agent][path.parent.name] = reason
+                continue
+            verifier = cast(dict[str, Any] | None, data.get("verifier_result")) or {}
+            reward = cast(dict[str, Any], verifier.get("rewards") or {}).get("reward")
+            rows[agent].append((data["task_name"], data["started_at"] or "", float(reward or 0.0)))
+    runs: list[HarborRun] = []
+    for agent in sorted(set(rows) | set(excluded)):
+        counts: dict[str, int] = defaultdict(int)
+        trials: list[Trial] = []
+        for task, _, reward in sorted(rows[agent]):
+            counts[task] += 1
+            trials.append(Trial(task, counts[task], reward))
+        runs.append(HarborRun(agent, trials, dict(sorted(excluded[agent].items()))))
+    return runs
