@@ -1,6 +1,5 @@
-"""User hooks: shell commands from settings that run before tool calls or before the turn ends.
-
-Settings come from the user's data directory and the repository's `.harness/settings.toml`:
+"""User hooks: shell commands from settings (see harness.config) that run before tool calls or
+before the turn ends:
 
     [[hooks]]
     point = "pre_tool"          # or "stop"
@@ -16,65 +15,13 @@ unless the hooks feature is on, since a repository's hooks run commands without 
 import base64
 import json
 import re
-import tomllib
-from collections.abc import Sequence
-from pathlib import Path
-from typing import Literal
-
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from harness.agent.hooks import Hook, HookContext
+from harness.config import HookSpec, Settings
 from harness.core.events import ItemEvent
 from harness.core.items import Message, ToolCall
-from harness.env.base import Environment
 
-SETTINGS = ".harness/settings.toml"
 BLOCK_EXIT = 2
-
-
-class HookSpec(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    point: Literal["pre_tool", "stop"]
-    command: str
-    match: str | None = None
-    timeout_s: float = Field(default=30, gt=0, le=600)
-
-    @field_validator("match")
-    @classmethod
-    def _compiles(cls, value: str | None) -> str | None:
-        if value is not None:
-            try:
-                re.compile(value)
-            except re.error as exc:
-                raise ValueError(f"match is not a valid regex: {exc}") from exc
-        return value
-
-
-class Settings(BaseModel):
-    model_config = ConfigDict(extra="allow", frozen=True)
-
-    hooks: tuple[HookSpec, ...] = ()
-
-
-def parse_settings(text: str, source: str) -> Settings:
-    try:
-        return Settings.model_validate(tomllib.loads(text))
-    except (tomllib.TOMLDecodeError, ValidationError) as exc:
-        raise ValueError(f"bad settings in {source}: {exc}") from exc
-
-
-async def load_settings(env: Environment, user_file: Path) -> list[tuple[str, Settings]]:
-    """User settings first, then the repository's."""
-    found: list[tuple[str, Settings]] = []
-    if user_file.is_file():
-        found.append((str(user_file), parse_settings(user_file.read_text(), str(user_file))))
-    try:
-        text = (await env.read_file(SETTINGS)).decode()
-    except (OSError, ValueError):
-        return found
-    found.append((SETTINGS, parse_settings(text, SETTINGS)))
-    return found
 
 
 def _last_message(ctx: HookContext) -> str:
@@ -96,8 +43,8 @@ async def _run(spec: HookSpec, payload: dict[str, object], ctx: HookContext) -> 
     return result.output.strip() or f"blocked by hook: {spec.command}"
 
 
-def user_hook(spec: HookSpec, source: str) -> Hook:
-    name = f"hook:{source}:{spec.command}"[:120]
+def user_hook(spec: HookSpec) -> Hook:
+    name = f"hook:{spec.command}"[:120]
     pattern = re.compile(spec.match) if spec.match else None
 
     async def before_tool(call: ToolCall, ctx: HookContext) -> str | None:
@@ -115,5 +62,5 @@ def user_hook(spec: HookSpec, source: str) -> Hook:
     return Hook(name=name, before_stop=before_stop)
 
 
-def user_hooks(settings: Sequence[tuple[str, Settings]]) -> list[Hook]:
-    return [user_hook(spec, source) for source, found in settings for spec in found.hooks]
+def user_hooks(settings: Settings) -> list[Hook]:
+    return [user_hook(spec) for spec in settings.hooks]

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from harness.agent.hooks import Hook
 from harness.agent.tools import ToolRegistry
+from harness.config import Settings
 from harness.core.features import Features
 from harness.core.strategy import Strategy
 from harness.env.base import Environment
@@ -14,7 +15,7 @@ from harness.skills import load_skills, skill_tool, skills_profile
 from harness.subagents import Spawner, task_tool
 from harness.tools import default_tools
 from harness.tools.verify import repro_tool, verify_first_hook
-from harness.userhooks import load_settings, user_hooks
+from harness.userhooks import user_hooks
 
 
 @dataclass(frozen=True)
@@ -35,10 +36,12 @@ async def toolkit(
     *,
     home: Path,
     memory_root: Path,
+    settings: Settings | None = None,
     spawner: Spawner | None = None,
 ) -> Toolkit:
-    """`home` holds user-level settings and skills; evals point it at an empty directory so
-    nothing from the machine leaks into a run. `spawner` is required with sub-agents."""
+    """`home` holds user-level skills; evals point it at an empty directory so nothing from the
+    machine leaks into a run. `settings` are the merged settings files. `spawner` is required
+    with sub-agents."""
     tools = default_tools(recall=strategy.masks, jobs=features.jobs)
     hooks: list[Hook] = []
     if features.verify_first:
@@ -55,7 +58,7 @@ async def toolkit(
             sections.append(skills_profile(skills))
     shared: list[Hook] = []
     if features.hooks:
-        shared = user_hooks(await load_settings(env, home / "settings.toml"))
+        shared = user_hooks(settings or Settings())
         hooks += shared
     profile = "\n\n".join(sections)
     if features.subagents:

@@ -7,6 +7,7 @@ from agent_helpers import RigFactory, bodies, echo_tool, results
 from harness.agent.gate import Policy
 from harness.agent.loop import Agent, AgentConfig
 from harness.agent.tools import ToolRegistry
+from harness.config import Settings, load_settings, parse_settings
 from harness.core.events import HookBlocked, Limits
 from harness.core.features import Features
 from harness.core.strategy import Strategy
@@ -15,7 +16,7 @@ from harness.kit import toolkit
 from harness.providers.fake import FakeProvider, FakeTurn, call, say
 from harness.skills import load_skills, parse_skill, skill_tool, skills_profile
 from harness.subagents import Spawner, missing_sections
-from harness.userhooks import load_settings, parse_settings, user_hooks
+from harness.userhooks import user_hooks
 from tool_helpers import make_ctx, run_tool
 
 REPORT = (
@@ -43,8 +44,7 @@ def settings(*hooks: str) -> str:
 
 
 async def test_a_pre_tool_hook_blocks_on_exit_2_with_its_output(rigs: RigFactory) -> None:
-    found = [("repo", parse_settings(settings(f'point = "pre_tool"\ncommand = """{BLOCK_ECHO}"""'),
-                                     "repo"))]
+    found = parse_settings(settings(f'point = "pre_tool"\ncommand = """{BLOCK_ECHO}"""'), "r")
     rig = rigs.make([FakeTurn(items=(call("echo", text="hi"),)), FakeTurn(items=(say("ok"),))],
                     [echo_tool()], hooks=user_hooks(found))
     assert (await rig.agent.run("go")).status == "done"
@@ -53,10 +53,10 @@ async def test_a_pre_tool_hook_blocks_on_exit_2_with_its_output(rigs: RigFactory
 
 
 async def test_broken_and_unmatched_hooks_let_calls_through(rigs: RigFactory) -> None:
-    found = [("repo", parse_settings(settings(
+    found = parse_settings(settings(
         'point = "pre_tool"\ncommand = "exit 1"',
         'point = "pre_tool"\nmatch = "bash"\ncommand = "exit 2"',
-    ), "repo"))]
+    ), "repo")
     rig = rigs.make([FakeTurn(items=(call("echo", text="hi"),)), FakeTurn(items=(say("ok"),))],
                     [echo_tool()], hooks=user_hooks(found))
     await rig.agent.run("go")
@@ -68,7 +68,7 @@ async def test_a_stop_hook_sees_the_last_message(rigs: RigFactory) -> None:
         "python3 -c \"import json,sys; m=json.load(sys.stdin)['last_message']; "
         "print('say DONE'); sys.exit(0 if 'DONE' in m else 2)\""
     )
-    found = [("repo", parse_settings(settings(f'point = "stop"\ncommand = """{command}"""'), "r"))]
+    found = parse_settings(settings(f'point = "stop"\ncommand = """{command}"""'), "r")
     rig = rigs.make([FakeTurn(items=(say("finished"),)), FakeTurn(items=(say("DONE"),))],
                     hooks=user_hooks(found))
     outcome = await rig.agent.run("go")
@@ -77,15 +77,26 @@ async def test_a_stop_hook_sees_the_last_message(rigs: RigFactory) -> None:
     assert blocked.message == "say DONE"
 
 
-async def test_settings_load_user_then_repo_and_reject_junk(tmp_path: Path) -> None:
+def test_repo_settings_go_on_top_of_the_user_settings(tmp_path: Path) -> None:
     (tmp_path / "repo" / ".harness").mkdir(parents=True)
     (tmp_path / "repo" / ".harness" / "settings.toml").write_text(
-        settings('point = "stop"\ncommand = "true"'))
-    (tmp_path / "user.toml").write_text(settings('point = "pre_tool"\ncommand = "true"'))
-    found = await load_settings(LocalEnvironment(tmp_path / "repo"), tmp_path / "user.toml")
-    assert [(source.endswith(name), s.hooks[0].point) for (source, s), name in
-            zip(found, ["user.toml", "settings.toml"], strict=True)] == [
-        (True, "pre_tool"), (True, "stop")]
+        'model = "repo-model"\nallow = ["bash:pytest *"]\n'
+        '[mcp.servers.docs]\ncommand = "repo-docs"\n'
+        + settings('point = "stop"\ncommand = "true"'))
+    (tmp_path / "user.toml").write_text(
+        'model = "user-model"\nmode = "yolo"\nallow = ["read:*"]\n'
+        '[mcp.servers.docs]\ncommand = "user-docs"\n[mcp.servers.web]\ncommand = "web"\n'
+        + settings('point = "pre_tool"\ncommand = "true"'))
+    merged = load_settings(tmp_path / "user.toml", tmp_path / "repo")
+    assert (merged.model, merged.mode) == ("repo-model", "yolo")
+    assert merged.allow == ("read:*", "bash:pytest *")
+    assert [h.point for h in merged.hooks] == ["pre_tool", "stop"]
+    assert {k: v.command for k, v in merged.mcp.servers.items()} == {
+        "docs": "repo-docs", "web": "web"}
+    assert load_settings(tmp_path / "none.toml", None) == Settings()
+
+
+def test_bad_settings_are_rejected() -> None:
     with pytest.raises(ValueError, match="bad settings"):
         parse_settings(settings('point = "later"\ncommand = "x"'), "x")
     with pytest.raises(ValueError, match="not a valid regex"):
@@ -186,3 +197,33 @@ async def test_subagents_need_a_spawner(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="needs a spawner"):
         await toolkit(Strategy(), Features(subagents=True), LocalEnvironment(tmp_path),
                       home=tmp_path, memory_root=tmp_path)
+
+
+def test_cli_flags_beat_env_beats_repo_beats_user(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from harness.cli.app import parse_args
+
+    home, repo = tmp_path / "home", tmp_path / "repo"
+    (repo / ".harness").mkdir(parents=True)
+    home.mkdir()
+    (home / "settings.toml").write_text(
+        'model = "user-model"\nmode = "auto-edit"\nmax_turns = 7\nfeatures = "jobs"\n')
+    (repo / ".harness" / "settings.toml").write_text('model = "repo-model"\nstrategy = "mask:k4"\n')
+    monkeypatch.setenv("HARNESS_HOME", str(home))
+    for name in ("HARNESS_PROVIDER", "HARNESS_MODEL", "HARNESS_BASE_URL"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.chdir(repo)
+    args = parse_args([])
+    assert (args.provider, args.model, args.mode, args.max_turns) == (
+        "nim", "repo-model", "auto-edit", 7)
+    assert args.strategy.label == "mask:k4" and args.features.label == "jobs"
+    monkeypatch.setenv("HARNESS_MODEL", "env-model")
+    assert parse_args([]).model == "env-model"
+    flagged = parse_args(["--model", "flag-model", "--mode", "yolo", "--features", "base"])
+    assert (flagged.model, flagged.mode, flagged.features.label) == ("flag-model", "yolo", "base")
+    (home / "settings.toml").write_text('provider = "gemini"\nmodel = "gemini-model"\n')
+    (repo / ".harness" / "settings.toml").write_text("")
+    monkeypatch.delenv("HARNESS_MODEL")
+    other = parse_args(["--provider", "nim"])
+    assert (other.provider, other.model) == ("nim", "minimaxai/minimax-m3.1-flash")

@@ -23,6 +23,7 @@ from harness.cli.terminal import (
     Terminal,
     TerminalApprover,
 )
+from harness.config import Settings, load_settings
 from harness.core.cancel import CancelToken
 from harness.core.events import Event, Limits, RunConfig, RunStarted, SessionStarted
 from harness.core.features import Features
@@ -140,6 +141,10 @@ def load_policy(path: str | None) -> Policy:
     return Policy(allow=_rules(data.allow), deny=_rules(data.deny))
 
 
+def merge_policies(first: Policy, second: Policy) -> Policy:
+    return Policy(allow=(*first.allow, *second.allow), deny=(*first.deny, *second.deny))
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="harness",
@@ -167,19 +172,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--model")
     parser.add_argument("--base-url")
     parser.add_argument("--api-key-env")
-    parser.add_argument("--mode", choices=("ask", "auto-edit", "yolo"), default="ask")
-    parser.add_argument("--max-turns", type=int, default=50)
+    parser.add_argument("--mode", choices=("ask", "auto-edit", "yolo"))
+    parser.add_argument("--max-turns", type=int)
     parser.add_argument(
         "--strategy",
         type=Strategy.parse,
-        default=Strategy(),
         help="context strategy: raw, mask, mask_batched, summarize or hybrid, with options "
         "like mask:k6 or hybrid:k6:b8:t48000",
     )
     parser.add_argument(
         "--features",
         type=Features.parse,
-        default=Features(),
         help="optional features to turn on, comma separated: jobs, verify_first, notes, facts, "
         "subagents, skills, hooks",
     )
@@ -196,8 +199,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("--continue needs --resume <session>")
     if args.continue_turn and args.headless is not None:
         parser.error("--continue and -p are exclusive")
-    if os.environ.get("HARNESS_PROVIDER", "nim") not in PRESETS:
-        parser.error(f"HARNESS_PROVIDER must be one of {', '.join(PRESETS)}")
+    try:
+        settings = load_settings(data_dir() / "settings.toml", _workspace(Path.cwd()))
+        args.strategy = args.strategy or Strategy.parse(settings.strategy or "raw")
+        args.features = args.features or Features.parse(settings.features or "base")
+    except ValueError as exc:
+        parser.error(str(exc))
+    args.settings = settings
+    args.mode = args.mode or settings.mode or "ask"
+    args.max_turns = args.max_turns or settings.max_turns or 50
+    if os.environ.get("HARNESS_PROVIDER", settings.provider or "nim") not in PRESETS:
+        parser.error(f"the provider must be one of {', '.join(PRESETS)}")
     args.overrides = {
         key: value for key in OVERRIDABLE if (value := getattr(args, key)) is not None
     }
@@ -206,19 +218,31 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def apply_provider(args: argparse.Namespace, recorded: RunConfig | None = None) -> None:
-    """Flags win, then the resumed session's config, then the environment, then the preset.
-    The session's model only carries over while its provider does."""
+    """Flags win, then the resumed session's config, then the environment, then the settings
+    files, then the preset. A model or endpoint from the session or the settings only carries
+    over while their provider is the one in use."""
     given: dict[str, str] = args.overrides
+    settings: Settings = args.settings
     session = recorded.provider if recorded is not None and recorded.provider in PRESETS else None
-    args.provider = given.get("provider") or session or os.environ.get("HARNESS_PROVIDER", "nim")
+    args.provider = (
+        given.get("provider") or session or os.environ.get("HARNESS_PROVIDER")
+        or settings.provider or "nim"
+    )
     base_url, key_env, model = PRESETS[args.provider]
-    args.base_url = given.get("base_url") or os.environ.get("HARNESS_BASE_URL") or base_url
-    args.api_key_env = given.get("api_key_env") or key_env
+    configured = settings.provider in (None, args.provider)
+    args.base_url = (
+        given.get("base_url") or os.environ.get("HARNESS_BASE_URL")
+        or (settings.base_url if configured else None) or base_url
+    )
+    args.api_key_env = (
+        given.get("api_key_env") or (settings.api_key_env if configured else None) or key_env
+    )
     same = recorded is not None and given.get("provider", recorded.provider) == recorded.provider
     args.model = (
         given.get("model")
         or (recorded.model if recorded is not None and same else None)
         or os.environ.get("HARNESS_MODEL")
+        or (settings.model if configured else None)
         or model
     )
 
@@ -256,7 +280,10 @@ class Runtime:
     ) -> None:
         self.args = args
         self.provider = provider
-        self.policy = policy if policy is not None else load_policy(args.policy)
+        self.policy = policy if policy is not None else merge_policies(
+            load_policy(args.policy),
+            Policy(allow=_rules(list(args.settings.allow)), deny=_rules(list(args.settings.deny))),
+        )
         cwd_path = Path.cwd()
         root = _workspace(cwd_path)
         self.cwd = os.path.relpath(cwd_path, root)
@@ -292,7 +319,7 @@ class Runtime:
         )
         kit = await toolkit(
             self.args.strategy, self.args.features, self.env, home=home,
-            memory_root=home / "memory", spawner=spawner,
+            memory_root=home / "memory", settings=self.args.settings, spawner=spawner,
         )
         config = AgentConfig(
             model=self.args.model,

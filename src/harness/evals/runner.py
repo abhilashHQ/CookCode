@@ -20,6 +20,7 @@ from harness.agent.instructions import load_instructions, render_system
 from harness.agent.loop import Agent, AgentConfig
 from harness.cli.app import BASE_PROMPT, PRESETS, SECRET_ENV, UNATTENDED, make_provider
 from harness.cli.headless import final_text
+from harness.config import REPO_SETTINGS, read_settings
 from harness.core.events import Limits
 from harness.core.features import Features
 from harness.core.ids import new_id
@@ -223,7 +224,8 @@ class Run:
                               checkpoints=checkpoints)
             kit = await toolkit(
                 self.strategy, self.features, env, home=self.out / "home",
-                memory_root=self.out / "memory" / str(attempt), spawner=spawner,
+                memory_root=self.out / "memory" / str(attempt),
+                settings=read_settings(work / REPO_SETTINGS), spawner=spawner,
             )
             agent = Agent(
                 log=log,
