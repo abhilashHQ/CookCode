@@ -1,0 +1,8 @@
+2024-04-01T09:00:00 DEBUG app.db: opening pool
+2024-04-01T09:00:01 INFO app.db: pool ready (5 connections)
+2024-04-01T09:05:12 INFO app.http: GET /health 200
+2024-04-01T09:07:44 WARNING app.http.auth: token close to expiry for user=17
+2024-04-01T09:15:03 ERROR app.db: query timeout after 2.5s
+2024-04-01T09:15:04 INFO worker: retrying job 881
+2024-04-01T10:02:30 CRITICAL app.db.replica: replica lag 120s
+2024-04-01T10:03:00 INFO application: started

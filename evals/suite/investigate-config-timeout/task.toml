@@ -1,0 +1,4 @@
+kind = "investigate"
+prompt = "When this service runs with APP_ENV=production and no other environment variables set, what request timeout, in seconds, does HttpClient actually end up using? Explain where the value comes from. Don't change any files."
+max_turns = 16
+max_wall_s = 900

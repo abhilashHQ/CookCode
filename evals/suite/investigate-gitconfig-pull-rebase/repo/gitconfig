@@ -1,0 +1,18 @@
+[user]
+	name = Priya Raman
+	email = priya@example.org
+[include]
+	path = ~/dotfiles/git/aliases.inc
+[init]
+	defaultBranch = main
+[includeIf "gitdir:~/work/legacy/"]
+	path = ~/dotfiles/git/legacy.inc
+[includeIf "gitdir:~/work/"]
+	path = ~/dotfiles/git/work.inc
+[pull]
+	rebase = false
+[core]
+	editor = nvim
+	autocrlf = input
+[push]
+	autoSetupRemote = true

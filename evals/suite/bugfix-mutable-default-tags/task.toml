@@ -1,0 +1,4 @@
+kind = "bugfix"
+prompt = "Users report that tagging one note makes the same tag show up on other, unrelated notes, and NoteStore.by_tag returns notes that were never tagged. Find the cause and fix it."
+max_turns = 12
+max_wall_s = 900

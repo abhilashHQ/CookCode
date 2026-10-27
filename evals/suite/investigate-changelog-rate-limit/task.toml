@@ -1,0 +1,4 @@
+kind = "investigate"
+prompt = "ApiClient throttles itself to a certain number of requests per minute by default. Which release first introduced that exact limit for any client? Check the code for the current default and the changelog for its history. Don't modify anything."
+max_turns = 14
+max_wall_s = 900

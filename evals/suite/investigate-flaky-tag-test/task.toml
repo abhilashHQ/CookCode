@@ -1,0 +1,4 @@
+kind = "investigate"
+prompt = "tests/test_tags.py::test_post_all_tags is flaky: it fails most runs, but every so often it passes, locally and in CI, with no code changes in between. Why is it flaky? Point me at the code responsible and the mechanism. Don't fix it yet, just explain, and don't modify any files."
+max_turns = 16
+max_wall_s = 900

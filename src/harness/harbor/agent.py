@@ -17,7 +17,7 @@ from harness import __version__
 from harness.agent.instructions import load_instructions, render_system
 from harness.agent.loop import Agent, AgentConfig
 from harness.agent.tools import ToolRegistry
-from harness.cli.app import BASE_PROMPT, PRESETS, SECRET_ENV, make_provider
+from harness.cli.app import BASE_PROMPT, PRESETS, SECRET_ENV, UNATTENDED, make_provider
 from harness.core.events import Event, Limits, ModelRequestFinished, SessionFinished
 from harness.core.ids import new_id
 from harness.core.usage import Usage
@@ -29,9 +29,7 @@ from harness.store.checkpoints import FileCheckpointStore
 from harness.store.jsonl import JsonlSessionStore
 from harness.tools import default_tools
 
-PROMPT = BASE_PROMPT.replace("in a local repository", "inside a task container") + (
-    "\n\nNobody will answer questions during the task. Work until it is done, then stop."
-)
+PROMPT = BASE_PROMPT.replace("in a local repository", "inside a task container") + UNATTENDED
 
 
 def split_model(model_name: str | None) -> tuple[str, str]:

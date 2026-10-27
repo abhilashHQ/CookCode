@@ -1,0 +1,6 @@
+kind = "feature"
+prompt = """Add a `--format {table,json}` option to wordstats.py (default `table`, which must keep the current output exactly). With `--format json`, print a single JSON object instead of the table:
+{"files": [{"name": "<path or - for stdin>", "lines": N, "words": N, "chars": N}, ...], "total": {"lines": N, "words": N, "chars": N}}
+`files` keeps the order the files were given in, and `total` is always present, even for a single input. An unknown format should be rejected with the usual argparse usage error."""
+max_turns = 12
+max_wall_s = 900

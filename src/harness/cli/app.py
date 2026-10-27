@@ -6,6 +6,7 @@ import subprocess
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
@@ -51,10 +52,14 @@ PRESETS = {
 }
 
 
-def make_provider(preset: str, *, api_key: str | None, base_url: str) -> Provider:
+def make_provider(
+    preset: str, *, api_key: str | None, base_url: str, **transport_policy: Any
+) -> Provider:
     if preset == "gemini":
-        return GeminiProvider(api_key=api_key, base_url=base_url, name=preset)
-    return OpenAICompatProvider(api_key=api_key, base_url=base_url, name=preset)
+        return GeminiProvider(api_key=api_key, base_url=base_url, name=preset, **transport_policy)
+    return OpenAICompatProvider(api_key=api_key, base_url=base_url, name=preset, **transport_policy)
+
+
 SECRET_ENV = (
     "NVIDIA_API_KEY",
     "OPENROUTER_API_KEY",
@@ -81,6 +86,7 @@ do what you asked. [interrupted] means it did not finish and is safe to retry. [
 it may have changed state: inspect before you retry it.
 
 When the task is done, reply with a short summary of what you changed and stop calling tools."""
+UNATTENDED = "\n\nNobody will answer questions during the task. Work until it is done, then stop."
 
 
 def _workspace(start: Path) -> Path:

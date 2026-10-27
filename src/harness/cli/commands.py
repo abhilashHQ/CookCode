@@ -19,6 +19,7 @@ from harness.core.events import (
     event_schema,
 )
 from harness.core.ids import new_id
+from harness.evals.cli import eval_command, stats_command
 from harness.export.atif import to_atif
 from harness.store.base import SessionCorruptError, SessionNotFoundError
 from harness.store.jsonl import JsonlSessionStore
@@ -192,4 +193,6 @@ COMMANDS: dict[str, Callable[[list[str]], int]] = {
     "fork": fork_command,
     "sessions": sessions_command,
     "replay": replay_command,
+    "stats": stats_command,
+    "eval": eval_command,
 }

@@ -1,0 +1,4 @@
+kind = "investigate"
+prompt = "Which function actually handles a POST to /refunds in this app? Give me the function name and the file it lives in. Don't change anything."
+max_turns = 12
+max_wall_s = 900

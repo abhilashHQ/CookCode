@@ -1,0 +1,8 @@
+[project]
+name = "shopkit"
+version = "0.11.0"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

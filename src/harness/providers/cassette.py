@@ -9,6 +9,7 @@ from harness.redact import JSONValue, Redactor
 
 CASSETTE_VERSION = 1
 KEPT_HEADERS = ("content-type", "retry-after")
+DIFF_CONTEXT = 40
 
 type JSON = dict[str, Any]
 
@@ -43,6 +44,17 @@ def first_difference(expected: Any, actual: Any, path: str = "$") -> str | None:
         if len(left_items) != len(right_items):
             return f"{path}: expected {len(left_items)} entries, got {len(right_items)}"
         return None
+    if isinstance(expected, str) and isinstance(actual, str) and expected != actual:
+        at = next(
+            (i for i, (a, b) in enumerate(zip(expected, actual, strict=False)) if a != b),
+            min(len(expected), len(actual)),
+        )
+        if at > DIFF_CONTEXT:
+            start = at - DIFF_CONTEXT
+            return (
+                f"{path} at char {at}: expected ...{expected[start : at + 80]!r}, "
+                f"got ...{actual[start : at + 80]!r}"
+            )
     if expected != actual:
         return f"{path}: expected {expected!r:.200}, got {actual!r:.200}"
     return None
@@ -132,11 +144,19 @@ class RecordingTransport(httpx.AsyncBaseTransport):
 
 
 class ReplayTransport(httpx.AsyncBaseTransport):
-    """Serves recorded responses in order and fails on any request that differs from the tape."""
+    """Serves recorded responses in order. Strict replay fails on any request that differs from
+    the tape; sequenced replay (strict=False) serves the response anyway and notes the drift."""
 
-    def __init__(self, cassette: Cassette) -> None:
+    def __init__(self, cassette: Cassette, *, strict: bool = True) -> None:
         self._cassette = cassette
+        self._strict = strict
         self.position = 0
+        self.drift: list[str] = []
+
+    def _differs(self, message: str) -> None:
+        if self._strict:
+            raise CassetteMismatch(message)
+        self.drift.append(message)
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
         if self.position >= len(self._cassette.interactions):
@@ -147,13 +167,13 @@ class ReplayTransport(httpx.AsyncBaseTransport):
         self.position += 1
         expected = recorded["request"]
         if expected["method"] != request.method or expected["url"] != str(request.url):
-            raise CassetteMismatch(
+            self._differs(
                 f"request #{self.position}: expected {expected['method']} {expected['url']}, "
                 f"got {request.method} {request.url}"
             )
         difference = first_difference(expected["json"], _request_json(request))
         if difference is not None:
-            raise CassetteMismatch(f"request #{self.position} body differs at {difference}")
+            self._differs(f"request #{self.position} body differs at {difference}")
         response = recorded["response"]
         return httpx.Response(
             response["status"],

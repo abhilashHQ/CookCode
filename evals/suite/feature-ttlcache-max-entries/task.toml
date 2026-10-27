@@ -1,0 +1,5 @@
+kind = "feature"
+prompt = """Our TTLCache in cache.py grows without bound. Add an optional `max_entries` constructor argument (default None = unlimited; values below 1 raise ValueError).
+When a set() of a new key would push the cache past max_entries, first drop any expired entries, and only if it's still full evict the least recently used entry. A successful get() and any set() (including overwriting an existing key) count as a use. `key in cache` must NOT count as a use. len(cache) must never exceed max_entries."""
+max_turns = 16
+max_wall_s = 900

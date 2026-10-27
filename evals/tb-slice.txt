@@ -1,0 +1,11 @@
+# Terminal-Bench 2.0 slice for M6 and the M7 ablations (decision 0036). Fixed; edits need a new decision.
+fix-git
+prove-plus-comm
+cobol-modernization
+crack-7z-hash
+constraints-scheduling
+kv-store-grpc
+nginx-request-logging
+openssl-selfsigned-cert
+git-leak-recovery
+sanitize-git-repo

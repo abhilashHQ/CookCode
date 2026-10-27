@@ -1,0 +1,4 @@
+kind = "refactor"
+prompt = "shopkit/utils.py has turned into a grab bag. Split it by topic into three modules: shopkit/text.py (slug, truncate), shopkit/money.py (to_cents, format_money, parse_money) and shopkit/dates.py (is_business_day, add_business_days, business_days_between). Move each function, update every import in the package and tests, and delete utils.py entirely, with no re-export shim. The public API of shopkit/__init__.py and all behavior must stay the same."
+max_turns = 22
+max_wall_s = 900

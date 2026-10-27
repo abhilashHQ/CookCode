@@ -1,0 +1,4 @@
+kind = "bugfix"
+prompt = "The product listing endpoint skips the first page: /products?page=1 returns products 21-40 instead of 1-20, and the last page comes back empty. There's a failing test in test_pagination.py. Please fix it."
+max_turns = 12
+max_wall_s = 900

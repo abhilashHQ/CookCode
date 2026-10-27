@@ -1,0 +1,4 @@
+kind = "refactor"
+prompt = "Rename the method UserRepository.get_usr to get_user everywhere in the project: the definition, every call site and the tests. Don't leave a compatibility alias behind. Behavior must stay the same."
+max_turns = 12
+max_wall_s = 900

@@ -1,0 +1,4 @@
+kind = "refactor"
+prompt = "datetime.utcnow() and datetime.utcfromtimestamp() are deprecated in Python 3.12 and our test runs are full of DeprecationWarnings. Replace every use in the project, tests included, with timezone-aware equivalents. Afterwards expires_at() and audit.parse_stamp() must return timezone-aware UTC datetimes, issue()/verify()/record() must accept aware `now`/`when` values, tokens must stay valid across the change, and the serialized audit timestamp format must stay exactly YYYY-MM-DDTHH:MM:SSZ."
+max_turns = 14
+max_wall_s = 900

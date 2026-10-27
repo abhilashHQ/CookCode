@@ -23,7 +23,7 @@ from harness.providers.base import (
     ToolSchema,
     UsageReport,
 )
-from harness.providers.http import SSEDecoder, StreamFailure, server_wait
+from harness.providers.http import MAX_RATE_LIMIT_ATTEMPTS, SSEDecoder, StreamFailure, server_wait
 from harness.providers.openai_compat import ChatStreamAssembler, build_body, to_messages
 from openai_helpers import (
     MODEL,
@@ -380,6 +380,31 @@ async def test_a_rate_limit_is_retried_and_reported() -> None:
     assert "slow down" in retries[0].reason
     assert events[-1] == StreamEnd(stop_reason="end_turn")
     assert len(script.bodies) == 2
+
+
+async def test_rate_limits_are_retried_past_max_retries_within_the_wait_budget() -> None:
+    script = Script([*(status(429, "busy") for _ in range(6)), ok(text_stream("ok"))])
+    source = provider(script, max_retries=2, backoff_base_s=0.001, max_server_wait_s=1.0)
+    events = await collect(source, request(text_message("user", "x")))
+    assert len([e for e in events if isinstance(e, StreamRetry)]) == 6
+    assert events[-1] == StreamEnd(stop_reason="end_turn")
+
+
+async def test_rate_limits_stop_when_the_wait_budget_is_spent() -> None:
+    script = Script([status(429, "busy") for _ in range(20)])
+    source = provider(script, backoff_base_s=0.01, backoff_cap_s=0.01, max_server_wait_s=0.035,
+                      jitter=lambda: 1.0)
+    events = await collect(source, request(text_message("user", "x")))
+    end = events[-1]
+    assert isinstance(end, StreamEnd) and end.error is not None
+    assert end.error.endswith("after 4 attempts") and len(script.bodies) == 4
+
+
+async def test_rate_limits_with_zero_backoff_stop_at_the_attempt_ceiling() -> None:
+    script = Script([status(429, "busy") for _ in range(MAX_RATE_LIMIT_ATTEMPTS + 5)])
+    events = await collect(provider(script, backoff_base_s=0.0), request(text_message("user", "x")))
+    assert len(script.bodies) == MAX_RATE_LIMIT_ATTEMPTS + 1
+    assert isinstance(events[-1], StreamEnd) and events[-1].stop_reason == "error"
 
 
 async def test_retry_after_within_the_cap_sets_the_delay() -> None:

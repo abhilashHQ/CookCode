@@ -1,0 +1,4 @@
+kind = "feature"
+prompt = "Windows contributors keep committing CRLF line endings into our shell scripts, which breaks the deploy box. Configure the repository (committed config, not per-machine settings) so that: every *.sh file anywhere in the tree is always checked out with LF, *.bat and *.cmd files always with CRLF, PNG and JPG images are treated as binary, and all other files get automatic text normalization."
+max_turns = 12
+max_wall_s = 900

@@ -1,0 +1,4 @@
+kind = "refactor"
+prompt = "parse_order returns a bare tuple and the rest of the orders package indexes into it (order[2] * order[3] and so on), which keeps causing mistakes. Introduce a frozen dataclass `Order` in a new module orders/models.py with fields order_id, sku, quantity, unit_price (in that order) and a `total` property (quantity * unit_price). Make parse_order return it, switch every consumer and the tests to attribute access, and export Order from the package. Output of the summary and export functions must not change."
+max_turns = 22
+max_wall_s = 900

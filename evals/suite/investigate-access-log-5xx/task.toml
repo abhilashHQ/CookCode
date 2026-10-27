@@ -1,0 +1,4 @@
+kind = "investigate"
+prompt = "We had an outage window on March 11. Using logs/access.log, which client IP received the most 5xx responses, and how many 5xx responses did it get? Don't change any files."
+max_turns = 12
+max_wall_s = 900

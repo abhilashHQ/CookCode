@@ -1,0 +1,4 @@
+kind = "feature"
+prompt = "Add a `max_length` keyword argument to `slugify` in textutils.py (default None = no limit). When set, the returned slug must be at most max_length characters, cut on a separator boundary so no word gets chopped in half, with no trailing separator. If even the first word is longer than max_length, hard-truncate that word to max_length. It has to work with custom separators too."
+max_turns = 12
+max_wall_s = 900

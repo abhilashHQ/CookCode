@@ -1,0 +1,7 @@
+[project]
+name = "svc-auth"
+version = "1.8.0"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

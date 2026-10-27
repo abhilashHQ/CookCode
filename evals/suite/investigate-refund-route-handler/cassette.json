@@ -1,0 +1,1508 @@
+{
+ "version": 1,
+ "interactions": [
+  {
+   "request": {
+    "method": "POST",
+    "url": "https://integrate.api.nvidia.com/v1/chat/completions",
+    "json": {
+     "model": "minimaxai/minimax-m3.1-flash",
+     "messages": [
+      {
+       "role": "system",
+       "content": "You are a coding agent working in a local repository.\nWorkspace root: /tmp/harness-suite/investigate-refund-route-handler/1\nStarting working directory (relative to the root): .\n\nUse the tools to inspect and change files and to run commands. Read a file before you edit it, and copy old_string exactly from a fresh read. Prefer small, targeted edits. Run the project's tests or a quick check after changing code when that is possible.\n\nSome tool results start with a status in brackets. [error] and [denied] mean the call did not do what you asked. [interrupted] means it did not finish and is safe to retry. [unknown] means it may have changed state: inspect before you retry it.\n\nWhen the task is done, reply with a short summary of what you changed and stop calling tools.\n\nNobody will answer questions during the task. Work until it is done, then stop."
+      },
+      {
+       "role": "user",
+       "content": "Which function actually handles a POST to /refunds in this app? Give me the function name and the file it lives in. Don't change anything."
+      }
+     ],
+     "stream": true,
+     "stream_options": {
+      "include_usage": true
+     },
+     "tools": [
+      {
+       "type": "function",
+       "function": {
+        "name": "read",
+        "description": "Read a text file with line numbers. Use offset and limit to page through large files. Lines over 2000 characters are cut, and output stops at the output cap with a hint giving the offset to continue from.",
+        "parameters": {
+         "properties": {
+          "path": {
+           "description": "File to read, relative to the working directory or absolute.",
+           "title": "Path",
+           "type": "string"
+          },
+          "offset": {
+           "default": 1,
+           "description": "1-based line to start from.",
+           "minimum": 1,
+           "title": "Offset",
+           "type": "integer"
+          },
+          "limit": {
+           "default": 2000,
+           "description": "Maximum number of lines to return.",
+           "minimum": 1,
+           "title": "Limit",
+           "type": "integer"
+          }
+         },
+         "required": [
+          "path"
+         ],
+         "title": "ReadArgs",
+         "type": "object"
+        }
+       }
+      },
+      {
+       "type": "function",
+       "function": {
+        "name": "write",
+        "description": "Create a file or overwrite it with the given content. Parent directories are created. Prefer edit for changes to an existing file.",
+        "parameters": {
+         "properties": {
+          "path": {
+           "description": "File to write, relative to the working directory or absolute.",
+           "title": "Path",
+           "type": "string"
+          },
+          "content": {
+           "description": "Full new content of the file.",
+           "title": "Content",
+           "type": "string"
+          }
+         },
+         "required": [
+          "path",
+          "content"
+         ],
+         "title": "WriteArgs",
+         "type": "object"
+        }
+       }
+      },
+      {
+       "type": "function",
+       "function": {
+        "name": "edit",
+        "description": "Replace exact text in a file. old_string must match the file exactly, including whitespace, and must be unique unless replace_all is set.",
+        "parameters": {
+         "properties": {
+          "path": {
+           "description": "File to edit, relative to the working directory or absolute.",
+           "title": "Path",
+           "type": "string"
+          },
+          "old_string": {
+           "description": "Exact text to replace, including whitespace.",
+           "title": "Old String",
+           "type": "string"
+          },
+          "new_string": {
+           "description": "Replacement text.",
+           "title": "New String",
+           "type": "string"
+          },
+          "replace_all": {
+           "default": false,
+           "description": "Replace every occurrence.",
+           "title": "Replace All",
+           "type": "boolean"
+          }
+         },
+         "required": [
+          "path",
+          "old_string",
+          "new_string"
+         ],
+         "title": "EditArgs",
+         "type": "object"
+        }
+       }
+      },
+      {
+       "type": "function",
+       "function": {
+        "name": "grep",
+        "description": "Search file contents with a regular expression. Returns path:line:text lines. Use glob to restrict the files searched.",
+        "parameters": {
+         "properties": {
+          "pattern": {
+           "description": "Regular expression to search for.",
+           "title": "Pattern",
+           "type": "string"
+          },
+          "path": {
+           "default": ".",
+           "description": "File or directory to search.",
+           "title": "Path",
+           "type": "string"
+          },
+          "glob": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "default": null,
+           "description": "Only search files matching this glob.",
+           "title": "Glob"
+          },
+          "ignore_case": {
+           "default": false,
+           "description": "Match case-insensitively.",
+           "title": "Ignore Case",
+           "type": "boolean"
+          },
+          "max_results": {
+           "default": 200,
+           "description": "Maximum number of matching lines.",
+           "minimum": 1,
+           "title": "Max Results",
+           "type": "integer"
+          }
+         },
+         "required": [
+          "pattern"
+         ],
+         "title": "GrepArgs",
+         "type": "object"
+        }
+       }
+      },
+      {
+       "type": "function",
+       "function": {
+        "name": "glob",
+        "description": "List files matching a glob pattern, sorted. A pattern without a slash matches file names at any depth; use src/**/*.py to match a path. Hidden directories are skipped.",
+        "parameters": {
+         "properties": {
+          "pattern": {
+           "description": "Glob such as src/**/*.py. Without a slash it matches names.",
+           "title": "Pattern",
+           "type": "string"
+          },
+          "path": {
+           "default": ".",
+           "description": "Directory to search in.",
+           "title": "Path",
+           "type": "string"
+          }
+         },
+         "required": [
+          "pattern"
+         ],
+         "title": "GlobArgs",
+         "type": "object"
+        }
+       }
+      },
+      {
+       "type": "function",
+       "function": {
+        "name": "bash",
+        "description": "Run a shell command with bash. Each call runs in a fresh shell: a directory change made with cd persists to later calls, but exported variables and shell state do not. Stdout and stderr are merged, output is capped, and a non-zero exit is reported as an error.",
+        "parameters": {
+         "properties": {
+          "command": {
+           "description": "The command to run.",
+           "title": "Command",
+           "type": "string"
+          },
+          "timeout_s": {
+           "anyOf": [
+            {
+             "exclusiveMinimum": 0,
+             "type": "number"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "default": null,
+           "description": "Timeout in seconds, capped by the tool timeout.",
+           "title": "Timeout S"
+          }
+         },
+         "required": [
+          "command"
+         ],
+         "title": "BashArgs",
+         "type": "object"
+        }
+       }
+      }
+     ]
+    }
+   },
+   "response": {
+    "status": 503,
+    "headers": {
+     "content-type": "application/json"
+    },
+    "body": "{\"message\":\"Service is not ready\",\"type\":\"Service Unavailable\",\"code\":503}"
+   }
+  },
+  {
+   "request": {
+    "method": "POST",
+    "url": "https://integrate.api.nvidia.com/v1/chat/completions",
+    "json": {
+     "model": "minimaxai/minimax-m3.1-flash",
+     "messages": [
+      {
+       "role": "system",
+       "content": "You are a coding agent working in a local repository.\nWorkspace root: /tmp/harness-suite/investigate-refund-route-handler/1\nStarting working directory (relative to the root): .\n\nUse the tools to inspect and change files and to run commands. Read a file before you edit it, and copy old_string exactly from a fresh read. Prefer small, targeted edits. Run the project's tests or a quick check after changing code when that is possible.\n\nSome tool results start with a status in brackets. [error] and [denied] mean the call did not do what you asked. [interrupted] means it did not finish and is safe to retry. [unknown] means it may have changed state: inspect before you retry it.\n\nWhen the task is done, reply with a short summary of what you changed and stop calling tools.\n\nNobody will answer questions during the task. Work until it is done, then stop."
+      },
+      {
+       "role": "user",
+       "content": "Which function actually handles a POST to /refunds in this app? Give me the function name and the file it lives in. Don't change anything."
+      }
+     ],
+     "stream": true,
+     "stream_options": {
+      "include_usage": true
+     },
+     "tools": [
+      {
+       "type": "function",
+       "function": {
+        "name": "read",
+        "description": "Read a text file with line numbers. Use offset and limit to page through large files. Lines over 2000 characters are cut, and output stops at the output cap with a hint giving the offset to continue from.",
+        "parameters": {
+         "properties": {
+          "path": {
+           "description": "File to read, relative to the working directory or absolute.",
+           "title": "Path",
+           "type": "string"
+          },
+          "offset": {
+           "default": 1,
+           "description": "1-based line to start from.",
+           "minimum": 1,
+           "title": "Offset",
+           "type": "integer"
+          },
+          "limit": {
+           "default": 2000,
+           "description": "Maximum number of lines to return.",
+           "minimum": 1,
+           "title": "Limit",
+           "type": "integer"
+          }
+         },
+         "required": [
+          "path"
+         ],
+         "title": "ReadArgs",
+         "type": "object"
+        }
+       }
+      },
+      {
+       "type": "function",
+       "function": {
+        "name": "write",
+        "description": "Create a file or overwrite it with the given content. Parent directories are created. Prefer edit for changes to an existing file.",
+        "parameters": {
+         "properties": {
+          "path": {
+           "description": "File to write, relative to the working directory or absolute.",
+           "title": "Path",
+           "type": "string"
+          },
+          "content": {
+           "description": "Full new content of the file.",
+           "title": "Content",
+           "type": "string"
+          }
+         },
+         "required": [
+          "path",
+          "content"
+         ],
+         "title": "WriteArgs",
+         "type": "object"
+        }
+       }
+      },
+      {
+       "type": "function",
+       "function": {
+        "name": "edit",
+        "description": "Replace exact text in a file. old_string must match the file exactly, including whitespace, and must be unique unless replace_all is set.",
+        "parameters": {
+         "properties": {
+          "path": {
+           "description": "File to edit, relative to the working directory or absolute.",
+           "title": "Path",
+           "type": "string"
+          },
+          "old_string": {
+           "description": "Exact text to replace, including whitespace.",
+           "title": "Old String",
+           "type": "string"
+          },
+          "new_string": {
+           "description": "Replacement text.",
+           "title": "New String",
+           "type": "string"
+          },
+          "replace_all": {
+           "default": false,
+           "description": "Replace every occurrence.",
+           "title": "Replace All",
+           "type": "boolean"
+          }
+         },
+         "required": [
+          "path",
+          "old_string",
+          "new_string"
+         ],
+         "title": "EditArgs",
+         "type": "object"
+        }
+       }
+      },
+      {
+       "type": "function",
+       "function": {
+        "name": "grep",
+        "description": "Search file contents with a regular expression. Returns path:line:text lines. Use glob to restrict the files searched.",
+        "parameters": {
+         "properties": {
+          "pattern": {
+           "description": "Regular expression to search for.",
+           "title": "Pattern",
+           "type": "string"
+          },
+          "path": {
+           "default": ".",
+           "description": "File or directory to search.",
+           "title": "Path",
+           "type": "string"
+          },
+          "glob": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "default": null,
+           "description": "Only search files matching this glob.",
+           "title": "Glob"
+          },
+          "ignore_case": {
+           "default": false,
+           "description": "Match case-insensitively.",
+           "title": "Ignore Case",
+           "type": "boolean"
+          },
+          "max_results": {
+           "default": 200,
+           "description": "Maximum number of matching lines.",
+           "minimum": 1,
+           "title": "Max Results",
+           "type": "integer"
+          }
+         },
+         "required": [
+          "pattern"
+         ],
+         "title": "GrepArgs",
+         "type": "object"
+        }
+       }
+      },
+      {
+       "type": "function",
+       "function": {
+        "name": "glob",
+        "description": "List files matching a glob pattern, sorted. A pattern without a slash matches file names at any depth; use src/**/*.py to match a path. Hidden directories are skipped.",
+        "parameters": {
+         "properties": {
+          "pattern": {
+           "description": "Glob such as src/**/*.py. Without a slash it matches names.",
+           "title": "Pattern",
+           "type": "string"
+          },
+          "path": {
+           "default": ".",
+           "description": "Directory to search in.",
+           "title": "Path",
+           "type": "string"
+          }
+         },
+         "required": [
+          "pattern"
+         ],
+         "title": "GlobArgs",
+         "type": "object"
+        }
+       }
+      },
+      {
+       "type": "function",
+       "function": {
+        "name": "bash",
+        "description": "Run a shell command with bash. Each call runs in a fresh shell: a directory change made with cd persists to later calls, but exported variables and shell state do not. Stdout and stderr are merged, output is capped, and a non-zero exit is reported as an error.",
+        "parameters": {
+         "properties": {
+          "command": {
+           "description": "The command to run.",
+           "title": "Command",
+           "type": "string"
+          },
+          "timeout_s": {
+           "anyOf": [
+            {
+             "exclusiveMinimum": 0,
+             "type": "number"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "default": null,
+           "description": "Timeout in seconds, capped by the tool timeout.",
+           "title": "Timeout S"
+          }
+         },
+         "required": [
+          "command"
+         ],
+         "title": "BashArgs",
+         "type": "object"
+        }
+       }
+      }
+     ]
+    }
+   },
+   "response": {
+    "status": 200,
+    "headers": {
+     "content-type": "text/event-stream"
+    },
+    "body": "data: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"We\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" need\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" answer\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" inspect\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" repo\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\",\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" no\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" changes\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" Need\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" determine\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" function\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" actually\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" handles\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" POST\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" /\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"ref\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"unds\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" Need\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" inspect\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" files\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" Use\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" tools\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" commentary\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" Start\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" list\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"\",\"tool_calls\":[{\"index\":0,\"id\":\"call-9057cfb3-b343-4f85-9cba-5fe4080893f2\",\"type\":\"function\",\"function\":{\"name\":\"glob\",\"arguments\":\"{\\\"pattern\\\":\\\"**/*\\\",\\\"path\\\":\\\".\\\"}\"}},{\"index\":1,\"id\":\"call-0532da16-d1ec-4de3-950a-90510492e76a\",\"type\":\"function\",\"function\":{\"name\":\"grep\",\"arguments\":\"{\\\"pattern\\\":\\\"refunds|refund\\\",\\\"path\\\":\\\".\\\",\\\"glob\\\":\\\"**/*\\\",\\\"ignore_case\\\":true,\\\"max_results\\\":200}\"}}]},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\",\"logprobs\":null}],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-3556f3cb-5306-40f6-a6e0-7d8067350b58\",\"choices\":[],\"created\":1793040389,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\",\"usage\":{\"prompt_tokens\":1629,\"completion_tokens\":127,\"total_tokens\":1756,\"prompt_tokens_details\":{\"cached_tokens\":128},\"completion_tokens_details\":{\"reasoning_tokens\":31}}}\n\ndata: [DONE]\n\n"
+   }
+  },
+  {
+   "request": {
+    "method": "POST",
+    "url": "https://integrate.api.nvidia.com/v1/chat/completions",
+    "json": {
+     "model": "minimaxai/minimax-m3.1-flash",
+     "messages": [
+      {
+       "role": "system",
+       "content": "You are a coding agent working in a local repository.\nWorkspace root: /tmp/harness-suite/investigate-refund-route-handler/1\nStarting working directory (relative to the root): .\n\nUse the tools to inspect and change files and to run commands. Read a file before you edit it, and copy old_string exactly from a fresh read. Prefer small, targeted edits. Run the project's tests or a quick check after changing code when that is possible.\n\nSome tool results start with a status in brackets. [error] and [denied] mean the call did not do what you asked. [interrupted] means it did not finish and is safe to retry. [unknown] means it may have changed state: inspect before you retry it.\n\nWhen the task is done, reply with a short summary of what you changed and stop calling tools.\n\nNobody will answer questions during the task. Work until it is done, then stop."
+      },
+      {
+       "role": "user",
+       "content": "Which function actually handles a POST to /refunds in this app? Give me the function name and the file it lives in. Don't change anything."
+      },
+      {
+       "role": "assistant",
+       "content": null,
+       "tool_calls": [
+        {
+         "id": "call-9057cfb3-b343-4f85-9cba-5fe4080893f2",
+         "type": "function",
+         "function": {
+          "name": "glob",
+          "arguments": "{\"pattern\": \"**/*\", \"path\": \".\"}"
+         }
+        },
+        {
+         "id": "call-0532da16-d1ec-4de3-950a-90510492e76a",
+         "type": "function",
+         "function": {
+          "name": "grep",
+          "arguments": "{\"pattern\": \"refunds|refund\", \"path\": \".\", \"glob\": \"**/*\", \"ignore_case\": true, \"max_results\": 200}"
+         }
+        }
+       ],
+       "reasoning_content": "We need answer inspect repo, no changes. Need determine function actually handles POST /refunds. Need inspect files. Use tools commentary. Start list."
+      },
+      {
+       "role": "tool",
+       "tool_call_id": "call-9057cfb3-b343-4f85-9cba-5fe4080893f2",
+       "content": ".git/COMMIT_EDITMSG\n.git/HEAD\n.git/config\n.git/description\n.git/hooks/applypatch-msg.sample\n.git/hooks/commit-msg.sample\n.git/hooks/fsmonitor-watchman.sample\n.git/hooks/post-update.sample\n.git/hooks/pre-applypatch.sample\n.git/hooks/pre-commit.sample\n.git/hooks/pre-merge-commit.sample\n.git/hooks/pre-push.sample\n.git/hooks/pre-rebase.sample\n.git/hooks/pre-receive.sample\n.git/hooks/prepare-commit-msg.sample\n.git/hooks/push-to-checkout.sample\n.git/hooks/sendemail-validate.sample\n.git/hooks/update.sample\n.git/index\n.git/info/exclude\n.git/logs/HEAD\n.git/logs/refs/heads/master\n.git/objects/0c/b0b29b6ae9b662ed3fee1fb64be833b87b986b\n.git/objects/15/b2aec0773b623b47df4dc83ea72f2617488a56\n.git/objects/21/96335a39f38665f1b978ce60c24de01946a468\n.git/objects/35/ee83cdd582740ab90ff9b00d4baec735a8e0c8\n.git/objects/73/4233e1654d547740d4b40df5032a7589a86b15\n.git/objects/7f/c9895cbb10860a0ab508f62fbe197bd1f77301\n.git/objects/c4/715e07b4176b74c3485a6c708f8273c4c03661\n.git/objects/cb/3fd2a6695f80e6149919f0895f47407a5886eb\n.git/objects/d0/9e808119d1e2f4a1a78a49afe86b57af91dbbc\n.git/refs/heads/master\napp/billing/approvals.py\napp/billing/payments.py\napp/billing/refunds.py\napp/main.py\napp/routes.py"
+      },
+      {
+       "role": "tool",
+       "tool_call_id": "call-0532da16-d1ec-4de3-950a-90510492e76a",
+       "content": "app/main.py:8:from app.billing import refunds, payments, approvals  # noqa: F401,E402\napp/billing/payments.py:3:from .refunds import create_refund\napp/billing/payments.py:6:@route(\"POST\", \"/payments/refund\")\napp/billing/payments.py:7:def refund_payment(request):\napp/billing/payments.py:9:    return 201, create_refund(body[\"payment_id\"], body[\"amount\"], \"full refund\")\napp/billing/refunds.py:5:_REFUNDS = []\napp/billing/refunds.py:8:def create_refund(payment_id, amount, reason=\"\"):\napp/billing/refunds.py:9:    refund = {\"id\": len(_REFUNDS) + 1, \"payment_id\": payment_id, \"amount\": str(Decimal(amount)), \"reason\": reason}\napp/billing/refunds.py:10:    _REFUNDS.append(refund)\napp/billing/refunds.py:11:    return refund\napp/billing/refunds.py:14:@route(\"GET\", \"/refunds\")\napp/billing/refunds.py:15:def list_refunds(request):\napp/billing/refunds.py:16:    return 200, {\"refunds\": list(_REFUNDS)}\napp/billing/refunds.py:19:@route(\"POST\", \"/refunds\")\napp/billing/refunds.py:20:def handle_refund(request):\napp/billing/refunds.py:24:    return 201, create_refund(body[\"payment_id\"], body[\"amount\"], body.get(\"reason\", \"\"))\napp/billing/approvals.py:5:from .refunds import create_refund\napp/billing/approvals.py:11:@route(\"POST\", \"/refunds\")\napp/billing/approvals.py:12:def issue_refund(request):\napp/billing/approvals.py:13:    \"\"\"Refunds above the threshold need a second pair of eyes before money moves.\"\"\"\napp/billing/approvals.py:20:    return 201, create_refund(body[\"payment_id\"], body[\"amount\"], body.get(\"reason\", \"\"))"
+      }
+     ],
+     "stream": true,
+     "stream_options": {
+      "include_usage": true
+     },
+     "tools": [
+      {
+       "type": "function",
+       "function": {
+        "name": "read",
+        "description": "Read a text file with line numbers. Use offset and limit to page through large files. Lines over 2000 characters are cut, and output stops at the output cap with a hint giving the offset to continue from.",
+        "parameters": {
+         "properties": {
+          "path": {
+           "description": "File to read, relative to the working directory or absolute.",
+           "title": "Path",
+           "type": "string"
+          },
+          "offset": {
+           "default": 1,
+           "description": "1-based line to start from.",
+           "minimum": 1,
+           "title": "Offset",
+           "type": "integer"
+          },
+          "limit": {
+           "default": 2000,
+           "description": "Maximum number of lines to return.",
+           "minimum": 1,
+           "title": "Limit",
+           "type": "integer"
+          }
+         },
+         "required": [
+          "path"
+         ],
+         "title": "ReadArgs",
+         "type": "object"
+        }
+       }
+      },
+      {
+       "type": "function",
+       "function": {
+        "name": "write",
+        "description": "Create a file or overwrite it with the given content. Parent directories are created. Prefer edit for changes to an existing file.",
+        "parameters": {
+         "properties": {
+          "path": {
+           "description": "File to write, relative to the working directory or absolute.",
+           "title": "Path",
+           "type": "string"
+          },
+          "content": {
+           "description": "Full new content of the file.",
+           "title": "Content",
+           "type": "string"
+          }
+         },
+         "required": [
+          "path",
+          "content"
+         ],
+         "title": "WriteArgs",
+         "type": "object"
+        }
+       }
+      },
+      {
+       "type": "function",
+       "function": {
+        "name": "edit",
+        "description": "Replace exact text in a file. old_string must match the file exactly, including whitespace, and must be unique unless replace_all is set.",
+        "parameters": {
+         "properties": {
+          "path": {
+           "description": "File to edit, relative to the working directory or absolute.",
+           "title": "Path",
+           "type": "string"
+          },
+          "old_string": {
+           "description": "Exact text to replace, including whitespace.",
+           "title": "Old String",
+           "type": "string"
+          },
+          "new_string": {
+           "description": "Replacement text.",
+           "title": "New String",
+           "type": "string"
+          },
+          "replace_all": {
+           "default": false,
+           "description": "Replace every occurrence.",
+           "title": "Replace All",
+           "type": "boolean"
+          }
+         },
+         "required": [
+          "path",
+          "old_string",
+          "new_string"
+         ],
+         "title": "EditArgs",
+         "type": "object"
+        }
+       }
+      },
+      {
+       "type": "function",
+       "function": {
+        "name": "grep",
+        "description": "Search file contents with a regular expression. Returns path:line:text lines. Use glob to restrict the files searched.",
+        "parameters": {
+         "properties": {
+          "pattern": {
+           "description": "Regular expression to search for.",
+           "title": "Pattern",
+           "type": "string"
+          },
+          "path": {
+           "default": ".",
+           "description": "File or directory to search.",
+           "title": "Path",
+           "type": "string"
+          },
+          "glob": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "default": null,
+           "description": "Only search files matching this glob.",
+           "title": "Glob"
+          },
+          "ignore_case": {
+           "default": false,
+           "description": "Match case-insensitively.",
+           "title": "Ignore Case",
+           "type": "boolean"
+          },
+          "max_results": {
+           "default": 200,
+           "description": "Maximum number of matching lines.",
+           "minimum": 1,
+           "title": "Max Results",
+           "type": "integer"
+          }
+         },
+         "required": [
+          "pattern"
+         ],
+         "title": "GrepArgs",
+         "type": "object"
+        }
+       }
+      },
+      {
+       "type": "function",
+       "function": {
+        "name": "glob",
+        "description": "List files matching a glob pattern, sorted. A pattern without a slash matches file names at any depth; use src/**/*.py to match a path. Hidden directories are skipped.",
+        "parameters": {
+         "properties": {
+          "pattern": {
+           "description": "Glob such as src/**/*.py. Without a slash it matches names.",
+           "title": "Pattern",
+           "type": "string"
+          },
+          "path": {
+           "default": ".",
+           "description": "Directory to search in.",
+           "title": "Path",
+           "type": "string"
+          }
+         },
+         "required": [
+          "pattern"
+         ],
+         "title": "GlobArgs",
+         "type": "object"
+        }
+       }
+      },
+      {
+       "type": "function",
+       "function": {
+        "name": "bash",
+        "description": "Run a shell command with bash. Each call runs in a fresh shell: a directory change made with cd persists to later calls, but exported variables and shell state do not. Stdout and stderr are merged, output is capped, and a non-zero exit is reported as an error.",
+        "parameters": {
+         "properties": {
+          "command": {
+           "description": "The command to run.",
+           "title": "Command",
+           "type": "string"
+          },
+          "timeout_s": {
+           "anyOf": [
+            {
+             "exclusiveMinimum": 0,
+             "type": "number"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "default": null,
+           "description": "Timeout in seconds, capped by the tool timeout.",
+           "title": "Timeout S"
+          }
+         },
+         "required": [
+          "command"
+         ],
+         "title": "BashArgs",
+         "type": "object"
+        }
+       }
+      }
+     ]
+    }
+   },
+   "response": {
+    "status": 200,
+    "headers": {
+     "content-type": "text/event-stream"
+    },
+    "body": "data: {\"id\":\"chatcmpl-2aed9c70-6fa3-4eb5-9846-681c85b35bd8\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040394,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-2aed9c70-6fa3-4eb5-9846-681c85b35bd8\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"We\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040394,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-2aed9c70-6fa3-4eb5-9846-681c85b35bd8\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" need\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040394,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-2aed9c70-6fa3-4eb5-9846-681c85b35bd8\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" inspect\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040394,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-2aed9c70-6fa3-4eb5-9846-681c85b35bd8\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" routes\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040394,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-2aed9c70-6fa3-4eb5-9846-681c85b35bd8\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"/main\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040394,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-2aed9c70-6fa3-4eb5-9846-681c85b35bd8\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" perhaps\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040394,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-2aed9c70-6fa3-4eb5-9846-681c85b35bd8\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" ambiguity\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040394,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-2aed9c70-6fa3-4eb5-9846-681c85b35bd8\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" duplicate\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040394,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-2aed9c70-6fa3-4eb5-9846-681c85b35bd8\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" routes\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040394,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-2aed9c70-6fa3-4eb5-9846-681c85b35bd8\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\",\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040394,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-2aed9c70-6fa3-4eb5-9846-681c85b35bd8\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" actual\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040394,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-2aed9c70-6fa3-4eb5-9846-681c85b35bd8\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" dispatch\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040394,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-2aed9c70-6fa3-4eb5-9846-681c85b35bd8\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" precedence\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040394,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-2aed9c70-6fa3-4eb5-9846-681c85b35bd8\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040394,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-2aed9c70-6fa3-4eb5-9846-681c85b35bd8\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" Read\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040394,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-2aed9c70-6fa3-4eb5-9846-681c85b35bd8\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" files\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040394,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-2aed9c70-6fa3-4eb5-9846-681c85b35bd8\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040394,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-2aed9c70-6fa3-4eb5-9846-681c85b35bd8\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"\",\"tool_calls\":[{\"index\":0,\"id\":\"call-7d44ad09-3256-4ad7-a768-f5ec7e8cd51e\",\"type\":\"function\",\"function\":{\"name\":\"read\",\"arguments\":\"{\\\"path\\\":\\\"app/main.py\\\",\\\"offset\\\":1,\\\"limit\\\":2000}\"}},{\"index\":1,\"id\":\"call-02b3663f-1f13-4e2b-a22a-b4371bcbd37f\",\"type\":\"function\",\"function\":{\"name\":\"read\",\"arguments\":\"{\\\"path\\\":\\\"app/routes.py\\\",\\\"offset\\\":1,\\\"limit\\\":2000}\"}},{\"index\":2,\"id\":\"call-623112ca-4e73-45f2-8bd5-3789be3eac89\",\"type\":\"function\",\"function\":{\"name\":\"read\",\"arguments\":\"{\\\"path\\\":\\\"app/billing/refunds.py\\\",\\\"offset\\\":1,\\\"limit\\\":2000}\"}},{\"index\":3,\"id\":\"call-cc61c735-94c1-44dd-be3b-8ac8ec12e028\",\"type\":\"function\",\"function\":{\"name\":\"read\",\"arguments\":\"{\\\"path\\\":\\\"app/billing/approvals.py\\\",\\\"offset\\\":1,\\\"limit\\\":2000}\"}},{\"index\":4,\"id\":\"call-035d7e6c-b36c-4e20-8140-040053aae2b5\",\"type\":\"function\",\"function\":{\"name\":\"read\",\"arguments\":\"{\\\"path\\\":\\\"app/billing/payments.py\\\",\\\"offset\\\":1,\\\"limit\\\":2000}\"}}]},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040394,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-2aed9c70-6fa3-4eb5-9846-681c85b35bd8\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\",\"logprobs\":null}],\"created\":1793040394,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-2aed9c70-6fa3-4eb5-9846-681c85b35bd8\",\"choices\":[],\"created\":1793040394,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\",\"usage\":{\"prompt_tokens\":2688,\"completion_tokens\":240,\"total_tokens\":2928,\"prompt_tokens_details\":{\"cached_tokens\":1664},\"completion_tokens_details\":{\"reasoning_tokens\":18}}}\n\ndata: [DONE]\n\n"
+   }
+  },
+  {
+   "request": {
+    "method": "POST",
+    "url": "https://integrate.api.nvidia.com/v1/chat/completions",
+    "json": {
+     "model": "minimaxai/minimax-m3.1-flash",
+     "messages": [
+      {
+       "role": "system",
+       "content": "You are a coding agent working in a local repository.\nWorkspace root: /tmp/harness-suite/investigate-refund-route-handler/1\nStarting working directory (relative to the root): .\n\nUse the tools to inspect and change files and to run commands. Read a file before you edit it, and copy old_string exactly from a fresh read. Prefer small, targeted edits. Run the project's tests or a quick check after changing code when that is possible.\n\nSome tool results start with a status in brackets. [error] and [denied] mean the call did not do what you asked. [interrupted] means it did not finish and is safe to retry. [unknown] means it may have changed state: inspect before you retry it.\n\nWhen the task is done, reply with a short summary of what you changed and stop calling tools.\n\nNobody will answer questions during the task. Work until it is done, then stop."
+      },
+      {
+       "role": "user",
+       "content": "Which function actually handles a POST to /refunds in this app? Give me the function name and the file it lives in. Don't change anything."
+      },
+      {
+       "role": "assistant",
+       "content": null,
+       "tool_calls": [
+        {
+         "id": "call-9057cfb3-b343-4f85-9cba-5fe4080893f2",
+         "type": "function",
+         "function": {
+          "name": "glob",
+          "arguments": "{\"pattern\": \"**/*\", \"path\": \".\"}"
+         }
+        },
+        {
+         "id": "call-0532da16-d1ec-4de3-950a-90510492e76a",
+         "type": "function",
+         "function": {
+          "name": "grep",
+          "arguments": "{\"pattern\": \"refunds|refund\", \"path\": \".\", \"glob\": \"**/*\", \"ignore_case\": true, \"max_results\": 200}"
+         }
+        }
+       ],
+       "reasoning_content": "We need answer inspect repo, no changes. Need determine function actually handles POST /refunds. Need inspect files. Use tools commentary. Start list."
+      },
+      {
+       "role": "tool",
+       "tool_call_id": "call-9057cfb3-b343-4f85-9cba-5fe4080893f2",
+       "content": ".git/COMMIT_EDITMSG\n.git/HEAD\n.git/config\n.git/description\n.git/hooks/applypatch-msg.sample\n.git/hooks/commit-msg.sample\n.git/hooks/fsmonitor-watchman.sample\n.git/hooks/post-update.sample\n.git/hooks/pre-applypatch.sample\n.git/hooks/pre-commit.sample\n.git/hooks/pre-merge-commit.sample\n.git/hooks/pre-push.sample\n.git/hooks/pre-rebase.sample\n.git/hooks/pre-receive.sample\n.git/hooks/prepare-commit-msg.sample\n.git/hooks/push-to-checkout.sample\n.git/hooks/sendemail-validate.sample\n.git/hooks/update.sample\n.git/index\n.git/info/exclude\n.git/logs/HEAD\n.git/logs/refs/heads/master\n.git/objects/0c/b0b29b6ae9b662ed3fee1fb64be833b87b986b\n.git/objects/15/b2aec0773b623b47df4dc83ea72f2617488a56\n.git/objects/21/96335a39f38665f1b978ce60c24de01946a468\n.git/objects/35/ee83cdd582740ab90ff9b00d4baec735a8e0c8\n.git/objects/73/4233e1654d547740d4b40df5032a7589a86b15\n.git/objects/7f/c9895cbb10860a0ab508f62fbe197bd1f77301\n.git/objects/c4/715e07b4176b74c3485a6c708f8273c4c03661\n.git/objects/cb/3fd2a6695f80e6149919f0895f47407a5886eb\n.git/objects/d0/9e808119d1e2f4a1a78a49afe86b57af91dbbc\n.git/refs/heads/master\napp/billing/approvals.py\napp/billing/payments.py\napp/billing/refunds.py\napp/main.py\napp/routes.py"
+      },
+      {
+       "role": "tool",
+       "tool_call_id": "call-0532da16-d1ec-4de3-950a-90510492e76a",
+       "content": "app/main.py:8:from app.billing import refunds, payments, approvals  # noqa: F401,E402\napp/billing/payments.py:3:from .refunds import create_refund\napp/billing/payments.py:6:@route(\"POST\", \"/payments/refund\")\napp/billing/payments.py:7:def refund_payment(request):\napp/billing/payments.py:9:    return 201, create_refund(body[\"payment_id\"], body[\"amount\"], \"full refund\")\napp/billing/refunds.py:5:_REFUNDS = []\napp/billing/refunds.py:8:def create_refund(payment_id, amount, reason=\"\"):\napp/billing/refunds.py:9:    refund = {\"id\": len(_REFUNDS) + 1, \"payment_id\": payment_id, \"amount\": str(Decimal(amount)), \"reason\": reason}\napp/billing/refunds.py:10:    _REFUNDS.append(refund)\napp/billing/refunds.py:11:    return refund\napp/billing/refunds.py:14:@route(\"GET\", \"/refunds\")\napp/billing/refunds.py:15:def list_refunds(request):\napp/billing/refunds.py:16:    return 200, {\"refunds\": list(_REFUNDS)}\napp/billing/refunds.py:19:@route(\"POST\", \"/refunds\")\napp/billing/refunds.py:20:def handle_refund(request):\napp/billing/refunds.py:24:    return 201, create_refund(body[\"payment_id\"], body[\"amount\"], body.get(\"reason\", \"\"))\napp/billing/approvals.py:5:from .refunds import create_refund\napp/billing/approvals.py:11:@route(\"POST\", \"/refunds\")\napp/billing/approvals.py:12:def issue_refund(request):\napp/billing/approvals.py:13:    \"\"\"Refunds above the threshold need a second pair of eyes before money moves.\"\"\"\napp/billing/approvals.py:20:    return 201, create_refund(body[\"payment_id\"], body[\"amount\"], body.get(\"reason\", \"\"))"
+      },
+      {
+       "role": "assistant",
+       "content": null,
+       "tool_calls": [
+        {
+         "id": "call-7d44ad09-3256-4ad7-a768-f5ec7e8cd51e",
+         "type": "function",
+         "function": {
+          "name": "read",
+          "arguments": "{\"path\": \"app/main.py\", \"offset\": 1, \"limit\": 2000}"
+         }
+        },
+        {
+         "id": "call-02b3663f-1f13-4e2b-a22a-b4371bcbd37f",
+         "type": "function",
+         "function": {
+          "name": "read",
+          "arguments": "{\"path\": \"app/routes.py\", \"offset\": 1, \"limit\": 2000}"
+         }
+        },
+        {
+         "id": "call-623112ca-4e73-45f2-8bd5-3789be3eac89",
+         "type": "function",
+         "function": {
+          "name": "read",
+          "arguments": "{\"path\": \"app/billing/refunds.py\", \"offset\": 1, \"limit\": 2000}"
+         }
+        },
+        {
+         "id": "call-cc61c735-94c1-44dd-be3b-8ac8ec12e028",
+         "type": "function",
+         "function": {
+          "name": "read",
+          "arguments": "{\"path\": \"app/billing/approvals.py\", \"offset\": 1, \"limit\": 2000}"
+         }
+        },
+        {
+         "id": "call-035d7e6c-b36c-4e20-8140-040053aae2b5",
+         "type": "function",
+         "function": {
+          "name": "read",
+          "arguments": "{\"path\": \"app/billing/payments.py\", \"offset\": 1, \"limit\": 2000}"
+         }
+        }
+       ],
+       "reasoning_content": "We need inspect routes/main perhaps ambiguity duplicate routes, actual dispatch precedence. Read files."
+      },
+      {
+       "role": "tool",
+       "tool_call_id": "call-7d44ad09-3256-4ad7-a768-f5ec7e8cd51e",
+       "content": "     1\timport json\n     2\timport sys\n     3\t\n     4\tfrom app.routes import dispatch\n     5\t\n     6\t# Import order matters only in that every module must be imported for its\n     7\t# routes to be registered.\n     8\tfrom app.billing import refunds, payments, approvals  # noqa: F401,E402\n     9\t\n    10\t\n    11\tdef handle(method, path, body=None):\n    12\t    return dispatch(method, path, {\"json\": body})\n    13\t\n    14\t\n    15\tif __name__ == \"__main__\":\n    16\t    status, payload = handle(sys.argv[1], sys.argv[2], json.loads(sys.argv[3]) if len(sys.argv) > 3 else None)\n    17\t    print(status, json.dumps(payload))"
+      },
+      {
+       "role": "tool",
+       "tool_call_id": "call-02b3663f-1f13-4e2b-a22a-b4371bcbd37f",
+       "content": "     1\tROUTES = {}\n     2\t\n     3\t\n     4\tdef route(method, path):\n     5\t    \"\"\"Register the decorated function as the handler for ``method path``.\n     6\t\n     7\t    Registering the same method/path twice replaces the earlier handler.\n     8\t    \"\"\"\n     9\t    def register(func):\n    10\t        ROUTES[(method.upper(), path)] = func\n    11\t        return func\n    12\t    return register\n    13\t\n    14\t\n    15\tdef dispatch(method, path, request):\n    16\t    handler = ROUTES.get((method.upper(), path))\n    17\t    if handler is None:\n    18\t        return 404, {\"error\": \"not found\"}\n    19\t    return handler(request)"
+      },
+      {
+       "role": "tool",
+       "tool_call_id": "call-623112ca-4e73-45f2-8bd5-3789be3eac89",
+       "content": "     1\tfrom decimal import Decimal\n     2\t\n     3\tfrom app.routes import route\n     4\t\n     5\t_REFUNDS = []\n     6\t\n     7\t\n     8\tdef create_refund(payment_id, amount, reason=\"\"):\n     9\t    refund = {\"id\": len(_REFUNDS) + 1, \"payment_id\": payment_id, \"amount\": str(Decimal(amount)), \"reason\": reason}\n    10\t    _REFUNDS.append(refund)\n    11\t    return refund\n    12\t\n    13\t\n    14\t@route(\"GET\", \"/refunds\")\n    15\tdef list_refunds(request):\n    16\t    return 200, {\"refunds\": list(_REFUNDS)}\n    17\t\n    18\t\n    19\t@route(\"POST\", \"/refunds\")\n    20\tdef handle_refund(request):\n    21\t    body = request.get(\"json\") or {}\n    22\t    if \"payment_id\" not in body or \"amount\" not in body:\n    23\t        return 400, {\"error\": \"payment_id and amount are required\"}\n    24\t    return 201, create_refund(body[\"payment_id\"], body[\"amount\"], body.get(\"reason\", \"\"))"
+      },
+      {
+       "role": "tool",
+       "tool_call_id": "call-cc61c735-94c1-44dd-be3b-8ac8ec12e028",
+       "content": "     1\tfrom decimal import Decimal\n     2\t\n     3\tfrom app.routes import route\n     4\t\n     5\tfrom .refunds import create_refund\n     6\t\n     7\tAPPROVAL_THRESHOLD = Decimal(\"500\")\n     8\t_PENDING = []\n     9\t\n    10\t\n    11\t@route(\"POST\", \"/refunds\")\n    12\tdef issue_refund(request):\n    13\t    \"\"\"Refunds above the threshold need a second pair of eyes before money moves.\"\"\"\n    14\t    body = request.get(\"json\") or {}\n    15\t    if \"payment_id\" not in body or \"amount\" not in body:\n    16\t        return 400, {\"error\": \"payment_id and amount are required\"}\n    17\t    if Decimal(body[\"amount\"]) > APPROVAL_THRESHOLD:\n    18\t        _PENDING.append(body)\n    19\t        return 202, {\"status\": \"pending_approval\"}\n    20\t    return 201, create_refund(body[\"payment_id\"], body[\"amount\"], body.get(\"reason\", \"\"))"
+      },
+      {
+       "role": "tool",
+       "tool_call_id": "call-035d7e6c-b36c-4e20-8140-040053aae2b5",
+       "content": "     1\tfrom app.routes import route\n     2\t\n     3\tfrom .refunds import create_refund\n     4\t\n     5\t\n     6\t@route(\"POST\", \"/payments/refund\")\n     7\tdef refund_payment(request):\n     8\t    body = request.get(\"json\") or {}\n     9\t    return 201, create_refund(body[\"payment_id\"], body[\"amount\"], \"full refund\")"
+      }
+     ],
+     "stream": true,
+     "stream_options": {
+      "include_usage": true
+     },
+     "tools": [
+      {
+       "type": "function",
+       "function": {
+        "name": "read",
+        "description": "Read a text file with line numbers. Use offset and limit to page through large files. Lines over 2000 characters are cut, and output stops at the output cap with a hint giving the offset to continue from.",
+        "parameters": {
+         "properties": {
+          "path": {
+           "description": "File to read, relative to the working directory or absolute.",
+           "title": "Path",
+           "type": "string"
+          },
+          "offset": {
+           "default": 1,
+           "description": "1-based line to start from.",
+           "minimum": 1,
+           "title": "Offset",
+           "type": "integer"
+          },
+          "limit": {
+           "default": 2000,
+           "description": "Maximum number of lines to return.",
+           "minimum": 1,
+           "title": "Limit",
+           "type": "integer"
+          }
+         },
+         "required": [
+          "path"
+         ],
+         "title": "ReadArgs",
+         "type": "object"
+        }
+       }
+      },
+      {
+       "type": "function",
+       "function": {
+        "name": "write",
+        "description": "Create a file or overwrite it with the given content. Parent directories are created. Prefer edit for changes to an existing file.",
+        "parameters": {
+         "properties": {
+          "path": {
+           "description": "File to write, relative to the working directory or absolute.",
+           "title": "Path",
+           "type": "string"
+          },
+          "content": {
+           "description": "Full new content of the file.",
+           "title": "Content",
+           "type": "string"
+          }
+         },
+         "required": [
+          "path",
+          "content"
+         ],
+         "title": "WriteArgs",
+         "type": "object"
+        }
+       }
+      },
+      {
+       "type": "function",
+       "function": {
+        "name": "edit",
+        "description": "Replace exact text in a file. old_string must match the file exactly, including whitespace, and must be unique unless replace_all is set.",
+        "parameters": {
+         "properties": {
+          "path": {
+           "description": "File to edit, relative to the working directory or absolute.",
+           "title": "Path",
+           "type": "string"
+          },
+          "old_string": {
+           "description": "Exact text to replace, including whitespace.",
+           "title": "Old String",
+           "type": "string"
+          },
+          "new_string": {
+           "description": "Replacement text.",
+           "title": "New String",
+           "type": "string"
+          },
+          "replace_all": {
+           "default": false,
+           "description": "Replace every occurrence.",
+           "title": "Replace All",
+           "type": "boolean"
+          }
+         },
+         "required": [
+          "path",
+          "old_string",
+          "new_string"
+         ],
+         "title": "EditArgs",
+         "type": "object"
+        }
+       }
+      },
+      {
+       "type": "function",
+       "function": {
+        "name": "grep",
+        "description": "Search file contents with a regular expression. Returns path:line:text lines. Use glob to restrict the files searched.",
+        "parameters": {
+         "properties": {
+          "pattern": {
+           "description": "Regular expression to search for.",
+           "title": "Pattern",
+           "type": "string"
+          },
+          "path": {
+           "default": ".",
+           "description": "File or directory to search.",
+           "title": "Path",
+           "type": "string"
+          },
+          "glob": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "default": null,
+           "description": "Only search files matching this glob.",
+           "title": "Glob"
+          },
+          "ignore_case": {
+           "default": false,
+           "description": "Match case-insensitively.",
+           "title": "Ignore Case",
+           "type": "boolean"
+          },
+          "max_results": {
+           "default": 200,
+           "description": "Maximum number of matching lines.",
+           "minimum": 1,
+           "title": "Max Results",
+           "type": "integer"
+          }
+         },
+         "required": [
+          "pattern"
+         ],
+         "title": "GrepArgs",
+         "type": "object"
+        }
+       }
+      },
+      {
+       "type": "function",
+       "function": {
+        "name": "glob",
+        "description": "List files matching a glob pattern, sorted. A pattern without a slash matches file names at any depth; use src/**/*.py to match a path. Hidden directories are skipped.",
+        "parameters": {
+         "properties": {
+          "pattern": {
+           "description": "Glob such as src/**/*.py. Without a slash it matches names.",
+           "title": "Pattern",
+           "type": "string"
+          },
+          "path": {
+           "default": ".",
+           "description": "Directory to search in.",
+           "title": "Path",
+           "type": "string"
+          }
+         },
+         "required": [
+          "pattern"
+         ],
+         "title": "GlobArgs",
+         "type": "object"
+        }
+       }
+      },
+      {
+       "type": "function",
+       "function": {
+        "name": "bash",
+        "description": "Run a shell command with bash. Each call runs in a fresh shell: a directory change made with cd persists to later calls, but exported variables and shell state do not. Stdout and stderr are merged, output is capped, and a non-zero exit is reported as an error.",
+        "parameters": {
+         "properties": {
+          "command": {
+           "description": "The command to run.",
+           "title": "Command",
+           "type": "string"
+          },
+          "timeout_s": {
+           "anyOf": [
+            {
+             "exclusiveMinimum": 0,
+             "type": "number"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "default": null,
+           "description": "Timeout in seconds, capped by the tool timeout.",
+           "title": "Timeout S"
+          }
+         },
+         "required": [
+          "command"
+         ],
+         "title": "BashArgs",
+         "type": "object"
+        }
+       }
+      }
+     ]
+    }
+   },
+   "response": {
+    "status": 200,
+    "headers": {
+     "content-type": "text/event-stream"
+    },
+    "body": "data: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"Question\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\":\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" \\\"\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"Which\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" function\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" actually\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" handles\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" a\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" POST\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" to\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" /\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"ref\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"unds\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" in\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" this\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" app\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"?\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" Give\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" me\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" the\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" function\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" name\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" and\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" the\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" file\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" it\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" lives\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" in\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" Don't\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" change\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" anything\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".\\\"\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" Need\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" answer\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" likely\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" issue\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"_ref\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"und\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" in\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" app\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"/b\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"illing\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"/\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"appro\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"vals\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".py\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" due\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" import\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" order\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" and\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" route\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" replacement\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" Need\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" carefully\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" establish\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" import\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" order\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\":\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" main\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" imports\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" routes\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" dispatch\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" then `\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"from\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" app\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".b\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"illing\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" import\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" refunds\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\",\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" payments\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\",\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" approvals\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"`\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\";\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" Python\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" import\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" statement\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" imports\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" modules\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" in\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" listed\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" order\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\",\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" yes\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" refunds\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" then\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" payments\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" then\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" approvals\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" Each\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" route\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" decorator\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" same\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" key\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" replaces\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" earlier\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" refunds\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" handle\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"_ref\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"und\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" registered\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" first\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\",\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" approvals\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" issue\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"_ref\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"und\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" later\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" over\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"writes\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" Thus\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" actual\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" handler\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" issue\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"_ref\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"und\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" app\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"/b\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"illing\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"/\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"appro\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"vals\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".py\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" Need\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" perhaps\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" check\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" git\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" or\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" run\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" app\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" to verify\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" No\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" changes\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" Could\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" state\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" But\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" let's\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" ensure\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" subtle\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" import\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" mechanics\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\":\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" `\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"from\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" app\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".b\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"illing\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" import\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" refunds\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\",\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" payments\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\",\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" approvals\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"`\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" imports\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" package\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" attrs\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" perhaps\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" order\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"?\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" yes\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" list\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" order\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\",\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" import\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"lib\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" imports\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" each\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" sequentially\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" approvals\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" imported\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" last\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" Route\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" registration\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" replacement\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" We\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" can\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" run\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" perhaps\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" `\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"python\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" -\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"c\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"`\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" inspect\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" routes\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" But\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" no\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" need\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\",\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" though\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" question\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" wording\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" \\\"\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"actually\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" handles\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"\\\"\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" likely\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" tests\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" subtle\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" duplicate\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" route\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" Need\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" provide\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" function\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"/file\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\",\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" perhaps\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" mention\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" why\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" We\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" should\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" inspect\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" maybe\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" package\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" __\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"init\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"__\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" absent\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"?\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" glob\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" didn't\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" show\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" __\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"init\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"__,\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" namespace\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" package\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" works\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" Could\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" run\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" command\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" to\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" confirm\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" without\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" changes\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"\",\"tool_calls\":[{\"index\":0,\"id\":\"call-0a8b59ab-95bc-48eb-a78c-6a517368b1e6\",\"type\":\"function\",\"function\":{\"name\":\"bash\",\"arguments\":\"{\\\"command\\\":\\\"python - <<'PY'\\\\nfrom app.main import handle\\\\nfrom app.routes import ROUTES\\\\nprint(ROUTES[(\\\\\\\"POST\\\\\\\", \\\\\\\"/refunds\\\\\\\")].__name__, ROUTES[(\\\\\\\"POST\\\\\\\", \\\\\\\"/refunds\\\\\\\")].__module__)\\\\nPY\\\",\\\"timeout_s\\\":30}\"}}]},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\",\"logprobs\":null}],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-a4646f0c-e13c-4a4c-81b0-1d7d2a8fc9f6\",\"choices\":[],\"created\":1793040402,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\",\"usage\":{\"prompt_tokens\":3924,\"completion_tokens\":344,\"total_tokens\":4268,\"prompt_tokens_details\":{\"cached_tokens\":2816},\"completion_tokens_details\":{\"reasoning_tokens\":257}}}\n\ndata: [DONE]\n\n"
+   }
+  },
+  {
+   "request": {
+    "method": "POST",
+    "url": "https://integrate.api.nvidia.com/v1/chat/completions",
+    "json": {
+     "model": "minimaxai/minimax-m3.1-flash",
+     "messages": [
+      {
+       "role": "system",
+       "content": "You are a coding agent working in a local repository.\nWorkspace root: /tmp/harness-suite/investigate-refund-route-handler/1\nStarting working directory (relative to the root): .\n\nUse the tools to inspect and change files and to run commands. Read a file before you edit it, and copy old_string exactly from a fresh read. Prefer small, targeted edits. Run the project's tests or a quick check after changing code when that is possible.\n\nSome tool results start with a status in brackets. [error] and [denied] mean the call did not do what you asked. [interrupted] means it did not finish and is safe to retry. [unknown] means it may have changed state: inspect before you retry it.\n\nWhen the task is done, reply with a short summary of what you changed and stop calling tools.\n\nNobody will answer questions during the task. Work until it is done, then stop."
+      },
+      {
+       "role": "user",
+       "content": "Which function actually handles a POST to /refunds in this app? Give me the function name and the file it lives in. Don't change anything."
+      },
+      {
+       "role": "assistant",
+       "content": null,
+       "tool_calls": [
+        {
+         "id": "call-9057cfb3-b343-4f85-9cba-5fe4080893f2",
+         "type": "function",
+         "function": {
+          "name": "glob",
+          "arguments": "{\"pattern\": \"**/*\", \"path\": \".\"}"
+         }
+        },
+        {
+         "id": "call-0532da16-d1ec-4de3-950a-90510492e76a",
+         "type": "function",
+         "function": {
+          "name": "grep",
+          "arguments": "{\"pattern\": \"refunds|refund\", \"path\": \".\", \"glob\": \"**/*\", \"ignore_case\": true, \"max_results\": 200}"
+         }
+        }
+       ],
+       "reasoning_content": "We need answer inspect repo, no changes. Need determine function actually handles POST /refunds. Need inspect files. Use tools commentary. Start list."
+      },
+      {
+       "role": "tool",
+       "tool_call_id": "call-9057cfb3-b343-4f85-9cba-5fe4080893f2",
+       "content": ".git/COMMIT_EDITMSG\n.git/HEAD\n.git/config\n.git/description\n.git/hooks/applypatch-msg.sample\n.git/hooks/commit-msg.sample\n.git/hooks/fsmonitor-watchman.sample\n.git/hooks/post-update.sample\n.git/hooks/pre-applypatch.sample\n.git/hooks/pre-commit.sample\n.git/hooks/pre-merge-commit.sample\n.git/hooks/pre-push.sample\n.git/hooks/pre-rebase.sample\n.git/hooks/pre-receive.sample\n.git/hooks/prepare-commit-msg.sample\n.git/hooks/push-to-checkout.sample\n.git/hooks/sendemail-validate.sample\n.git/hooks/update.sample\n.git/index\n.git/info/exclude\n.git/logs/HEAD\n.git/logs/refs/heads/master\n.git/objects/0c/b0b29b6ae9b662ed3fee1fb64be833b87b986b\n.git/objects/15/b2aec0773b623b47df4dc83ea72f2617488a56\n.git/objects/21/96335a39f38665f1b978ce60c24de01946a468\n.git/objects/35/ee83cdd582740ab90ff9b00d4baec735a8e0c8\n.git/objects/73/4233e1654d547740d4b40df5032a7589a86b15\n.git/objects/7f/c9895cbb10860a0ab508f62fbe197bd1f77301\n.git/objects/c4/715e07b4176b74c3485a6c708f8273c4c03661\n.git/objects/cb/3fd2a6695f80e6149919f0895f47407a5886eb\n.git/objects/d0/9e808119d1e2f4a1a78a49afe86b57af91dbbc\n.git/refs/heads/master\napp/billing/approvals.py\napp/billing/payments.py\napp/billing/refunds.py\napp/main.py\napp/routes.py"
+      },
+      {
+       "role": "tool",
+       "tool_call_id": "call-0532da16-d1ec-4de3-950a-90510492e76a",
+       "content": "app/main.py:8:from app.billing import refunds, payments, approvals  # noqa: F401,E402\napp/billing/payments.py:3:from .refunds import create_refund\napp/billing/payments.py:6:@route(\"POST\", \"/payments/refund\")\napp/billing/payments.py:7:def refund_payment(request):\napp/billing/payments.py:9:    return 201, create_refund(body[\"payment_id\"], body[\"amount\"], \"full refund\")\napp/billing/refunds.py:5:_REFUNDS = []\napp/billing/refunds.py:8:def create_refund(payment_id, amount, reason=\"\"):\napp/billing/refunds.py:9:    refund = {\"id\": len(_REFUNDS) + 1, \"payment_id\": payment_id, \"amount\": str(Decimal(amount)), \"reason\": reason}\napp/billing/refunds.py:10:    _REFUNDS.append(refund)\napp/billing/refunds.py:11:    return refund\napp/billing/refunds.py:14:@route(\"GET\", \"/refunds\")\napp/billing/refunds.py:15:def list_refunds(request):\napp/billing/refunds.py:16:    return 200, {\"refunds\": list(_REFUNDS)}\napp/billing/refunds.py:19:@route(\"POST\", \"/refunds\")\napp/billing/refunds.py:20:def handle_refund(request):\napp/billing/refunds.py:24:    return 201, create_refund(body[\"payment_id\"], body[\"amount\"], body.get(\"reason\", \"\"))\napp/billing/approvals.py:5:from .refunds import create_refund\napp/billing/approvals.py:11:@route(\"POST\", \"/refunds\")\napp/billing/approvals.py:12:def issue_refund(request):\napp/billing/approvals.py:13:    \"\"\"Refunds above the threshold need a second pair of eyes before money moves.\"\"\"\napp/billing/approvals.py:20:    return 201, create_refund(body[\"payment_id\"], body[\"amount\"], body.get(\"reason\", \"\"))"
+      },
+      {
+       "role": "assistant",
+       "content": null,
+       "tool_calls": [
+        {
+         "id": "call-7d44ad09-3256-4ad7-a768-f5ec7e8cd51e",
+         "type": "function",
+         "function": {
+          "name": "read",
+          "arguments": "{\"path\": \"app/main.py\", \"offset\": 1, \"limit\": 2000}"
+         }
+        },
+        {
+         "id": "call-02b3663f-1f13-4e2b-a22a-b4371bcbd37f",
+         "type": "function",
+         "function": {
+          "name": "read",
+          "arguments": "{\"path\": \"app/routes.py\", \"offset\": 1, \"limit\": 2000}"
+         }
+        },
+        {
+         "id": "call-623112ca-4e73-45f2-8bd5-3789be3eac89",
+         "type": "function",
+         "function": {
+          "name": "read",
+          "arguments": "{\"path\": \"app/billing/refunds.py\", \"offset\": 1, \"limit\": 2000}"
+         }
+        },
+        {
+         "id": "call-cc61c735-94c1-44dd-be3b-8ac8ec12e028",
+         "type": "function",
+         "function": {
+          "name": "read",
+          "arguments": "{\"path\": \"app/billing/approvals.py\", \"offset\": 1, \"limit\": 2000}"
+         }
+        },
+        {
+         "id": "call-035d7e6c-b36c-4e20-8140-040053aae2b5",
+         "type": "function",
+         "function": {
+          "name": "read",
+          "arguments": "{\"path\": \"app/billing/payments.py\", \"offset\": 1, \"limit\": 2000}"
+         }
+        }
+       ],
+       "reasoning_content": "We need inspect routes/main perhaps ambiguity duplicate routes, actual dispatch precedence. Read files."
+      },
+      {
+       "role": "tool",
+       "tool_call_id": "call-7d44ad09-3256-4ad7-a768-f5ec7e8cd51e",
+       "content": "     1\timport json\n     2\timport sys\n     3\t\n     4\tfrom app.routes import dispatch\n     5\t\n     6\t# Import order matters only in that every module must be imported for its\n     7\t# routes to be registered.\n     8\tfrom app.billing import refunds, payments, approvals  # noqa: F401,E402\n     9\t\n    10\t\n    11\tdef handle(method, path, body=None):\n    12\t    return dispatch(method, path, {\"json\": body})\n    13\t\n    14\t\n    15\tif __name__ == \"__main__\":\n    16\t    status, payload = handle(sys.argv[1], sys.argv[2], json.loads(sys.argv[3]) if len(sys.argv) > 3 else None)\n    17\t    print(status, json.dumps(payload))"
+      },
+      {
+       "role": "tool",
+       "tool_call_id": "call-02b3663f-1f13-4e2b-a22a-b4371bcbd37f",
+       "content": "     1\tROUTES = {}\n     2\t\n     3\t\n     4\tdef route(method, path):\n     5\t    \"\"\"Register the decorated function as the handler for ``method path``.\n     6\t\n     7\t    Registering the same method/path twice replaces the earlier handler.\n     8\t    \"\"\"\n     9\t    def register(func):\n    10\t        ROUTES[(method.upper(), path)] = func\n    11\t        return func\n    12\t    return register\n    13\t\n    14\t\n    15\tdef dispatch(method, path, request):\n    16\t    handler = ROUTES.get((method.upper(), path))\n    17\t    if handler is None:\n    18\t        return 404, {\"error\": \"not found\"}\n    19\t    return handler(request)"
+      },
+      {
+       "role": "tool",
+       "tool_call_id": "call-623112ca-4e73-45f2-8bd5-3789be3eac89",
+       "content": "     1\tfrom decimal import Decimal\n     2\t\n     3\tfrom app.routes import route\n     4\t\n     5\t_REFUNDS = []\n     6\t\n     7\t\n     8\tdef create_refund(payment_id, amount, reason=\"\"):\n     9\t    refund = {\"id\": len(_REFUNDS) + 1, \"payment_id\": payment_id, \"amount\": str(Decimal(amount)), \"reason\": reason}\n    10\t    _REFUNDS.append(refund)\n    11\t    return refund\n    12\t\n    13\t\n    14\t@route(\"GET\", \"/refunds\")\n    15\tdef list_refunds(request):\n    16\t    return 200, {\"refunds\": list(_REFUNDS)}\n    17\t\n    18\t\n    19\t@route(\"POST\", \"/refunds\")\n    20\tdef handle_refund(request):\n    21\t    body = request.get(\"json\") or {}\n    22\t    if \"payment_id\" not in body or \"amount\" not in body:\n    23\t        return 400, {\"error\": \"payment_id and amount are required\"}\n    24\t    return 201, create_refund(body[\"payment_id\"], body[\"amount\"], body.get(\"reason\", \"\"))"
+      },
+      {
+       "role": "tool",
+       "tool_call_id": "call-cc61c735-94c1-44dd-be3b-8ac8ec12e028",
+       "content": "     1\tfrom decimal import Decimal\n     2\t\n     3\tfrom app.routes import route\n     4\t\n     5\tfrom .refunds import create_refund\n     6\t\n     7\tAPPROVAL_THRESHOLD = Decimal(\"500\")\n     8\t_PENDING = []\n     9\t\n    10\t\n    11\t@route(\"POST\", \"/refunds\")\n    12\tdef issue_refund(request):\n    13\t    \"\"\"Refunds above the threshold need a second pair of eyes before money moves.\"\"\"\n    14\t    body = request.get(\"json\") or {}\n    15\t    if \"payment_id\" not in body or \"amount\" not in body:\n    16\t        return 400, {\"error\": \"payment_id and amount are required\"}\n    17\t    if Decimal(body[\"amount\"]) > APPROVAL_THRESHOLD:\n    18\t        _PENDING.append(body)\n    19\t        return 202, {\"status\": \"pending_approval\"}\n    20\t    return 201, create_refund(body[\"payment_id\"], body[\"amount\"], body.get(\"reason\", \"\"))"
+      },
+      {
+       "role": "tool",
+       "tool_call_id": "call-035d7e6c-b36c-4e20-8140-040053aae2b5",
+       "content": "     1\tfrom app.routes import route\n     2\t\n     3\tfrom .refunds import create_refund\n     4\t\n     5\t\n     6\t@route(\"POST\", \"/payments/refund\")\n     7\tdef refund_payment(request):\n     8\t    body = request.get(\"json\") or {}\n     9\t    return 201, create_refund(body[\"payment_id\"], body[\"amount\"], \"full refund\")"
+      },
+      {
+       "role": "assistant",
+       "content": null,
+       "tool_calls": [
+        {
+         "id": "call-0a8b59ab-95bc-48eb-a78c-6a517368b1e6",
+         "type": "function",
+         "function": {
+          "name": "bash",
+          "arguments": "{\"command\": \"python - <<'PY'\\nfrom app.main import handle\\nfrom app.routes import ROUTES\\nprint(ROUTES[(\\\"POST\\\", \\\"/refunds\\\")].__name__, ROUTES[(\\\"POST\\\", \\\"/refunds\\\")].__module__)\\nPY\", \"timeout_s\": 30}"
+         }
+        }
+       ],
+       "reasoning_content": "Question: \"Which function actually handles a POST to /refunds in this app? Give me the function name and the file it lives in. Don't change anything.\" Need answer likely issue_refund in app/billing/approvals.py due import order and route replacement. Need carefully establish import order: main imports routes dispatch then `from app.billing import refunds, payments, approvals`; Python import statement imports modules in listed order, yes refunds then payments then approvals. Each route decorator same key replaces earlier. refunds handle_refund registered first, approvals issue_refund later overwrites. Thus actual handler issue_refund app/billing/approvals.py. Need perhaps check git or run app to verify. No changes. Could state. But let's ensure subtle import mechanics: `from app.billing import refunds, payments, approvals` imports package attrs perhaps order? yes list order, importlib imports each sequentially. approvals imported last. Route registration replacement. We can run perhaps `python -c` inspect routes. But no need, though question wording \"actually handles\" likely tests subtle duplicate route. Need provide function/file, perhaps mention why. We should inspect maybe package __init__ absent? glob didn't show __init__, namespace package works. Could run command to confirm without changes."
+      },
+      {
+       "role": "tool",
+       "tool_call_id": "call-0a8b59ab-95bc-48eb-a78c-6a517368b1e6",
+       "content": "issue_refund app.billing.approvals"
+      }
+     ],
+     "stream": true,
+     "stream_options": {
+      "include_usage": true
+     },
+     "tools": [
+      {
+       "type": "function",
+       "function": {
+        "name": "read",
+        "description": "Read a text file with line numbers. Use offset and limit to page through large files. Lines over 2000 characters are cut, and output stops at the output cap with a hint giving the offset to continue from.",
+        "parameters": {
+         "properties": {
+          "path": {
+           "description": "File to read, relative to the working directory or absolute.",
+           "title": "Path",
+           "type": "string"
+          },
+          "offset": {
+           "default": 1,
+           "description": "1-based line to start from.",
+           "minimum": 1,
+           "title": "Offset",
+           "type": "integer"
+          },
+          "limit": {
+           "default": 2000,
+           "description": "Maximum number of lines to return.",
+           "minimum": 1,
+           "title": "Limit",
+           "type": "integer"
+          }
+         },
+         "required": [
+          "path"
+         ],
+         "title": "ReadArgs",
+         "type": "object"
+        }
+       }
+      },
+      {
+       "type": "function",
+       "function": {
+        "name": "write",
+        "description": "Create a file or overwrite it with the given content. Parent directories are created. Prefer edit for changes to an existing file.",
+        "parameters": {
+         "properties": {
+          "path": {
+           "description": "File to write, relative to the working directory or absolute.",
+           "title": "Path",
+           "type": "string"
+          },
+          "content": {
+           "description": "Full new content of the file.",
+           "title": "Content",
+           "type": "string"
+          }
+         },
+         "required": [
+          "path",
+          "content"
+         ],
+         "title": "WriteArgs",
+         "type": "object"
+        }
+       }
+      },
+      {
+       "type": "function",
+       "function": {
+        "name": "edit",
+        "description": "Replace exact text in a file. old_string must match the file exactly, including whitespace, and must be unique unless replace_all is set.",
+        "parameters": {
+         "properties": {
+          "path": {
+           "description": "File to edit, relative to the working directory or absolute.",
+           "title": "Path",
+           "type": "string"
+          },
+          "old_string": {
+           "description": "Exact text to replace, including whitespace.",
+           "title": "Old String",
+           "type": "string"
+          },
+          "new_string": {
+           "description": "Replacement text.",
+           "title": "New String",
+           "type": "string"
+          },
+          "replace_all": {
+           "default": false,
+           "description": "Replace every occurrence.",
+           "title": "Replace All",
+           "type": "boolean"
+          }
+         },
+         "required": [
+          "path",
+          "old_string",
+          "new_string"
+         ],
+         "title": "EditArgs",
+         "type": "object"
+        }
+       }
+      },
+      {
+       "type": "function",
+       "function": {
+        "name": "grep",
+        "description": "Search file contents with a regular expression. Returns path:line:text lines. Use glob to restrict the files searched.",
+        "parameters": {
+         "properties": {
+          "pattern": {
+           "description": "Regular expression to search for.",
+           "title": "Pattern",
+           "type": "string"
+          },
+          "path": {
+           "default": ".",
+           "description": "File or directory to search.",
+           "title": "Path",
+           "type": "string"
+          },
+          "glob": {
+           "anyOf": [
+            {
+             "type": "string"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "default": null,
+           "description": "Only search files matching this glob.",
+           "title": "Glob"
+          },
+          "ignore_case": {
+           "default": false,
+           "description": "Match case-insensitively.",
+           "title": "Ignore Case",
+           "type": "boolean"
+          },
+          "max_results": {
+           "default": 200,
+           "description": "Maximum number of matching lines.",
+           "minimum": 1,
+           "title": "Max Results",
+           "type": "integer"
+          }
+         },
+         "required": [
+          "pattern"
+         ],
+         "title": "GrepArgs",
+         "type": "object"
+        }
+       }
+      },
+      {
+       "type": "function",
+       "function": {
+        "name": "glob",
+        "description": "List files matching a glob pattern, sorted. A pattern without a slash matches file names at any depth; use src/**/*.py to match a path. Hidden directories are skipped.",
+        "parameters": {
+         "properties": {
+          "pattern": {
+           "description": "Glob such as src/**/*.py. Without a slash it matches names.",
+           "title": "Pattern",
+           "type": "string"
+          },
+          "path": {
+           "default": ".",
+           "description": "Directory to search in.",
+           "title": "Path",
+           "type": "string"
+          }
+         },
+         "required": [
+          "pattern"
+         ],
+         "title": "GlobArgs",
+         "type": "object"
+        }
+       }
+      },
+      {
+       "type": "function",
+       "function": {
+        "name": "bash",
+        "description": "Run a shell command with bash. Each call runs in a fresh shell: a directory change made with cd persists to later calls, but exported variables and shell state do not. Stdout and stderr are merged, output is capped, and a non-zero exit is reported as an error.",
+        "parameters": {
+         "properties": {
+          "command": {
+           "description": "The command to run.",
+           "title": "Command",
+           "type": "string"
+          },
+          "timeout_s": {
+           "anyOf": [
+            {
+             "exclusiveMinimum": 0,
+             "type": "number"
+            },
+            {
+             "type": "null"
+            }
+           ],
+           "default": null,
+           "description": "Timeout in seconds, capped by the tool timeout.",
+           "title": "Timeout S"
+          }
+         },
+         "required": [
+          "command"
+         ],
+         "title": "BashArgs",
+         "type": "object"
+        }
+       }
+      }
+     ]
+    }
+   },
+   "response": {
+    "status": 200,
+    "headers": {
+     "content-type": "text/event-stream"
+    },
+    "body": "data: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"The\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" function\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" that\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" actually\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" handles\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" `\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"POST\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" /\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ref\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"unds\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"`\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" is\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" **`\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"issue\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"_ref\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"und\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"`\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"**,\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" located\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" in\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" **`\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"app\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"/b\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"illing\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"/\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"appro\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"vals\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\".py\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"`\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"**.\\n\\n\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"It\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" replaces\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" `\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"handle\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"_ref\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"und\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"`\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" from\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" `\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"app\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"/b\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"illing\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"/ref\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"unds\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\".py\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"`\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" because\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" both\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" register\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" the\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" same\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" route\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\",\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" and\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" `\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"appro\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"vals\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"`\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" is\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" imported\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" last\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\".\"},\"finish_reason\":null,\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\",\"logprobs\":null}],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\"}\n\ndata: {\"id\":\"chatcmpl-afb10656-44c4-451e-aa71-1ff8b69afa89\",\"choices\":[],\"created\":1793040419,\"model\":\"minimaxai/minimax-m3.1-flash\",\"object\":\"chat.completion.chunk\",\"usage\":{\"prompt_tokens\":4292,\"completion_tokens\":64,\"total_tokens\":4356,\"prompt_tokens_details\":{\"cached_tokens\":4224},\"completion_tokens_details\":{\"reasoning_tokens\":0}}}\n\ndata: [DONE]\n\n"
+   }
+  }
+ ]
+}

@@ -1,0 +1,4 @@
+kind = "refactor"
+prompt = "logfilter.py still uses the deprecated optparse module. Port the CLI to argparse. Keep every option, short and long flag, default and the exit behavior for bad input the same, and keep the build_parser()/main(argv) structure so the tests keep working. No optparse imports may remain."
+max_turns = 16
+max_wall_s = 900

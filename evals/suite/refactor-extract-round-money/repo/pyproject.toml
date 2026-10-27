@@ -1,0 +1,7 @@
+[project]
+name = "till"
+version = "0.5.2"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

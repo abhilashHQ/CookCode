@@ -1,0 +1,4 @@
+kind = "bugfix"
+prompt = "bin/backup.sh falls over as soon as a path contains spaces. With a source folder holding 'Q1 report.pdf' it dies with 'cp: cannot stat', and when the destination is something like '/mnt/backups/Team Drive' the pruning of old snapshots doesn't work either. Make the script handle spaces in file names and in the source/destination paths. Keep the CLI and the KEEP behaviour the same."
+max_turns = 14
+max_wall_s = 900

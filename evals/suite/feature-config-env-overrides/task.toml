@@ -1,0 +1,6 @@
+kind = "feature"
+prompt = """Add environment variable overrides to appconfig.load_config. New signature: load_config(path=None, env=None), where env is a mapping that defaults to os.environ.
+A variable named APP_<SECTION>_<KEY> (upper case) overrides config[section][key], e.g. APP_DATABASE_POOL_SIZE=10 sets config["database"]["pool_size"] to 10. Only keys that already exist in the merged config can be overridden; anything else is ignored. Convert the string to the type of the value it replaces: int, float, bool (accept 1/0, true/false, yes/no, on/off, case-insensitive, and raise ValueError for anything else), and str stays str.
+Precedence is env over config file over defaults. Loading must never mutate DEFAULTS."""
+max_turns = 18
+max_wall_s = 900

@@ -1,0 +1,4 @@
+kind = "refactor"
+prompt = "pricing.py and checkout.py repeat the same cents-rounding logic (quantize to 0.01, half-up) in several places, spelled slightly differently each time. Extract it into one public helper `round_money(amount)` in pricing.py that accepts a Decimal or int and returns a Decimal rounded to cents, half-up, and make every one of those places call it. No other quantize calls should remain. Behavior must not change."
+max_turns = 16
+max_wall_s = 900

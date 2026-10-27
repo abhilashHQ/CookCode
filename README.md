@@ -29,6 +29,15 @@ items hash.
 
 Terminal-Bench through Harbor (Docker required):
 `uv run harbor run -d terminal-bench@2.0 -i <task> -a harness.harbor.agent:HarnessAgent -m nim/minimaxai/minimax-m3.1-flash`.
+`evals/run_tb.sh harness|terminus-2 <attempts> [task ...]` runs the fixed slice in
+`evals/tb-slice.txt` with either agent on the same endpoint, model and turn cap.
+
+Evals: `uv run harness eval run` replays the local suite (`evals/suite/`, 24 fixture tasks) from
+cassettes with no API calls; `--mode oracle` runs the reference solutions, `--mode record` calls
+the model once per task and saves the cassettes, `--mode live --attempts N` measures.
+`uv run harness eval report <run-dir | harbor-job-dir>` prints the score, per-attempt spread,
+bootstrap CI and paired MDE. `uv run harness stats <session | dir>` totals requests, tokens,
+cache-read share, time split and tool errors from the session logs.
 
 Tests replay recorded provider traffic from `tests/cassettes/`. To re-record against OpenRouter:
 `HARNESS_RECORD=1 uv run pytest tests/test_cassettes.py -k openrouter` (or `-k nim`, `-k gemini`).

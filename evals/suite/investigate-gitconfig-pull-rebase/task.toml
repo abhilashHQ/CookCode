@@ -1,0 +1,4 @@
+kind = "investigate"
+prompt = "These are my dotfiles. Assume the repo is cloned to ~/dotfiles and dotfiles/gitconfig is installed as ~/.gitconfig, as the README describes. Inside a git repository at ~/work/payments-api, what value does `git config pull.rebase` print? Walk me through why. Don't modify any files."
+max_turns = 18
+max_wall_s = 900

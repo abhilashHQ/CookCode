@@ -25,6 +25,8 @@ from harness.providers.base import (
 )
 
 RETRYABLE_STATUS = frozenset({408, 409, 425, 429, 500, 502, 503, 504, *range(520, 530)})
+# Bounds 429 retries even when backoff is zero; at the default backoff the wait budget ends first.
+MAX_RATE_LIMIT_ATTEMPTS = 12
 
 type JSON = dict[str, Any]
 
@@ -195,6 +197,7 @@ class StreamingHttpProvider(ABC):
     ) -> AsyncGenerator[StreamEvent]:
         body = self.build_body(request)
         attempt = 0
+        waited = 0.0
         async with httpx.AsyncClient(transport=self._transport, timeout=self._timeout) as client:
             while True:
                 attempt += 1
@@ -219,11 +222,19 @@ class StreamingHttpProvider(ABC):
                         f"over the {self._max_server_wait_s:.0f}s limit)",
                     )
                     return
-                if not failure.retryable or attempt > self._max_retries:
+                delay = self._delay(attempt, failure)
+                # A 429 says the provider is busy, which lasts as long as its window or another
+                # caller's in-flight request: budget it in seconds of waiting, not attempts.
+                exhausted = (
+                    waited + delay > self._max_server_wait_s or attempt > MAX_RATE_LIMIT_ATTEMPTS
+                    if failure.status == 429
+                    else attempt > self._max_retries
+                )
+                if not failure.retryable or exhausted:
                     tries = f" after {attempt} attempts" if attempt > 1 else ""
                     yield StreamEnd(stop_reason="error", error=f"{failure.reason}{tries}")
                     return
-                delay = self._delay(attempt, failure)
+                waited += delay
                 yield StreamRetry(
                     attempt=attempt, delay_s=delay, reason=failure.reason, status=failure.status
                 )

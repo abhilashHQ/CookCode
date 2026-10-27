@@ -1,0 +1,5 @@
+kind = "feature"
+prompt = """Accounting wants invoices as CSV. Add `to_csv(invoices) -> str` to invoicing/report.py, and a `--format {text,csv}` option to the CLI (python -m invoicing.cli FILE), default text.
+CSV spec: header row `number,customer,issued,subtotal,tax,total`, then one row per invoice in the given order. `issued` is an ISO date, money columns always have exactly two decimals, values must match what the text report shows, quoting follows the csv module defaults, and lines end with \\n (not \\r\\n)."""
+max_turns = 22
+max_wall_s = 900

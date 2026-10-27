@@ -1,0 +1,7 @@
+[project]
+name = "catalog-api"
+version = "0.3.1"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

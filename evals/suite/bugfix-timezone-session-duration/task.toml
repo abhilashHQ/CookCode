@@ -1,0 +1,4 @@
+kind = "bugfix"
+prompt = "Timesheet totals are wrong for people logging from different timezones. Example: a session from 2024-03-01T10:00:00+02:00 to 2024-03-01T09:30:00+00:00 is rejected with 'ends before it starts', but it is a 90 minute session. Daily totals should be grouped by UTC date, and timestamps without an offset are UTC. Fix the root cause."
+max_turns = 18
+max_wall_s = 900

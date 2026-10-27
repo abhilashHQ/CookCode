@@ -1,0 +1,4 @@
+kind = "bugfix"
+prompt = "Release tooling crashes on release candidates: `python release.py 2.0.0-rc.1 minor` dies with ValueError: not a semantic version. test_versioning.py has a failing test for it. Fix version parsing so it follows the SemVer 2.0 spec, without breaking ordering."
+max_turns = 14
+max_wall_s = 900

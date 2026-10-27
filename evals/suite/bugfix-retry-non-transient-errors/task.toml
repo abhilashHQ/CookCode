@@ -1,0 +1,4 @@
+kind = "bugfix"
+prompt = "When the API returns 404 for a missing user, Client.get_user keeps retrying and eventually raises RetryError after several seconds of backoff, instead of raising NotFound right away. Auth failures (401/403) behave the same way. Also, hitting Ctrl-C while a request is in flight doesn't stop the program, it just moves on to the next attempt. Rate limits and 5xx responses should still be retried. Fix this properly."
+max_turns = 20
+max_wall_s = 900
