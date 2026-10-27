@@ -13,6 +13,8 @@ from harness.core.features import Features
 from harness.core.strategy import Strategy
 from harness.evals.context import ContextCost, session_cost
 from harness.evals.context import render as render_context
+from harness.evals.repro import judge
+from harness.evals.repro import render as render_repro
 from harness.evals.runner import AttemptResult, Mode, run_suite
 from harness.evals.stats import (
     Price,
@@ -183,6 +185,23 @@ def _context(args: argparse.Namespace) -> int:
     return 0
 
 
+def _repro(args: argparse.Namespace) -> int:
+    run = Path(args.run)
+    rows = [
+        AttemptResult.model_validate_json(line)
+        for line in (run / "results.jsonl").read_text().splitlines()
+        if line.strip()
+    ]
+    tasks = {task.id: task for task in load_suite(Path(args.suite))}
+    try:
+        verdicts = [judge(tasks[row.task], row, run / "sessions") for row in rows]
+    except (KeyError, ValueError) as exc:
+        print(f"harness: {exc}", file=sys.stderr)
+        return 1
+    print(render_repro(sorted(verdicts, key=lambda v: (v.task, v.attempt))))
+    return 0
+
+
 def eval_command(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="harness eval", description="Run and report evals.")
     sub = parser.add_subparsers(dest="action", required=True)
@@ -212,6 +231,11 @@ def eval_command(argv: list[str]) -> int:
     context.add_argument(
         "--strategies", default="raw,mask:k4,mask:k8,mask_batched:k4:b8,mask_batched:k8:b8"
     )
+    repro = sub.add_parser(
+        "repro", help="did verify-first reproductions fail for the right reason (no API calls)"
+    )
+    repro.add_argument("run", help="a suite run directory, judged before its tasks run again")
+    repro.add_argument("--suite", default="evals/suite")
     args = parser.parse_args(argv)
-    actions = {"run": _run, "report": _report, "context": _context}
+    actions = {"run": _run, "report": _report, "context": _context, "repro": _repro}
     return actions[args.action](args)

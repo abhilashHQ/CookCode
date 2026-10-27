@@ -93,10 +93,14 @@ def harness_commit() -> str:
     return f"{commit}-dirty" if dirty else commit
 
 
+def work_dir(task: SuiteTask, attempt: int) -> Path:
+    return WORK_ROOT / task.id / str(attempt)
+
+
 def prepare(task: SuiteTask, attempt: int) -> Path:
     """The same bytes, commit id and timestamps every time, so a listing the agent runs reads the
     same when a cassette is recorded and when it is replayed."""
-    work = WORK_ROOT / task.id / str(attempt)
+    work = work_dir(task, attempt)
     shutil.rmtree(work, ignore_errors=True)
     shutil.copytree(task.repo, work)
     env = {**os.environ, "GIT_AUTHOR_DATE": FIXTURE_DATE, "GIT_COMMITTER_DATE": FIXTURE_DATE}

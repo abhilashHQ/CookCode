@@ -409,3 +409,38 @@ async def test_stats_command_totals_every_session_under_a_directory(
     assert "sessions        1" in out and "requests        2 (0 retries)" in out
     assert "tool calls      1 (0% errors)" in out
     assert stats_command([str(tmp_path / "missing-session")]) == 1
+
+
+async def test_a_verify_first_run_is_judged_against_fixture_and_solution(tmp_path: Path) -> None:
+    from harness.core.features import Features
+    from harness.evals.repro import judge
+    from harness.evals.repro import render as render_repro
+
+    suite = make_suite(tmp_path)
+    tasks = load_suite(suite)
+    script = Script(
+        [
+            ok(tool_stream("write", json.dumps({"path": "check_moon.sh",
+                                                "content": "grep -q moon greet.py\n"}))),
+            ok(tool_stream("repro", json.dumps({"command": "sh check_moon.sh"}))),
+            ok(tool_stream("write", json.dumps({"path": "greet.py", "content": MOON}))),
+            ok(text_stream("Fixed.")),
+        ]
+    )
+
+    def factory(preset: str, **kwargs: Any) -> Provider:
+        kwargs.pop("transport", None)
+        return make_provider(preset, **{**kwargs, "api_key": "test"}, transport=script.transport)
+
+    [result] = await run_suite(tasks, tmp_path / "run", mode="live", preset="nim", model="m",
+                               features=Features(verify_first=True), provider_factory=factory)
+    assert (result.passed, result.turns) == (True, 4)
+    verdict = judge(tasks[0], result, tmp_path / "run" / "sessions")
+    assert (verdict.command, verdict.fails_before, verdict.passes_after) == (
+        "sh check_moon.sh", True, True
+    )
+    assert render_repro([verdict]).endswith(
+        "1/1 attempts registered a reproduction; 1 failed for the right reason (100%); 1/1 solved"
+    )
+    manifest = json.loads((tmp_path / "run" / "run.json").read_text())
+    assert manifest["features"] == "verify_first"
