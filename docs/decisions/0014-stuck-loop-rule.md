@@ -22,3 +22,10 @@ A model can repeat the same call and get the same result, turn after turn. The s
 
 ## What would change it
 Measured stuck runs at M6, or an early real-model run at M3 that loops until the cap.
+
+## Measured at M6 and M7 (2026-10-27)
+`cookcode stats` counts repeat streaks: 3 or more consecutive identical call-and-result pairs, the definition above.
+- Local suite, 24 sessions, 334 tool calls: 0 streaks.
+- Terminal-Bench slice, 50 CookCode sessions, 1,221 tool calls: 0 streaks. 35 sessions ended `done`, 2 `error` (429 exhaustion) and 13 never logged `session_finished`, so they were cut off from outside the loop rather than stopped by the turn cap. None of them repeated itself.
+
+The rule stays unbuilt. With zero streaks there are no runs to test a nudge on, and a rule with nothing to fire on can only add false positives. The measurement runs in every `stats` report, so a model that loops shows up as a nonzero count.
