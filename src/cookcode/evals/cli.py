@@ -132,13 +132,16 @@ def _report(args: argparse.Namespace) -> int:
     for target in args.runs:
         path = Path(target)
         if (path / "results.jsonl").is_file():
-            trials = suite_trials(path)
-            if not trials:
+            suite = suite_trials(path)
+            if not suite.trials:
                 print(f"cookcode: no trials in {target}", file=sys.stderr)
                 return 1
             manifest = json.loads((path / "run.json").read_text())
             label = f"{path.name} ({manifest['provider']}/{manifest['model']}, {manifest['mode']})"
-            print(render_summary(summarize(trials), label))
+            print(render_summary(summarize(suite.trials), label))
+            print(f"  excluded     {len(suite.excluded)} infrastructure failures")
+            for attempt, reason in suite.excluded.items():
+                print(f"    {attempt:<40} {reason}")
             logs = session_files(path)
             if logs:
                 print(render(total(session_stats(read_session(log)) for log in logs)))

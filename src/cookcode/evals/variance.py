@@ -121,16 +121,41 @@ def render(summary: Summary, label: str) -> str:
     return "\n".join(lines)
 
 
-def suite_trials(run_dir: Path) -> list[Trial]:
-    trials: list[Trial] = []
-    for line in (run_dir / "results.jsonl").read_text().splitlines():
-        row = json.loads(line)
-        trials.append(Trial(row["task"], row["attempt"], 1.0 if row["passed"] else 0.0))
-    return trials
-
-
 INFRA_EXCEPTIONS = ("RateLimitError", "APIConnectionError", "CancelledError")
 INFRA_MARKERS = ("HTTP 429", "ConnectError", "name resolution", "Connection error")
+
+
+def provider_outage(log: Path) -> str | None:
+    """The provider error that ended a session, if it was the provider being unavailable."""
+    for line in log.read_text().splitlines():
+        body = cast(dict[str, Any], json.loads(line)).get("body", {})
+        if body.get("type") == "error" and body.get("kind") == "provider":
+            text = str(body.get("message", ""))
+            if any(marker in text for marker in INFRA_MARKERS):
+                return text[:120]
+    return None
+
+
+@dataclass(frozen=True)
+class SuiteRun:
+    trials: list[Trial]
+    excluded: dict[str, str]
+
+
+def suite_trials(run_dir: Path) -> SuiteRun:
+    """Attempts of a suite run. One that ended on a provider outage is excluded and named, by
+    the same rule as Harbor trials, so the score measures the agent and not the rate limiter."""
+    trials: list[Trial] = []
+    excluded: dict[str, str] = {}
+    for line in (run_dir / "results.jsonl").read_text().splitlines():
+        row = json.loads(line)
+        log = run_dir / "sessions" / f"{row.get('session_id')}.jsonl"
+        reason = provider_outage(log) if row["status"] == "error" and log.is_file() else None
+        if reason is not None:
+            excluded[f"{row['task']}#{row['attempt']}"] = reason
+            continue
+        trials.append(Trial(row["task"], row["attempt"], 1.0 if row["passed"] else 0.0))
+    return SuiteRun(trials, excluded)
 
 
 def infra_failure(data: dict[str, Any], trial_dir: Path) -> str | None:
@@ -142,12 +167,9 @@ def infra_failure(data: dict[str, Any], trial_dir: Path) -> str | None:
     if kind in INFRA_EXCEPTIONS or any(marker in message for marker in INFRA_MARKERS):
         return f"{kind}: {message[:120]}".strip(": ")
     for log in (trial_dir / "agent" / "sessions").glob("*.jsonl"):
-        for line in log.read_text().splitlines():
-            body = cast(dict[str, Any], json.loads(line)).get("body", {})
-            if body.get("type") == "error" and body.get("kind") == "provider":
-                text = str(body.get("message", ""))
-                if any(marker in text for marker in INFRA_MARKERS):
-                    return text[:120]
+        reason = provider_outage(log)
+        if reason is not None:
+            return reason
     return None
 
 

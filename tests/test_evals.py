@@ -25,7 +25,7 @@ from cookcode.evals.cli import eval_command, stats_command
 from cookcode.evals.runner import AttemptResult, run_suite
 from cookcode.evals.stats import Price, cost, repeat_streaks, session_stats
 from cookcode.evals.suite import chains, load_suite, suite_sha256
-from cookcode.evals.variance import Trial, harbor_trials, summarize
+from cookcode.evals.variance import Trial, harbor_trials, suite_trials, summarize
 from cookcode.providers.base import Provider
 from cookcode.providers.cassette import Cassette, RecordingTransport, ReplayTransport
 from openai_helpers import Script, ok, provider, text_stream, tool_stream
@@ -169,6 +169,24 @@ def test_infrastructure_failures_are_excluded_and_reruns_merge_by_agent(tmp_path
     assert sorted(harness.excluded) == ["x__a", "x__b"]
     assert "name resolution" in harness.excluded["x__b"]
     assert terminus.trials == [Trial("x", 1, 1.0)] and list(terminus.excluded) == ["t__a"]
+
+
+def test_suite_attempts_lost_to_the_provider_are_excluded(tmp_path: Path) -> None:
+    (tmp_path / "sessions").mkdir()
+    rows = [("a", "done", True, "s1", None), ("b", "error", False, "s2", "HTTP 429: busy"),
+            ("c", "error", False, "s3", "HTTP 400: bad request"), ("d", "budget_exceeded", False,
+            "s4", None)]
+    lines: list[str] = []
+    for task, status, passed, session, error in rows:
+        lines.append(json.dumps({"task": task, "attempt": 1, "passed": passed, "status": status,
+                                 "session_id": session}))
+        body = {"type": "error", "kind": "provider", "retryable": False, "message": error}
+        (tmp_path / "sessions" / f"{session}.jsonl").write_text(
+            json.dumps({"body": body}) + "\n" if error else "")
+    (tmp_path / "results.jsonl").write_text("\n".join(lines) + "\n")
+    run = suite_trials(tmp_path)
+    assert run.trials == [Trial("a", 1, 1.0), Trial("c", 1, 0.0), Trial("d", 1, 0.0)]
+    assert list(run.excluded) == ["b#1"]
 
 
 # --- sequenced replay -------------------------------------------------------------------
