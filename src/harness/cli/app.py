@@ -186,6 +186,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="optional features to turn on, comma separated: jobs, verify_first, notes, facts, "
         "subagents, skills, hooks",
     )
+    parser.add_argument("--tui", action="store_true", help="full-screen interface")
     parser.add_argument("--once", action="store_true", help="exit after the first run")
     parser.add_argument("--resume", metavar="SESSION", help="continue an existing session")
     parser.add_argument(
@@ -280,8 +281,8 @@ class Runtime:
     ) -> None:
         self.args = args
         self.provider = provider
-        self.policy = policy if policy is not None else merge_policies(
-            load_policy(args.policy),
+        self.policy = merge_policies(
+            policy if policy is not None else load_policy(args.policy),
             Policy(allow=_rules(list(args.settings.allow)), deny=_rules(list(args.settings.deny))),
         )
         cwd_path = Path.cwd()
@@ -512,4 +513,19 @@ def main(argv: list[str] | None = None) -> int:
     if args.json:
         print("harness: --json needs -p <prompt> or --continue", file=sys.stderr)
         return 1
+    if args.tui:
+        try:
+            from harness.cli.tui import run_tui
+        except ImportError:
+            print("harness: the TUI needs the tui extra (uv sync --extra tui)", file=sys.stderr)
+            return 1
+        try:
+            load_resumed(args)
+        except SESSION_ERRORS as exc:
+            print(f"harness: {session_error(args.resume, exc)}", file=sys.stderr)
+            return 1
+        if not os.environ.get(args.api_key_env):
+            print(f"harness: set {args.api_key_env} to an API key for {args.base_url}")
+            return 1
+        return asyncio.run(run_tui(args))
     return asyncio.run(run_cli(args))

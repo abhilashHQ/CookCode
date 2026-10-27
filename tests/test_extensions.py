@@ -227,3 +227,19 @@ def test_cli_flags_beat_env_beats_repo_beats_user(
     monkeypatch.delenv("HARNESS_MODEL")
     other = parse_args(["--provider", "nim"])
     assert (other.provider, other.model) == ("nim", "minimaxai/minimax-m3.1-flash")
+
+
+def test_settings_rules_join_a_policy_given_to_the_runtime(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from harness.cli.app import Runtime, parse_args
+
+    (tmp_path / "home").mkdir()
+    (tmp_path / "home" / "settings.toml").write_text('allow = ["bash:pytest *"]\n')
+    monkeypatch.setenv("HARNESS_HOME", str(tmp_path / "home"))
+    monkeypatch.chdir(tmp_path)
+    runtime = Runtime(parse_args([]), lambda event: None, policy=Policy())
+    try:
+        assert [rule.display for rule in runtime.policy.allow] == ["bash:pytest *"]
+    finally:
+        runtime.log.close()

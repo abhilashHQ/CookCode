@@ -18,6 +18,9 @@ harbor = [
 mcp = [
     "mcp>=1.10",
 ]
+tui = [
+    "textual>=0.80",
+]
 
 [dependency-groups]
 dev = [
