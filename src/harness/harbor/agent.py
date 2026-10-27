@@ -14,6 +14,7 @@ from harbor.environments.base import BaseEnvironment
 from harbor.models.agent.context import AgentContext
 
 from harness import __version__
+from harness.agent.gate import Policy
 from harness.agent.instructions import load_instructions, render_system
 from harness.agent.loop import Agent, AgentConfig
 from harness.agent.tools import ToolRegistry
@@ -30,6 +31,7 @@ from harness.providers.base import Provider
 from harness.redact import Redactor
 from harness.store.checkpoints import FileCheckpointStore
 from harness.store.jsonl import JsonlSessionStore
+from harness.subagents import Spawner
 
 PROMPT = BASE_PROMPT.replace("in a local repository", "inside a task container") + UNATTENDED
 
@@ -97,26 +99,34 @@ class HarnessAgent(BaseAgent):
         )
         session_id = new_id()
         log = store.open(session_id, create=True)
-        kit = await toolkit(self.strategy, self.features, env, self.logs_dir / "memory")
-        tools = kit.tools
+        provider = self.provider or make_provider(
+            preset, api_key=secrets.get(key_env), base_url=base_url
+        )
+        checkpoints = FileCheckpointStore(self.logs_dir / "checkpoints")
+        tools = ToolRegistry([])
         try:
             instructions = await load_instructions(env, ".")
+            system = render_system(PROMPT.format(root=env.root, cwd="."), instructions)
+            spawner = Spawner(provider=provider, store=store, model=model, system_prompt=system,
+                              mode="yolo", policy=Policy(), checkpoints=checkpoints)
+            kit = await toolkit(
+                self.strategy, self.features, env, home=self.logs_dir / "home",
+                memory_root=self.logs_dir / "memory", spawner=spawner,
+            )
+            tools = kit.tools
             agent = Agent(
                 log=log,
-                provider=self.provider
-                or make_provider(preset, api_key=secrets.get(key_env), base_url=base_url),
+                provider=provider,
                 env=env,
                 tools=tools,
                 config=AgentConfig(
                     model=model,
-                    system_prompt=kit.system(
-                        render_system(PROMPT.format(root=env.root, cwd="."), instructions)
-                    ),
+                    system_prompt=kit.system(system),
                     limits=Limits(max_turns=self.max_turns),
                     mode="yolo",
                     strategy=self.strategy,
                 ),
-                checkpoints=FileCheckpointStore(self.logs_dir / "checkpoints"),
+                checkpoints=checkpoints,
                 hooks=kit.hooks,
             )
             await agent.run(instruction)

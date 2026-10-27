@@ -15,6 +15,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 from harness import __version__
+from harness.agent.gate import Policy
 from harness.agent.instructions import load_instructions, render_system
 from harness.agent.loop import Agent, AgentConfig
 from harness.cli.app import BASE_PROMPT, PRESETS, SECRET_ENV, UNATTENDED, make_provider
@@ -31,6 +32,7 @@ from harness.providers.cassette import Cassette, RecordingTransport, ReplayTrans
 from harness.redact import Redactor
 from harness.store.checkpoints import FileCheckpointStore
 from harness.store.jsonl import JsonlSessionStore
+from harness.subagents import Spawner
 
 Mode = Literal["live", "record", "replay", "oracle"]
 
@@ -210,11 +212,19 @@ class Run:
         env = LocalEnvironment(work)
         session_id = new_id()
         log = self.store.open(session_id, create=True)
-        kit = await toolkit(
-            self.strategy, self.features, env, self.out / "memory" / str(attempt)
-        )
+        checkpoints = FileCheckpointStore(self.out / "checkpoints" / session_id)
         try:
             instructions = await load_instructions(env, ".")
+            system = render_system(
+                BASE_PROMPT.format(root=env.root, cwd=".") + UNATTENDED, instructions
+            )
+            spawner = Spawner(provider=provider, store=self.store, model=self.model,
+                              system_prompt=system, mode="yolo", policy=Policy(),
+                              checkpoints=checkpoints)
+            kit = await toolkit(
+                self.strategy, self.features, env, home=self.out / "home",
+                memory_root=self.out / "memory" / str(attempt), spawner=spawner,
+            )
             agent = Agent(
                 log=log,
                 provider=provider,
@@ -223,16 +233,12 @@ class Run:
                 hooks=kit.hooks,
                 config=AgentConfig(
                     model=self.model,
-                    system_prompt=kit.system(
-                        render_system(
-                            BASE_PROMPT.format(root=env.root, cwd=".") + UNATTENDED, instructions
-                        )
-                    ),
+                    system_prompt=kit.system(system),
                     limits=Limits(max_turns=task.spec.max_turns, max_wall_s=task.spec.max_wall_s),
                     mode="yolo",
                     strategy=self.strategy,
                 ),
-                checkpoints=FileCheckpointStore(self.out / "checkpoints" / session_id),
+                checkpoints=checkpoints,
             )
             outcome = await agent.run(task.spec.prompt)
             answer.write_text(final_text(log.read()))

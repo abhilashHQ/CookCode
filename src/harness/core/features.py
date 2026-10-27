@@ -11,6 +11,9 @@ class Features(BaseModel):
     verify_first: bool = False
     notes: bool = False
     facts: bool = False
+    subagents: bool = False
+    skills: bool = False
+    hooks: bool = False
 
     @property
     def label(self) -> str:

@@ -17,10 +17,10 @@ from harness.core.features import Features
 from harness.core.items import Message, ToolCall
 from harness.core.strategy import Strategy
 from harness.env.local import LocalEnvironment
-from harness.kit import toolkit
 from harness.providers.fake import FakeTurn, call, say
 from harness.tools.files import edit_tool, write_tool
 from harness.tools.verify import registered, repro_tool, verify_first_hook
+from tool_helpers import make_kit
 
 CHECK = "grep -q good state.txt"
 
@@ -165,7 +165,7 @@ async def test_a_read_only_turn_finishes_without_a_reproduction(rigs: RigFactory
 
 async def test_toolkit_adds_repro_and_the_hook_only_with_the_feature(tmp_path: Path) -> None:
     env = LocalEnvironment(tmp_path)
-    base = await toolkit(Strategy(), Features(), env, tmp_path / "memory")
+    base = await make_kit(Features(), env, tmp_path / "memory")
     assert "repro" not in base.tools.names() and base.hooks == ()
-    on = await toolkit(Strategy(), Features(verify_first=True), env, tmp_path / "memory")
+    on = await make_kit(Features(verify_first=True), env, tmp_path / "memory")
     assert "repro" in on.tools.names() and [h.name for h in on.hooks] == ["verify-first"]

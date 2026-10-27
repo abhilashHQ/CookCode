@@ -1,6 +1,7 @@
-"""Composition: the tools, hooks and memory profile a run gets from its strategy and features."""
+"""Composition: the tools, hooks and system prompt additions a run gets from its strategy and
+features. Every composition site (CLI, suite runner, Harbor) builds its agent from this."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from harness.agent.hooks import Hook
@@ -9,8 +10,11 @@ from harness.core.features import Features
 from harness.core.strategy import Strategy
 from harness.env.base import Environment
 from harness.memory.layer import memory_parts
+from harness.skills import load_skills, skill_tool, skills_profile
+from harness.subagents import Spawner, task_tool
 from harness.tools import default_tools
 from harness.tools.verify import repro_tool, verify_first_hook
+from harness.userhooks import load_settings, user_hooks
 
 
 @dataclass(frozen=True)
@@ -20,19 +24,44 @@ class Toolkit:
     profile: str = ""
 
     def system(self, prompt: str) -> str:
-        """The system prompt with the memory profile, fixed for the whole session."""
+        """The system prompt with memory and skills sections, fixed for the whole session."""
         return f"{prompt}\n\n{self.profile}" if self.profile else prompt
 
 
 async def toolkit(
-    strategy: Strategy, features: Features, env: Environment, memory_root: Path
+    strategy: Strategy,
+    features: Features,
+    env: Environment,
+    *,
+    home: Path,
+    memory_root: Path,
+    spawner: Spawner | None = None,
 ) -> Toolkit:
-    """The tools, hooks and memory profile a run gets from its context strategy and enabled
-    features. Every composition site (CLI, suite runner, Harbor) builds its agent from this."""
+    """`home` holds user-level settings and skills; evals point it at an empty directory so
+    nothing from the machine leaks into a run. `spawner` is required with sub-agents."""
     tools = default_tools(recall=strategy.masks, jobs=features.jobs)
     hooks: list[Hook] = []
     if features.verify_first:
         tools.append(repro_tool())
         hooks.append(verify_first_hook())
     memory = await memory_parts(features, env, memory_root)
-    return Toolkit(ToolRegistry([*tools, *memory.tools]), (*hooks, *memory.hooks), memory.profile)
+    tools += memory.tools
+    hooks += memory.hooks
+    sections = [memory.profile] if memory.profile else []
+    if features.skills:
+        skills = await load_skills(env, home / "skills")
+        if skills:
+            tools.append(skill_tool(skills))
+            sections.append(skills_profile(skills))
+    shared: list[Hook] = []
+    if features.hooks:
+        shared = user_hooks(await load_settings(env, home / "settings.toml"))
+        hooks += shared
+    profile = "\n\n".join(sections)
+    if features.subagents:
+        if spawner is None:
+            raise ValueError("the subagents feature needs a spawner")
+        child = replace(spawner, system_prompt=Toolkit(ToolRegistry([]), (), profile).system(
+            spawner.system_prompt))
+        tools.append(task_tool(child, tools, shared))
+    return Toolkit(ToolRegistry(tools), tuple(hooks), profile)

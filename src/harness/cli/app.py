@@ -45,6 +45,7 @@ from harness.store.base import (
 )
 from harness.store.checkpoints import FileCheckpointStore
 from harness.store.jsonl import JsonlSessionStore
+from harness.subagents import Spawner
 
 PRESETS = {
     "nim": (NIM_BASE_URL, "NVIDIA_API_KEY", "minimaxai/minimax-m3.1-flash"),
@@ -179,7 +180,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--features",
         type=Features.parse,
         default=Features(),
-        help="optional features to turn on, comma separated: jobs, verify_first, notes, facts",
+        help="optional features to turn on, comma separated: jobs, verify_first, notes, facts, "
+        "subagents, skills, hooks",
     )
     parser.add_argument("--once", action="store_true", help="exit after the first run")
     parser.add_argument("--resume", metavar="SESSION", help="continue an existing session")
@@ -260,8 +262,10 @@ class Runtime:
         self.cwd = os.path.relpath(cwd_path, root)
         data = data_dir()
         self.session_id: str = args.resume or new_id()
-        store = JsonlSessionStore(data / "sessions", Redactor.from_env(SECRET_ENV, os.environ))
-        self.log = ObservedLog(store.open(self.session_id, create=args.resume is None), sink)
+        self.store = JsonlSessionStore(
+            data / "sessions", Redactor.from_env(SECRET_ENV, os.environ)
+        )
+        self.log = ObservedLog(self.store.open(self.session_id, create=args.resume is None), sink)
         self.checkpoints = FileCheckpointStore(data / "checkpoints" / self.session_id)
         self.env = LocalEnvironment(root)
         self.instructions: list[InstructionFile] = []
@@ -280,8 +284,15 @@ class Runtime:
         )
         if stream_sink is not None:
             provider = DisplayProvider(provider, stream_sink)
+        home = data_dir()
+        spawner = Spawner(
+            provider=provider, store=self.store, model=self.args.model, system_prompt=system,
+            mode=self.args.mode, policy=self.policy, approver=approver,
+            checkpoints=self.checkpoints,
+        )
         kit = await toolkit(
-            self.args.strategy, self.args.features, self.env, data_dir() / "memory"
+            self.args.strategy, self.args.features, self.env, home=home,
+            memory_root=home / "memory", spawner=spawner,
         )
         config = AgentConfig(
             model=self.args.model,

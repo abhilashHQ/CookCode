@@ -11,11 +11,11 @@ from harness.core.events import Event, ModelRequestStarted
 from harness.core.features import Features
 from harness.core.strategy import Strategy
 from harness.env.local import LocalEnvironment
-from harness.kit import Toolkit, toolkit
+from harness.kit import Toolkit
 from harness.memory.layer import fresh, memory_parts, parse_facts, repo_key
 from harness.memory.store import FactStore
 from harness.providers.fake import FakeTurn, call, say
-from tool_helpers import make_ctx, run_tool
+from tool_helpers import make_ctx, make_kit, run_tool
 
 FACT = '{"fact": "Tests run with sh check.sh.", "paths": ["check.sh"], "updates": null}'
 
@@ -87,7 +87,7 @@ async def test_copies_of_a_repository_share_a_key(tmp_path: Path) -> None:
 
 
 async def facts_rig(rigs: RigFactory, script: list[FakeTurn], memory: Path) -> tuple[Rig, Toolkit]:
-    kit = await toolkit(Strategy(), Features(facts=True), LocalEnvironment(rigs.workdir), memory)
+    kit = await make_kit(Features(facts=True), LocalEnvironment(rigs.workdir), memory)
     return rigs.make(script, list(kit.tools), hooks=kit.hooks), kit
 
 
@@ -116,11 +116,11 @@ async def test_a_finished_run_writes_facts_the_next_session_sees(
             assert event.body.items_sha256 == items_sha256(rebuilt.items)
 
     later_env = LocalEnvironment(rigs.workdir)
-    later = await toolkit(Strategy(), Features(facts=True), later_env, memory)
+    later = await make_kit(Features(facts=True), later_env, memory)
     assert "Tests run with sh check.sh. (check.sh)" in later.profile
     assert later.system("base").startswith("base\n\nFacts remembered")
     (rigs.workdir / "check.sh").write_text("exit 2\n")
-    changed = await toolkit(Strategy(), Features(facts=True), later_env, memory)
+    changed = await make_kit(Features(facts=True), later_env, memory)
     assert changed.profile == ""
 
 
@@ -155,18 +155,18 @@ async def test_notes_are_written_with_remember_and_shown_next_time(
 ) -> None:
     memory = tmp_path / "memory"
     env = LocalEnvironment(rigs.workdir)
-    kit = await toolkit(Strategy(), Features(notes=True), env, memory)
+    kit = await make_kit(Features(notes=True), env, memory)
     assert "remember" in kit.tools.names() and kit.hooks == () and kit.profile == ""
     script = [FakeTurn(items=(call("remember", text="Run  sh check.sh\nto test."),)),
               FakeTurn(items=(say("done"),))]
     rig = rigs.make(script, list(kit.tools), hooks=kit.hooks)
     assert (await rig.agent.run("go")).status == "done"
-    later = await toolkit(Strategy(), Features(notes=True), env, memory)
+    later = await make_kit(Features(notes=True), env, memory)
     assert later.profile == (
         "Notes from earlier sessions in this repository:\n- Run sh check.sh to test.\n"
     )
 
 
 async def test_no_memory_feature_means_no_memory(rigs: RigFactory, tmp_path: Path) -> None:
-    kit = await toolkit(Strategy(), Features(), LocalEnvironment(rigs.workdir), tmp_path / "m")
+    kit = await make_kit(Features(), LocalEnvironment(rigs.workdir), tmp_path / "m")
     assert kit.profile == "" and kit.hooks == () and not (tmp_path / "m").exists()
