@@ -32,12 +32,34 @@ Terminal-Bench through Harbor (Docker required):
 `evals/run_tb.sh cookcode|terminus-2 <attempts> [task ...]` runs the fixed slice in
 `evals/tb-slice.txt` with either agent on the same endpoint, model and turn cap.
 
-Evals: `uv run cookcode eval run` replays the local suite (`evals/suite/`, 24 fixture tasks) from
-cassettes with no API calls; `--mode oracle` runs the reference solutions, `--mode record` calls
-the model once per task and saves the cassettes, `--mode live --attempts N` measures.
+`uv run cookcode --tui` opens the full-screen client (install the `tui` extra).
+
+Context strategies (decision 0038): `--strategy raw|mask|mask_batched|summarize|hybrid`, with
+options like `mask_batched:k6:b8` or `hybrid:k6:b8:t48000`. Raw is the default.
+
+Features, all off by default (`--features a,b`, `TB_FEATURES=` for `run_tb.sh`):
+`jobs` (background commands, 0040), `verify_first` (reproduce before fixing, 0041), `notes` and
+`facts` (memory across sessions, 0042), `subagents` (the `task` tool, 0044), `skills`
+(`.cookcode/skills/<name>/SKILL.md`, 0045), `hooks` (user hooks from settings, 0046) and `mcp`
+(stdio MCP servers with deferred schemas, 0048; install the `mcp` extra).
+
+Settings (0047): `$COOKCODE_HOME/settings.toml` and the repository's `.cookcode/settings.toml`
+hold provider, model, mode, max_turns, strategy, features, allow and deny rules, `[[hooks]]` and
+`[mcp.servers.<name>]`. A flag beats a resumed session, which beats `COOKCODE_*` environment
+variables, which beat the repository file, which beats the user file. Rules and hooks add up.
+
+Evals: `uv run cookcode eval run` replays the local suite (`evals/suite/`, 24 fixture tasks plus
+6 memory pairs) from cassettes with no API calls; `--mode oracle` runs the reference solutions,
+`--mode record` calls the model once per task and saves the cassettes, `--mode live --attempts N`
+measures, and `--strategy` and `--features` pick the arm.
 `uv run cookcode eval report <run-dir | harbor-job-dir>` prints the score, per-attempt spread,
 bootstrap CI and paired MDE. `uv run cookcode stats <session | dir>` totals requests, tokens,
 cache-read share, time split and tool errors from the session logs.
+`uv run cookcode eval context <dirs> --strategies raw,mask:k6` rebuilds logged requests under
+other strategies (0039), and `uv run cookcode eval repro <run-dir>` checks that verify-first
+reproductions failed for the right reason. Neither makes API calls.
+
+Walkthroughs with cross-questions for every milestone: `docs/walkthroughs/`.
 
 Tests replay recorded provider traffic from `tests/cassettes/`. To re-record against OpenRouter:
 `COOKCODE_RECORD=1 uv run pytest tests/test_cassettes.py -k openrouter` (or `-k nim`, `-k gemini`).
