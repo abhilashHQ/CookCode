@@ -25,12 +25,12 @@ from harness.core.ids import new_id
 from harness.core.strategy import Strategy
 from harness.env.local import LocalEnvironment
 from harness.evals.suite import SuiteTask, suite_sha256
+from harness.kit import toolkit
 from harness.providers.base import Provider
 from harness.providers.cassette import Cassette, RecordingTransport, ReplayTransport
 from harness.redact import Redactor
 from harness.store.checkpoints import FileCheckpointStore
 from harness.store.jsonl import JsonlSessionStore
-from harness.tools import toolkit
 
 Mode = Literal["live", "record", "replay", "oracle"]
 
@@ -206,7 +206,9 @@ class Run:
         env = LocalEnvironment(work)
         session_id = new_id()
         log = self.store.open(session_id, create=True)
-        kit = toolkit(self.strategy, self.features)
+        kit = await toolkit(
+            self.strategy, self.features, env, self.out / "memory" / str(attempt)
+        )
         try:
             instructions = await load_instructions(env, ".")
             agent = Agent(
@@ -217,8 +219,10 @@ class Run:
                 hooks=kit.hooks,
                 config=AgentConfig(
                     model=self.model,
-                    system_prompt=render_system(
-                        BASE_PROMPT.format(root=env.root, cwd=".") + UNATTENDED, instructions
+                    system_prompt=kit.system(
+                        render_system(
+                            BASE_PROMPT.format(root=env.root, cwd=".") + UNATTENDED, instructions
+                        )
                     ),
                     limits=Limits(max_turns=task.spec.max_turns, max_wall_s=task.spec.max_wall_s),
                     mode="yolo",

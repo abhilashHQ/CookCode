@@ -295,6 +295,7 @@ class Agent:
             exceeded = self._budget_exceeded(run)
             if exceeded is not None:
                 self._log.append(exceeded)
+                await self._run_finish_hooks(run)
                 return self._finish(run, "budget_exceeded")
             outcome = await self._step(run)
             if outcome is not None:
@@ -337,6 +338,14 @@ class Agent:
         )
 
     def _hook_context(self, run: _RunState) -> HookContext:
+        async def ask(view: str, system: str, prompt: str) -> str | None:
+            request = ModelRequest(
+                model=self._config.model, system=system, items=(text_message("user", prompt),)
+            )
+            response = await self._side_call(run, view, request)
+            ok = response.stop_reason == "end_turn" and response.text.strip()
+            return response.text.strip() if ok else None
+
         return HookContext(
             env=self._env,
             cancel=run.token,
@@ -344,7 +353,34 @@ class Agent:
             timeout_s=self._config.tool_timeout_s,
             max_output_bytes=self._config.max_tool_output_bytes,
             history=self._log.read(),
+            ask=ask,
         )
+
+    async def _run_finish_hooks(self, run: _RunState) -> None:
+        for hook in self._hooks:
+            if hook.on_finish is not None and not run.cancelled():
+                await hook.on_finish(self._hook_context(run))
+
+    async def _side_call(self, run: _RunState, view: str, request: ModelRequest) -> _Response:
+        """A model call outside the conversation (a summary, a memory pass): logged with its
+        view and usage, its items never logged, so the context builder never sees it."""
+        request_id = new_id()
+        self._log.append(
+            ModelRequestStarted(
+                request_id=request_id, view=view, token_estimate=estimate_tokens(request)
+            )
+        )
+        response = await self._stream(run, request, request_id, log_items=False)
+        self._log.append(
+            ModelRequestFinished(
+                request_id=request_id,
+                stop_reason=response.stop_reason,
+                usage=response.usage,
+                raw_usage=response.raw_usage,
+            )
+        )
+        run.usage = run.usage + response.usage
+        return response
 
     async def _blocked_call(self, run: _RunState, tool_call: ToolCall) -> bool:
         for hook in self._hooks:
@@ -407,24 +443,7 @@ class Agent:
             system=SUMMARIZER_SYSTEM,
             items=(text_message("user", SUMMARIZER_PROMPT + transcript(events, *cut)),),
         )
-        request_id = new_id()
-        self._log.append(
-            ModelRequestStarted(
-                request_id=request_id,
-                view=SUMMARIZE_VIEW,
-                token_estimate=estimate_tokens(request),
-            )
-        )
-        response = await self._stream(run, request, request_id, log_items=False)
-        self._log.append(
-            ModelRequestFinished(
-                request_id=request_id,
-                stop_reason=response.stop_reason,
-                usage=response.usage,
-                raw_usage=response.raw_usage,
-            )
-        )
-        run.usage = run.usage + response.usage
+        response = await self._side_call(run, SUMMARIZE_VIEW, request)
         if response.stop_reason != "end_turn" or not response.text.strip():
             return
         draft = CompactionApplied(
@@ -485,6 +504,7 @@ class Agent:
             return None
         if self._steering or await self._blocked_stop(run):
             return None
+        await self._run_finish_hooks(run)
         return self._finish(run, "done")
 
     async def _stream(

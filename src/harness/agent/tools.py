@@ -1,5 +1,5 @@
 import posixpath
-from collections.abc import Awaitable, Callable, Iterable, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -84,3 +84,6 @@ class ToolRegistry:
 
     def names(self) -> tuple[str, ...]:
         return tuple(self._tools)
+
+    def __iter__(self) -> Iterator[Tool[Any]]:
+        return iter(self._tools.values())

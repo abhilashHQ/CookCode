@@ -25,11 +25,11 @@ from harness.core.strategy import Strategy
 from harness.core.usage import Usage
 from harness.env.harbor import HarborEnvironment
 from harness.export.atif import AGENT_NAME, to_atif
+from harness.kit import toolkit
 from harness.providers.base import Provider
 from harness.redact import Redactor
 from harness.store.checkpoints import FileCheckpointStore
 from harness.store.jsonl import JsonlSessionStore
-from harness.tools import toolkit
 
 PROMPT = BASE_PROMPT.replace("in a local repository", "inside a task container") + UNATTENDED
 
@@ -97,7 +97,7 @@ class HarnessAgent(BaseAgent):
         )
         session_id = new_id()
         log = store.open(session_id, create=True)
-        kit = toolkit(self.strategy, self.features)
+        kit = await toolkit(self.strategy, self.features, env, self.logs_dir / "memory")
         tools = kit.tools
         try:
             instructions = await load_instructions(env, ".")
@@ -109,8 +109,8 @@ class HarnessAgent(BaseAgent):
                 tools=tools,
                 config=AgentConfig(
                     model=model,
-                    system_prompt=render_system(
-                        PROMPT.format(root=env.root, cwd="."), instructions
+                    system_prompt=kit.system(
+                        render_system(PROMPT.format(root=env.root, cwd="."), instructions)
                     ),
                     limits=Limits(max_turns=self.max_turns),
                     mode="yolo",

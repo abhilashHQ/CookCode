@@ -29,6 +29,7 @@ from harness.core.features import Features
 from harness.core.ids import new_id
 from harness.core.strategy import Strategy
 from harness.env.local import LocalEnvironment
+from harness.kit import toolkit
 from harness.providers.base import Provider, StreamEvent
 from harness.providers.gemini import GEMINI_BASE_URL, GeminiProvider
 from harness.providers.openai_compat import (
@@ -44,7 +45,6 @@ from harness.store.base import (
 )
 from harness.store.checkpoints import FileCheckpointStore
 from harness.store.jsonl import JsonlSessionStore
-from harness.tools import toolkit
 
 PRESETS = {
     "nim": (NIM_BASE_URL, "NVIDIA_API_KEY", "minimaxai/minimax-m3.1-flash"),
@@ -179,7 +179,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--features",
         type=Features.parse,
         default=Features(),
-        help="optional features to turn on, comma separated: jobs, verify_first",
+        help="optional features to turn on, comma separated: jobs, verify_first, notes, facts",
     )
     parser.add_argument("--once", action="store_true", help="exit after the first run")
     parser.add_argument("--resume", metavar="SESSION", help="continue an existing session")
@@ -280,10 +280,12 @@ class Runtime:
         )
         if stream_sink is not None:
             provider = DisplayProvider(provider, stream_sink)
-        kit = toolkit(self.args.strategy, self.args.features)
+        kit = await toolkit(
+            self.args.strategy, self.args.features, self.env, data_dir() / "memory"
+        )
         config = AgentConfig(
             model=self.args.model,
-            system_prompt=system,
+            system_prompt=kit.system(system),
             limits=Limits(max_turns=self.args.max_turns),
             cwd=self.cwd,
             mode=self.args.mode,

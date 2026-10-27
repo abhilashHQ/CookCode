@@ -9,7 +9,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from harness.agent.context import (
-    SUMMARIZE_VIEW,
+    SIDE_VIEWS,
     build_request,
     estimate_tokens,
     shared_prefix_tokens,
@@ -52,7 +52,7 @@ def session_cost(events: Sequence[Event], strategy: Strategy) -> ContextCost:
         body = event.body
         if isinstance(body, SessionStarted | RunStarted):
             config = body.config
-        elif isinstance(body, ModelRequestStarted) and body.view != SUMMARIZE_VIEW:
+        elif isinstance(body, ModelRequestStarted) and body.view not in SIDE_VIEWS:
             request = build_request(
                 events[:index],
                 model=config.model if config is not None else "",

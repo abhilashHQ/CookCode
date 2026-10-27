@@ -6,7 +6,7 @@ from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
-from harness.agent.context import SUMMARIZE_VIEW, build_request, items_sha256
+from harness.agent.context import SIDE_VIEWS, build_request, items_sha256
 from harness.cli.app import SESSION_ERRORS, data_dir, main, session_config, session_error
 from harness.core.events import (
     Event,
@@ -159,7 +159,7 @@ def replay_command(argv: list[str]) -> int:
         body = event.body
         if isinstance(body, SessionStarted | RunStarted):
             config = body.config
-        elif isinstance(body, ModelRequestStarted) and body.view != SUMMARIZE_VIEW:
+        elif isinstance(body, ModelRequestStarted) and body.view not in SIDE_VIEWS:
             request = build_request(
                 events[:index],
                 model=config.model if config is not None else "",

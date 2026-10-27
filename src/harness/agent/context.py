@@ -22,6 +22,8 @@ from harness.providers.base import ModelRequest, ToolSchema
 MASK_MIN_CHARS = 200
 SUMMARY_HEADER = "[summary of the earlier part of this session]"
 SUMMARIZE_VIEW = "summarize"
+MEMORY_VIEW = "memory"
+SIDE_VIEWS = frozenset({SUMMARIZE_VIEW, MEMORY_VIEW})
 
 
 @dataclass(frozen=True)
@@ -33,7 +35,7 @@ class _Entry:
 
 def _is_step(event: Event) -> bool:
     body = event.body
-    return isinstance(body, ModelRequestStarted) and body.view != SUMMARIZE_VIEW
+    return isinstance(body, ModelRequestStarted) and body.view not in SIDE_VIEWS
 
 
 def _entries(events: Sequence[Event]) -> list[_Entry]:

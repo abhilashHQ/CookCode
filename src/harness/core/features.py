@@ -9,6 +9,8 @@ class Features(BaseModel):
 
     jobs: bool = False
     verify_first: bool = False
+    notes: bool = False
+    facts: bool = False
 
     @property
     def label(self) -> str:
@@ -17,7 +19,7 @@ class Features(BaseModel):
 
     @classmethod
     def parse(cls, text: str) -> "Features":
-        """`base` or a comma-separated list of feature names: `jobs,verify_first`."""
+        """`base` or a comma-separated list of feature names: `jobs,verify_first,facts`."""
         names = [name.strip() for name in text.split(",") if name.strip() not in ("", "base")]
         unknown = sorted(set(names) - set(cls.model_fields))
         if unknown:
