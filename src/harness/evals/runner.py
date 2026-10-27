@@ -21,6 +21,7 @@ from harness.agent.tools import ToolRegistry
 from harness.cli.app import BASE_PROMPT, PRESETS, SECRET_ENV, UNATTENDED, make_provider
 from harness.cli.headless import final_text
 from harness.core.events import Limits
+from harness.core.features import Features
 from harness.core.ids import new_id
 from harness.core.strategy import Strategy
 from harness.env.local import LocalEnvironment
@@ -70,6 +71,7 @@ class RunManifest(BaseModel):
     provider: str
     model: str
     strategy: str = "raw"
+    features: str = "base"
     attempts: int
     concurrency: int
     tasks: list[str]
@@ -147,10 +149,12 @@ class Run:
         preset: str,
         model: str,
         strategy: Strategy | None = None,
+        features: Features | None = None,
         provider_factory: Callable[..., Provider] | None = None,
     ) -> None:
         self.out = out
         self.strategy = strategy or Strategy()
+        self.features = features or Features()
         self.mode: Mode = mode
         self.preset = preset
         self.model = model
@@ -209,7 +213,9 @@ class Run:
                 log=log,
                 provider=provider,
                 env=env,
-                tools=ToolRegistry(default_tools(recall=self.strategy.masks)),
+                tools=ToolRegistry(
+                    default_tools(recall=self.strategy.masks, jobs=self.features.jobs)
+                ),
                 config=AgentConfig(
                     model=self.model,
                     system_prompt=render_system(
@@ -258,6 +264,7 @@ async def run_suite(
     attempts: int = 1,
     concurrency: int = 1,
     strategy: Strategy | None = None,
+    features: Features | None = None,
     provider_factory: Callable[..., Provider] | None = None,
     on_result: Callable[[AttemptResult], None] | None = None,
 ) -> list[AttemptResult]:
@@ -275,6 +282,7 @@ async def run_suite(
         provider=preset,
         model=model,
         strategy=(strategy or Strategy()).label,
+        features=(features or Features()).label,
         attempts=attempts,
         concurrency=concurrency,
         tasks=[task.id for task in tasks],
@@ -287,6 +295,7 @@ async def run_suite(
         preset=preset,
         model=model,
         strategy=strategy,
+        features=features,
         provider_factory=provider_factory,
     )
     gate = asyncio.Semaphore(concurrency)

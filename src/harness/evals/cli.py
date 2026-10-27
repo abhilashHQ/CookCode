@@ -9,6 +9,7 @@ from pathlib import Path
 from pydantic import TypeAdapter, ValidationError
 
 from harness.cli.app import PRESETS, data_dir
+from harness.core.features import Features
 from harness.core.strategy import Strategy
 from harness.evals.context import ContextCost, session_cost
 from harness.evals.context import render as render_context
@@ -110,6 +111,7 @@ def _run(args: argparse.Namespace) -> int:
                 attempts=args.attempts,
                 concurrency=args.concurrency,
                 strategy=args.strategy,
+                features=args.features,
                 on_result=show,
             )
         )
@@ -199,6 +201,7 @@ def eval_command(argv: list[str]) -> int:
     run.add_argument("--provider", choices=tuple(PRESETS), default="nim")
     run.add_argument("--model")
     run.add_argument("--strategy", type=Strategy.parse, default=Strategy())
+    run.add_argument("--features", type=Features.parse, default=Features())
     run.add_argument("-o", "--output", help="run directory (default under $HARNESS_HOME/runs)")
     report = sub.add_parser("report", help="variance summary and stats of runs")
     report.add_argument("runs", nargs="+", help="suite run directories or Harbor job directories")

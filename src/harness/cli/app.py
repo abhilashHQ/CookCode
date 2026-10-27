@@ -26,6 +26,7 @@ from harness.cli.terminal import (
 )
 from harness.core.cancel import CancelToken
 from harness.core.events import Event, Limits, RunConfig, RunStarted, SessionStarted
+from harness.core.features import Features
 from harness.core.ids import new_id
 from harness.core.strategy import Strategy
 from harness.env.local import LocalEnvironment
@@ -175,6 +176,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="context strategy: raw, mask, mask_batched, summarize or hybrid, with options "
         "like mask:k6 or hybrid:k6:b8:t48000",
     )
+    parser.add_argument(
+        "--features",
+        type=Features.parse,
+        default=Features(),
+        help="optional features to turn on, comma separated: jobs",
+    )
     parser.add_argument("--once", action="store_true", help="exit after the first run")
     parser.add_argument("--resume", metavar="SESSION", help="continue an existing session")
     parser.add_argument(
@@ -287,7 +294,9 @@ class Runtime:
             log=self.log,
             provider=provider,
             env=self.env,
-            tools=ToolRegistry(default_tools(recall=self.args.strategy.masks)),
+            tools=ToolRegistry(
+                default_tools(recall=self.args.strategy.masks, jobs=self.args.features.jobs)
+            ),
             config=config,
             approver=approver,
             checkpoints=self.checkpoints,
