@@ -1,0 +1,4 @@
+kind = "memory"
+prompt = "Inventory.remove does not reduce the item count. Fix it and add a test."
+max_turns = 20
+max_wall_s = 900

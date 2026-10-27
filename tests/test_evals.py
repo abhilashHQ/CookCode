@@ -24,7 +24,7 @@ from harness.evals import runner
 from harness.evals.cli import eval_command, stats_command
 from harness.evals.runner import AttemptResult, run_suite
 from harness.evals.stats import Price, cost, repeat_streaks, session_stats
-from harness.evals.suite import load_suite, suite_sha256
+from harness.evals.suite import chains, load_suite, suite_sha256
 from harness.evals.variance import Trial, harbor_trials, summarize
 from harness.providers.base import Provider
 from harness.providers.cassette import Cassette, RecordingTransport, ReplayTransport
@@ -255,6 +255,40 @@ def test_load_suite_validates_and_filters(tmp_path: Path) -> None:
     before = suite_sha256(tasks)
     (suite / "feature-moon" / "cassette.json").write_text("{}")
     assert suite_sha256(tasks) == before
+
+
+def add_follower(suite: Path) -> None:
+    task = suite / "memory-moon-b"
+    task.mkdir()
+    (task / "task.toml").write_text(
+        'kind = "memory"\nprompt = "Again."\nmax_turns = 5\nmax_wall_s = 60\n'
+        'after = "feature-moon"\n'
+    )
+    (task / "check.py").write_text(CHECK)
+    (task / "solution.sh").write_text("test ! -e marker && sed -i s/world/moon/ greet.py\n")
+    (suite / "feature-moon" / "solution.sh").write_text(
+        "touch marker && sed -i s/world/moon/ greet.py\n"
+    )
+
+
+async def test_a_follower_runs_after_its_task_on_a_fresh_copy_of_its_fixture(
+    tmp_path: Path,
+) -> None:
+    suite = make_suite(tmp_path)
+    add_follower(suite)
+    tasks = load_suite(suite)
+    first, follower = tasks
+    assert follower.repo == first.repo
+    assert [[t.id for t in chain] for chain in chains(tasks)] == [
+        ["feature-moon", "memory-moon-b"]
+    ]
+    assert [[t.id for t in chain] for chain in chains([follower])] == [["memory-moon-b"]]
+    results = await run_suite(tasks, tmp_path / "run", mode="oracle", preset="nim", model="m",
+                              attempts=2, concurrency=4)
+    assert all(r.passed for r in results)
+    order = [(r.attempt, r.task) for r in results]
+    for attempt in (1, 2):
+        assert order.index((attempt, "feature-moon")) < order.index((attempt, "memory-moon-b"))
 
 
 async def test_oracle_mode_runs_the_solution_and_the_check(tmp_path: Path) -> None:

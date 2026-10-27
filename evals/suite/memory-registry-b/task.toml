@@ -1,0 +1,5 @@
+kind = "memory"
+prompt = "Add a `count` command that prints how many commands exist, itself included."
+max_turns = 20
+max_wall_s = 900
+after = "memory-registry-a"

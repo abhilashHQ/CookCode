@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
-Kind = Literal["bugfix", "feature", "refactor", "investigate"]
+Kind = Literal["bugfix", "feature", "refactor", "investigate", "memory"]
 
 
 class TaskSpec(BaseModel):
@@ -18,6 +18,7 @@ class TaskSpec(BaseModel):
     prompt: str
     max_turns: int
     max_wall_s: float
+    after: str | None = None
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,10 @@ class SuiteTask:
 
     @property
     def repo(self) -> Path:
+        """A task that runs after another starts from a fresh copy of that task's fixture, so
+        what it shares with the first session is memory, never the first session's edits."""
+        if self.spec.after is not None:
+            return self.dir.parent / self.spec.after / "repo"
         return self.dir / "repo"
 
     @property
@@ -60,6 +65,22 @@ def load_suite(root: Path, only: list[str] | None = None) -> list[SuiteTask]:
     if missing:
         raise ValueError(f"unknown task(s): {', '.join(missing)}")
     return [task for task in tasks if task.id in only]
+
+
+def chains(tasks: list[SuiteTask]) -> list[list[SuiteTask]]:
+    """Selected tasks grouped so each runs after the task it names; an attempt runs a chain in
+    order, sharing one memory directory. A task whose predecessor is not selected runs alone."""
+    by_id = {task.id: task for task in tasks}
+    followers = {task.spec.after for task in tasks if task.spec.after in by_id}
+    result: list[list[SuiteTask]] = []
+    for task in tasks:
+        if task.spec.after in by_id:
+            continue
+        chain = [task]
+        while chain[-1].id in followers:
+            chain.append(next(t for t in tasks if t.spec.after == chain[-1].id))
+        result.append(chain)
+    return result
 
 
 def suite_sha256(tasks: list[SuiteTask]) -> str:

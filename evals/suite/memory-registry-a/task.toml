@@ -1,0 +1,4 @@
+kind = "memory"
+prompt = "Add a `version` command that prints the version from pyproject.toml."
+max_turns = 20
+max_wall_s = 900

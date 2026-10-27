@@ -1,0 +1,5 @@
+kind = "memory"
+prompt = "Add an orders table with id, customer_id and total_cents columns."
+max_turns = 20
+max_wall_s = 900
+after = "memory-migrations-a"

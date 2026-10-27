@@ -24,7 +24,7 @@ from harness.core.features import Features
 from harness.core.ids import new_id
 from harness.core.strategy import Strategy
 from harness.env.local import LocalEnvironment
-from harness.evals.suite import SuiteTask, suite_sha256
+from harness.evals.suite import SuiteTask, chains, suite_sha256
 from harness.kit import toolkit
 from harness.providers.base import Provider
 from harness.providers.cassette import Cassette, RecordingTransport, ReplayTransport
@@ -313,8 +313,12 @@ async def run_suite(
         if on_result is not None:
             on_result(result)
 
+    async def chain(members: list[SuiteTask], attempt: int) -> None:
+        for task in members:
+            await one(task, attempt)
+
     async with asyncio.TaskGroup() as group:
         for attempt in range(1, attempts + 1):
-            for task in tasks:
-                group.create_task(one(task, attempt))
+            for members in chains(tasks):
+                group.create_task(chain(members, attempt))
     return results

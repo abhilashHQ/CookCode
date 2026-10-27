@@ -1,0 +1,5 @@
+kind = "memory"
+prompt = "Inventory.restock accepts zero and negative quantities. Make it raise ValueError for them and add a test."
+max_turns = 20
+max_wall_s = 900
+after = "memory-testenv-a"

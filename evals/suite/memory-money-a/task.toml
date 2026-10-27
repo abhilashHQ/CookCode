@@ -1,0 +1,4 @@
+kind = "memory"
+prompt = "Invoices with a subtotal over $100 get a 5% service fee added to the total. Show it as its own line before the total."
+max_turns = 20
+max_wall_s = 900

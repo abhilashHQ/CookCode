@@ -1,0 +1,4 @@
+kind = "memory"
+prompt = "Add an email field to the User model."
+max_turns = 20
+max_wall_s = 900

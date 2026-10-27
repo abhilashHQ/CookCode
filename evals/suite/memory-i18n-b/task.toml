@@ -1,0 +1,5 @@
+kind = "memory"
+prompt = "Add a command `cli.py count N` that prints: You have N items."
+max_turns = 20
+max_wall_s = 900
+after = "memory-i18n-a"

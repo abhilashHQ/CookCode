@@ -1,0 +1,7 @@
+[project]
+name = "toolbox"
+version = "1.4.2"
+
+[tool.cli.commands]
+"hello" = "Say hello"
+"help" = "List commands"

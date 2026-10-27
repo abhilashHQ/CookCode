@@ -1,0 +1,4 @@
+kind = "memory"
+prompt = "Customers need an optional phone number. Add a phone column (TEXT) to the customers table."
+max_turns = 20
+max_wall_s = 900

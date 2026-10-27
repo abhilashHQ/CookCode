@@ -13,7 +13,8 @@ from collections import Counter
 from pathlib import Path
 
 SUITE = Path(__file__).resolve().parent
-KINDS = ("bugfix", "feature", "refactor", "investigate")
+KINDS = ("bugfix", "feature", "refactor", "investigate", "memory")
+EXPECTED = {"bugfix": 6, "feature": 6, "refactor": 6, "investigate": 6, "memory": 12}
 GIT_ID = ["-c", "user.name=eval", "-c", "user.email=eval@localhost", "-c", "commit.gpgsign=false"]
 
 
@@ -23,9 +24,14 @@ def git_init(path: Path) -> None:
     subprocess.run(["git", *GIT_ID, "commit", "-qm", "initial", "--allow-empty"], cwd=path, check=True)
 
 
+def fixture(task: Path) -> Path:
+    after = tomllib.loads((task / "task.toml").read_text()).get("after")
+    return SUITE / after / "repo" if after else task / "repo"
+
+
 def fresh_workdir(task: Path, tmp: Path) -> Path:
     workdir = tmp / "work"
-    shutil.copytree(task / "repo", workdir)
+    shutil.copytree(fixture(task), workdir)
     git_init(workdir)
     return workdir
 
@@ -41,12 +47,16 @@ def run_check(task: Path, workdir: Path, answer: Path) -> tuple[int, str]:
 
 def lint_task(task: Path) -> list[str]:
     problems = []
-    for name in ("task.toml", "check.py", "solution.sh", "repo"):
+    for name in ("task.toml", "check.py", "solution.sh"):
         if not (task / name).exists():
             problems.append(f"missing {name}")
     if problems:
         return problems
     meta = tomllib.loads((task / "task.toml").read_text())
+    if not fixture(task).is_dir():
+        return [f"missing fixture {fixture(task)}"]
+    if meta.get("after") and (task / "repo").exists():
+        problems.append("a task that runs after another must not have its own repo/")
     kind = meta.get("kind")
     if kind not in KINDS:
         problems.append(f"bad kind {kind!r}")
@@ -56,11 +66,11 @@ def lint_task(task: Path) -> list[str]:
         problems.append("empty prompt")
     if not (isinstance(meta.get("max_turns"), int) and 12 <= meta["max_turns"] <= 25):
         problems.append("max_turns out of range")
-    if not (isinstance(meta.get("max_wall_s"), int) and 180 <= meta["max_wall_s"] <= 420):
+    if not (isinstance(meta.get("max_wall_s"), int) and 180 <= meta["max_wall_s"] <= 900):
         problems.append("max_wall_s out of range")
-    if (task / "repo" / ".git").exists():
+    if (fixture(task) / ".git").exists():
         problems.append("repo/ contains .git")
-    files = [p for p in (task / "repo").rglob("*") if p.is_file()]
+    files = [p for p in fixture(task).rglob("*") if p.is_file()]
     if not 1 <= len(files) <= 6:
         problems.append(f"repo/ has {len(files)} files")
     lines = sum(len(p.read_text(errors="replace").splitlines()) for p in files)
@@ -116,8 +126,8 @@ def main() -> int:
     print()
     print(f"{len(tasks)} tasks: " + ", ".join(f"{k}={kinds[k]}" for k in KINDS))
     print(f"{len(tasks) - failures} ok, {failures} failing")
-    if not selected and (len(tasks) != 24 or any(kinds[k] != 6 for k in KINDS)):
-        print("suite shape is wrong: expected 24 tasks, 6 per kind")
+    if not selected and dict(kinds) != EXPECTED:
+        print(f"suite shape is wrong: expected {EXPECTED}")
         return 1
     return 1 if failures else 0
 

@@ -1,0 +1,5 @@
+kind = "memory"
+prompt = "Add Invoice.apply_code(code): SAVE10 takes 10% off the total and shows a Discount line before the total. Unknown codes raise ValueError."
+max_turns = 20
+max_wall_s = 900
+after = "memory-money-a"

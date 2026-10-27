@@ -1,0 +1,4 @@
+kind = "memory"
+prompt = "After the greeting, `cli.py greet NAME` should also print a second line: Goodbye, NAME!"
+max_turns = 20
+max_wall_s = 900
