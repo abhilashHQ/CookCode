@@ -24,7 +24,8 @@ Spec section 12a: an agent that works in one repository across sessions relearns
 - Staleness is computed on read (`fresh`). A fact is stale when any file it cites no longer hashes as recorded. Stale facts are left out of the profile and the search results, and the count of hidden facts is shown. Staleness is never stored, so it can never disagree with the files.
 
 ## Consequences
-- A fact about a file that changed disappears on its own. One that cites no files never goes stale, and that is the arm's weak point. The consolidation prompt asks for cited paths.
+- A fact about a file that changed disappears on its own. A fact that cites no existing file is dropped at write time, so every stored fact can go stale. The cost is that knowledge not tied to a file (a flaky CI runner, a team habit) cannot be stored as a fact. The notes arm can hold it.
+- Staleness is coarse: any edit to a cited file hides the fact, even an edit unrelated to it. A hidden fact is shown again if the file returns to the recorded hash. Otherwise the next consolidation rewrites it.
 - The consolidation call costs one request per session, logged and skipped by replay. Mid-session `remember` costs a tool call each time, and the model decides when.
 - FTS5 keyword search is enough at a repository's scale (dozens to hundreds of facts) and adds no dependency. Embeddings would add a model call per write and per search.
 - Eval runs isolate memory per attempt (`out/memory/<attempt>`), so attempts never contaminate each other.
