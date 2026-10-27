@@ -30,7 +30,7 @@ from harness.core.features import Features
 from harness.core.ids import new_id
 from harness.core.strategy import Strategy
 from harness.env.local import LocalEnvironment
-from harness.kit import toolkit
+from harness.kit import Toolkit, toolkit
 from harness.providers.base import Provider, StreamEvent
 from harness.providers.gemini import GEMINI_BASE_URL, GeminiProvider
 from harness.providers.openai_compat import (
@@ -296,6 +296,13 @@ class Runtime:
         self.checkpoints = FileCheckpointStore(data / "checkpoints" / self.session_id)
         self.env = LocalEnvironment(root)
         self.instructions: list[InstructionFile] = []
+        self.kit: Toolkit | None = None
+
+    async def aclose(self) -> None:
+        """Stops what the last agent's kit started (MCP servers)."""
+        if self.kit is not None:
+            await self.kit.aclose()
+            self.kit = None
 
     async def build_agent(
         self, approver: Approver, stream_sink: Callable[[StreamEvent], None] | None = None
@@ -317,10 +324,12 @@ class Runtime:
             mode=self.args.mode, policy=self.policy, approver=approver,
             checkpoints=self.checkpoints,
         )
+        await self.aclose()
         kit = await toolkit(
             self.args.strategy, self.args.features, self.env, home=home,
             memory_root=home / "memory", settings=self.args.settings, spawner=spawner,
         )
+        self.kit = kit
         config = AgentConfig(
             model=self.args.model,
             system_prompt=kit.system(system),
@@ -485,6 +494,7 @@ async def run_cli(
             prompt = None
     finally:
         loop.remove_signal_handler(signal.SIGINT)
+        await session.runtime.aclose()
         session.log.close()
         terminal.close()
     return EXIT_CODES[status]

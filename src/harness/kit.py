@@ -1,7 +1,8 @@
 """Composition: the tools, hooks and system prompt additions a run gets from its strategy and
 features. Every composition site (CLI, suite runner, Harbor) builds its agent from this."""
 
-from dataclasses import dataclass, replace
+import os
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from harness.agent.hooks import Hook
@@ -10,6 +11,7 @@ from harness.config import Settings
 from harness.core.features import Features
 from harness.core.strategy import Strategy
 from harness.env.base import Environment
+from harness.mcp import McpHub, tool_search
 from harness.memory.layer import memory_parts
 from harness.skills import load_skills, skill_tool, skills_profile
 from harness.subagents import Spawner, task_tool
@@ -23,6 +25,10 @@ class Toolkit:
     tools: ToolRegistry
     hooks: tuple[Hook, ...]
     profile: str = ""
+    hub: McpHub = field(default_factory=McpHub)
+
+    async def aclose(self) -> None:
+        await self.hub.aclose()
 
     def system(self, prompt: str) -> str:
         """The system prompt with memory and skills sections, fixed for the whole session."""
@@ -60,6 +66,16 @@ async def toolkit(
     if features.hooks:
         shared = user_hooks(settings or Settings())
         hooks += shared
+    hub = McpHub()
+    servers = (settings or Settings()).mcp.servers
+    if features.mcp and servers:
+        await hub.start(servers, env.root if os.path.isdir(env.root) else os.getcwd())
+        deferred = hub.tools()
+        tools += deferred
+        if deferred:
+            tools.append(tool_search(deferred))
+        if hub.profile():
+            sections.append(hub.profile())
     profile = "\n\n".join(sections)
     if features.subagents:
         if spawner is None:
@@ -67,4 +83,4 @@ async def toolkit(
         child = replace(spawner, system_prompt=Toolkit(ToolRegistry([]), (), profile).system(
             spawner.system_prompt))
         tools.append(task_tool(child, tools, shared))
-    return Toolkit(ToolRegistry(tools), tuple(hooks), profile)
+    return Toolkit(ToolRegistry(tools), tuple(hooks), profile, hub)

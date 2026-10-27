@@ -14,6 +14,7 @@ class Features(BaseModel):
     subagents: bool = False
     skills: bool = False
     hooks: bool = False
+    mcp: bool = False
 
     @property
     def label(self) -> str:

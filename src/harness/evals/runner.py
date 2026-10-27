@@ -242,7 +242,10 @@ class Run:
                 ),
                 checkpoints=checkpoints,
             )
-            outcome = await agent.run(task.spec.prompt)
+            try:
+                outcome = await agent.run(task.spec.prompt)
+            finally:
+                await kit.aclose()
             answer.write_text(final_text(log.read()))
         finally:
             log.close()

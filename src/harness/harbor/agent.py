@@ -129,7 +129,10 @@ class HarnessAgent(BaseAgent):
                 checkpoints=checkpoints,
                 hooks=kit.hooks,
             )
-            await agent.run(instruction)
+            try:
+                await agent.run(instruction)
+            finally:
+                await kit.aclose()
         finally:
             events = log.read()
             log.close()

@@ -1,14 +1,34 @@
 import posixpath
-from collections.abc import Awaitable, Callable, Iterable, Iterator, Sequence
+from collections.abc import Awaitable, Callable, Collection, Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
 from harness.core.cancel import CancelToken
-from harness.core.events import Event, SideEffect
+from harness.core.events import Event, ItemEvent, SideEffect
+from harness.core.items import ToolCall, ToolResult
 from harness.env.base import Environment
 from harness.providers.base import ToolSchema
+
+TOOL_SEARCH = "tool_search"
+
+
+def loaded_tools(events: Sequence[Event]) -> frozenset[str]:
+    """Deferred tools whose schemas the model loaded: the names passed to tool_search calls
+    that succeeded. A pure function of the log, so replay sends the same tool list."""
+    asked: dict[str, list[str]] = {}
+    loaded: set[str] = set()
+    for event in events:
+        body = event.body
+        if isinstance(body, ItemEvent) and isinstance(body.item, ToolCall):
+            names = body.item.arguments.get("names")
+            if body.item.name == TOOL_SEARCH and isinstance(names, list):
+                asked[body.item.id] = [str(name) for name in names]  # pyright: ignore[reportUnknownVariableType, reportUnknownArgumentType]
+        elif isinstance(body, ItemEvent) and isinstance(body.item, ToolResult):
+            if body.item.call_id in asked and body.item.status == "ok":
+                loaded.update(asked[body.item.call_id])
+    return frozenset(loaded)
 
 
 def _absolute(path: str) -> str:
@@ -59,6 +79,7 @@ class Tool[A: BaseModel]:
     side_effect: SideEffect
     handler: Callable[[A, ToolContext], Awaitable[ToolOutput]]
     touches: Callable[[A], list[str]] | None = None
+    deferred: bool = False
 
     def schema(self) -> ToolSchema:
         return ToolSchema(
@@ -79,8 +100,13 @@ class ToolRegistry:
     def get(self, name: str) -> Tool[Any] | None:
         return self._tools.get(name)
 
-    def schemas(self) -> tuple[ToolSchema, ...]:
-        return tuple(tool.schema() for tool in self._tools.values())
+    def schemas(self, loaded: Collection[str] = ()) -> tuple[ToolSchema, ...]:
+        """Every tool's schema, except deferred tools that have not been loaded."""
+        return tuple(
+            tool.schema()
+            for tool in self._tools.values()
+            if not tool.deferred or tool.name in loaded
+        )
 
     def names(self) -> tuple[str, ...]:
         return tuple(self._tools)

@@ -15,6 +15,9 @@ harness = "harness.cli.app:main"
 harbor = [
     "harbor==0.25.0",
 ]
+mcp = [
+    "mcp>=1.10",
+]
 
 [dependency-groups]
 dev = [

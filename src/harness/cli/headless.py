@@ -163,5 +163,6 @@ async def run_headless(
     finally:
         for sig in signals:
             loop.remove_signal_handler(sig)
+        await runtime.aclose()
         runtime.log.close()
     return EXIT_CODES[status]

@@ -31,7 +31,14 @@ from harness.agent.gate import (
 )
 from harness.agent.hooks import Hook, HookContext
 from harness.agent.repair import NOT_EXECUTED, RepairAction, plan_repairs, repair_bodies
-from harness.agent.tools import Tool, ToolContext, ToolOutput, ToolRegistry, workspace_path
+from harness.agent.tools import (
+    Tool,
+    ToolContext,
+    ToolOutput,
+    ToolRegistry,
+    loaded_tools,
+    workspace_path,
+)
 from harness.core.cancel import CancelToken
 from harness.core.events import (
     ApprovalRequested,
@@ -422,7 +429,7 @@ class Agent:
             events,
             model=self._config.model,
             system=self._config.system_prompt,
-            tools=self._tools.schemas(),
+            tools=self._tools.schemas(loaded_tools(events)),
             provider=self._provider.name,
             strategy=self._config.strategy,
         )
