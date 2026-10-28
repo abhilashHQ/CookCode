@@ -416,7 +416,7 @@ def test_eval_oracle_and_report_commands(
     out = tmp_path / "run"
     assert eval_command(["run", "--suite", str(suite), "--mode", "oracle", "-o", str(out)]) == 0
     assert "1/1 passed" in capsys.readouterr().out
-    assert eval_command(["report", str(out)]) == 0
+    assert eval_command(["report", "--suite", str(suite), str(out)]) == 0
     report = capsys.readouterr().out
     assert "1 tasks x 1 attempts" in report and "score        1.000" in report
     assert eval_command(["report", str(tmp_path)]) == 1

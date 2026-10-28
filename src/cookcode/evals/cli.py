@@ -24,13 +24,13 @@ from cookcode.evals.stats import (
     session_stats,
     total,
 )
-from cookcode.evals.suite import load_suite
+from cookcode.evals.suite import load_suite, suite_sha256
 from cookcode.evals.variance import harbor_trials, pool_suite, suite_trials, summarize
 from cookcode.evals.variance import render as render_summary
 from cookcode.store.base import SessionNotFoundError
 
 PRICES = TypeAdapter(dict[str, Price])
-SUITE_CONFIG = ("suite_sha256", "mode", "provider", "model", "strategy", "features")
+SUITE_CONFIG = ("mode", "provider", "model", "strategy", "features")
 
 
 def _load_prices(path: str | None) -> dict[str, Price]:
@@ -136,6 +136,16 @@ def _report(args: argparse.Namespace) -> int:
         if (path / "results.jsonl").is_file():
             manifest = json.loads((path / "run.json").read_text())
             key = tuple(str(manifest.get(field)) for field in SUITE_CONFIG)
+            # The manifest hashes only the tasks a run selected, so runs of different task sets
+            # pool when each ran the tasks as they are now; a run of changed tasks stands alone.
+            try:
+                ran = suite_sha256(load_suite(Path(args.suite), manifest["tasks"]))
+            except ValueError:
+                ran = None
+            if ran != manifest["suite_sha256"]:
+                print(f"cookcode: {path.name} ran tasks that are not in {args.suite} as they "
+                      "are now; not pooled", file=sys.stderr)
+                key = (*key, path.name)
             suites.setdefault(key, []).append(path)
         elif (path / "result.json").is_file():
             jobs.append(path)
