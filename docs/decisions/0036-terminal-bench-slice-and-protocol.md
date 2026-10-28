@@ -36,3 +36,47 @@ Four trials ran at once (2 per agent). Within 5 minutes, all 5 of our finished t
 
 ## What would change it
 A paid or faster endpoint (then more attempts or the hard tier), or a variance result showing 5 attempts cannot resolve the effects M7 expects.
+
+## Final results (2026-10-29)
+All runs on NIM free, `minimaxai/minimax-m3.1-flash`. Attempts lost to the provider (429 past the wait budget, a DNS outage) are excluded and re-run, and the pooled numbers come from `cookcode eval report`. For a memory pair, losing task A excludes its B too.
+
+**Terminal-Bench slice, 10 tasks × 5 attempts.** The sweep ran at 0cb5ec8, and the 2 fix-git trials lost to 429s were re-run from a worktree at that commit.
+
+| Agent | Score | 95% CI | Per-round | Paired MDE |
+|---|---|---|---|---|
+| CookCode | 0.800 | 0.60 to 0.94 | 0.70 to 0.90 | 0.20 |
+| Terminus 2 | 0.760 | 0.54 to 0.96 | 0.50 to 0.90 | 0.18 |
+
+No detected difference. Per task, the agents split: CookCode leads on cobol-modernization (0.60 against 0.00) and sanitize-git-repo (0.80 against 0.60), and Terminus 2 leads on kv-store-grpc (1.00 against 0.80) and crack-7z-hash (0.40 against 0.20).
+
+**Context strategies, live, 24 base tasks × 1 attempt.**
+
+| Strategy | Score | Requests | Input tokens | Cache reads |
+|---|---|---|---|---|
+| raw | 1.000 | 193 | 1.08M | 89% |
+| mask_batched:k6:b8 | 0.833 | 202 | 1.08M | 61% |
+| hybrid:k6:b8:t48000 | 0.958 | 215 | 1.33M | 81% |
+
+The live runs confirm the counterfactual (0038). On short tasks masking saves no tokens and costs a third of the cache hits. The score gap is confounded: all 5 masking and hybrid failures ran into the 900 s wall cap after 3 to 18 turns, and those arms ran at 2 in flight while raw ran at 1 next to the Terminus 2 sweep. I read that as provider latency, not strategy.
+
+**Verify-first, 6 bugfix tasks × 2 attempts.** Both arms pass 12/12. Verify-first costs 11.8 turns against 9.6, and 87k input tokens per attempt against 58k (+50%). `eval repro`: all 12 valid attempts registered a reproduction, all 12 failed on the original code and passed on the reference fix, and all 12 were solved. The lock works and the reproductions are right. On tasks this easy, it is pure cost.
+
+**Memory, 6 pairs × 2 attempts, B tasks only.**
+
+| Arm | B pass | Turns | Input tokens |
+|---|---|---|---|
+| none | 0.83 | 9.0 | 42k |
+| notes | 0.83 | 7.7 | 27k |
+| facts | 0.83 | 8.8 | 43k |
+
+The pairs do not separate the arms on pass rate. Every B task except money passes without memory, and money-b fails in all three arms. Notes cut B's input tokens by about a third and its turns by 1.3. Facts change nothing measurable: the profile is shown, but the conventions were cheap to rediscover. The pairs were too easy for a flash model to need memory, which is the risk 0043 named.
+
+**Sub-agents, 12 investigate and refactor tasks × 1 attempt.** The `task` tool was offered in every run and called in none: tasks averaging 7 turns are not worth delegating, and the model agreed. The arm therefore measures an unused tool, 11/12 against raw's 12/12, which is within noise. Delegation and the report contract are verified by tests, not by a live run.
+
+**Jobs, crack-7z-hash × 3 (one more lost to 429s).** 0/3. The agent started the crack with `job_start` and then polled with `bash` instead of `job_check`, so the mechanism worked and the tool description did not.
+
+**Smoke runs, live:** skills (loaded before acting, format followed exactly), hooks (a write blocked before approval, then routed around) and MCP (`tool_search` loaded the schema, then the call returned 42).
+
+**Known issue: replay drift.** Replay of all 36 tasks passes 34. Most cassettes, including those recorded on 2026-10-27, show drift on some requests, and two recorded passes (memory-money-a, memory-money-b) replay as failures. Drift on a fresh cassette means something in the request still varies between record and replay. Finding it is the first job after this milestone, before any cassette is trusted as a regression gate.
+
+Batch totals from `cookcode stats`: 300 sessions, 2,449 requests and 2,673 logged retries, all on the free tier.

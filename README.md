@@ -110,6 +110,18 @@ The 0.04 gap is below the paired minimum detectable effect (about 0.20), so the 
 
 Plain masking cuts tokens and breaks the prompt cache, so it costs more than doing nothing. Batched masking keeps most of the saving at a fraction of the cache loss. See [0038](docs/decisions/0038-context-strategies.md) and [0039](docs/decisions/0039-token-ledger-and-counterfactual.md).
 
+**Feature ablations** (local suite, live, attempts lost to the provider re-run):
+
+| Feature | Result |
+|---|---|
+| Verify-first | Same pass rate (12/12), +50% input tokens. 12/12 reproductions failed for the right reason. |
+| Memory: notes | Same pass rate on the follow-up tasks, about a third fewer input tokens. |
+| Memory: facts | No measurable change. The paired tasks were too easy to need memory. |
+| Sub-agents | Offered in every run, never called on tasks averaging 7 turns. |
+| Jobs | The mechanism works, but the model polled with `bash` instead of `job_check`. |
+
+Full numbers and caveats are in [0036](docs/decisions/0036-terminal-bench-slice-and-protocol.md#final-results-2026-10-29).
+
 Over 74 measured sessions, the agent produced zero repeat streaks (3 or more identical call-and-result pairs in a row), so no stuck-loop breaker was built ([0014](docs/decisions/0014-stuck-loop-rule.md)).
 
 ## Configuration

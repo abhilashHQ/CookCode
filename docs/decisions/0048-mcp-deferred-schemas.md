@@ -24,7 +24,7 @@ MCP lets a user plug external tool servers into the agent. A single server can e
 - The fixed cost of a server is one line per tool. The schema cost is paid only for tools the session uses, from the step after loading.
 - Loading takes one extra step. For a session that uses one MCP tool once, that step costs more than the saved schemas. Deferral pays off as the server count grows.
 - Remote MCP servers are not supported. Adding streamable HTTP is a transport change behind the same hub.
-- The first live smoke run hit 429 exhaustion before its first step, with the Terminal-Bench sweep sharing the key. The run is queued again after the batch (result in 0036).
+- The first live smoke run hit 429 exhaustion with the Terminal-Bench sweep sharing the key. The rerun called `tool_search`, then `mcp__calc__add`, and wrote the result, in 4 requests.
 
 ## What would change it
 Providers adding native deferred tool loading (then use theirs), or users needing remote servers.
