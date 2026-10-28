@@ -25,7 +25,7 @@ from cookcode.evals.cli import eval_command, stats_command
 from cookcode.evals.runner import AttemptResult, run_suite
 from cookcode.evals.stats import Price, cost, repeat_streaks, session_stats
 from cookcode.evals.suite import chains, load_suite, suite_sha256
-from cookcode.evals.variance import Trial, harbor_trials, suite_trials, summarize
+from cookcode.evals.variance import Trial, harbor_trials, pool_suite, suite_trials, summarize
 from cookcode.providers.base import Provider
 from cookcode.providers.cassette import Cassette, RecordingTransport, ReplayTransport
 from openai_helpers import Script, ok, provider, text_stream, tool_stream
@@ -186,7 +186,13 @@ def test_suite_attempts_lost_to_the_provider_are_excluded(tmp_path: Path) -> Non
     (tmp_path / "results.jsonl").write_text("\n".join(lines) + "\n")
     run = suite_trials(tmp_path)
     assert run.trials == [Trial("a", 1, 1.0), Trial("c", 1, 0.0), Trial("d", 1, 0.0)]
-    assert list(run.excluded) == ["b#1"]
+    assert list(run.excluded) == [f"{tmp_path.name}/b#1"]
+    rerun = suite_trials(tmp_path)
+    pooled = pool_suite([run, rerun])
+    chained = suite_trials(tmp_path, {"c": "b"})
+    assert "c" not in {t.task for t in chained.trials}
+    assert chained.excluded[f"{tmp_path.name}/c#1"] == "after b, which was excluded"
+    assert [(t.task, t.attempt) for t in pooled.trials if t.task == "a"] == [("a", 1), ("a", 2)]
 
 
 # --- sequenced replay -------------------------------------------------------------------

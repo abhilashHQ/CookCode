@@ -25,11 +25,12 @@ from cookcode.evals.stats import (
     total,
 )
 from cookcode.evals.suite import load_suite
-from cookcode.evals.variance import harbor_trials, suite_trials, summarize
+from cookcode.evals.variance import harbor_trials, pool_suite, suite_trials, summarize
 from cookcode.evals.variance import render as render_summary
 from cookcode.store.base import SessionNotFoundError
 
 PRICES = TypeAdapter(dict[str, Price])
+SUITE_CONFIG = ("suite_sha256", "mode", "provider", "model", "strategy", "features")
 
 
 def _load_prices(path: str | None) -> dict[str, Price]:
@@ -126,31 +127,40 @@ def _run(args: argparse.Namespace) -> int:
 
 
 def _report(args: argparse.Namespace) -> int:
-    """Suite runs report one by one. Harbor jobs are pooled and grouped by agent, so a job of
-    re-runs merges with the job whose trials it replaces."""
+    """Suite runs are pooled by configuration and Harbor jobs by agent, so a run of re-runs
+    merges with the run whose attempts it replaces."""
     jobs: list[Path] = []
+    suites: dict[tuple[str, ...], list[Path]] = {}
     for target in args.runs:
         path = Path(target)
         if (path / "results.jsonl").is_file():
-            suite = suite_trials(path)
-            if not suite.trials:
-                print(f"cookcode: no trials in {target}", file=sys.stderr)
-                return 1
             manifest = json.loads((path / "run.json").read_text())
-            label = f"{path.name} ({manifest['provider']}/{manifest['model']}, {manifest['mode']})"
-            print(render_summary(summarize(suite.trials), label))
-            print(f"  excluded     {len(suite.excluded)} infrastructure failures")
-            for attempt, reason in suite.excluded.items():
-                print(f"    {attempt:<40} {reason}")
-            logs = session_files(path)
-            if logs:
-                print(render(total(session_stats(read_session(log)) for log in logs)))
-            print()
+            key = tuple(str(manifest.get(field)) for field in SUITE_CONFIG)
+            suites.setdefault(key, []).append(path)
         elif (path / "result.json").is_file():
             jobs.append(path)
         else:
             print(f"cookcode: {target} is neither a suite run nor a Harbor job", file=sys.stderr)
             return 1
+    after = {task.id: task.spec.after for task in load_suite(Path(args.suite))
+             if task.spec.after is not None} if suites else {}
+    for key, paths in suites.items():
+        suite = pool_suite([suite_trials(path, after) for path in paths])
+        names = ", ".join(path.name for path in paths)
+        if not suite.trials:
+            print(f"cookcode: no trials in {names}", file=sys.stderr)
+            return 1
+        config = dict(zip(SUITE_CONFIG, key, strict=True))
+        label = (f"{names} ({config['provider']}/{config['model']}, {config['mode']}, "
+                 f"{config['strategy']}, {config['features']})")
+        print(render_summary(summarize(suite.trials), label))
+        print(f"  excluded     {len(suite.excluded)} infrastructure failures")
+        for attempt, reason in suite.excluded.items():
+            print(f"    {attempt:<40} {reason}")
+        logs = [log for path in paths for log in session_files(path)]
+        if logs:
+            print(render(total(session_stats(read_session(log)) for log in logs)))
+        print()
     for run in harbor_trials(*jobs):
         if run.trials:
             print(render_summary(summarize(run.trials), f"{run.agent} (harbor)"))
@@ -227,6 +237,7 @@ def eval_command(argv: list[str]) -> int:
     run.add_argument("-o", "--output", help="run directory (default under $COOKCODE_HOME/runs)")
     report = sub.add_parser("report", help="variance summary and stats of runs")
     report.add_argument("runs", nargs="+", help="suite run directories or Harbor job directories")
+    report.add_argument("--suite", default="evals/suite")
     context = sub.add_parser(
         "context", help="rebuild logged requests under other strategies (no API calls)"
     )

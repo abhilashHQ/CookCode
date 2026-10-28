@@ -5,7 +5,7 @@ import math
 import random
 import statistics
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -142,19 +142,46 @@ class SuiteRun:
     excluded: dict[str, str]
 
 
-def suite_trials(run_dir: Path) -> SuiteRun:
+def suite_trials(run_dir: Path, after: Mapping[str, str] | None = None) -> SuiteRun:
     """Attempts of a suite run. One that ended on a provider outage is excluded and named, by
-    the same rule as Harbor trials, so the score measures the agent and not the rate limiter."""
-    trials: list[Trial] = []
-    excluded: dict[str, str] = {}
-    for line in (run_dir / "results.jsonl").read_text().splitlines():
-        row = json.loads(line)
+    the same rule as Harbor trials, so the score measures the agent and not the rate limiter.
+    `after` maps a follower task to its predecessor: a follower whose predecessor was excluded
+    in the same attempt is excluded too, since it ran without what that session would have
+    left it."""
+    rows = [json.loads(line) for line in (run_dir / "results.jsonl").read_text().splitlines()]
+    lost: dict[tuple[str, int], str] = {}
+    for row in rows:
         log = run_dir / "sessions" / f"{row.get('session_id')}.jsonl"
         reason = provider_outage(log) if row["status"] == "error" and log.is_file() else None
         if reason is not None:
-            excluded[f"{row['task']}#{row['attempt']}"] = reason
+            lost[(row["task"], row["attempt"])] = reason
+    for row in rows:
+        predecessor = (after or {}).get(row["task"])
+        key = (row["task"], row["attempt"])
+        if predecessor is not None and (predecessor, row["attempt"]) in lost:
+            lost.setdefault(key, f"after {predecessor}, which was excluded")
+    trials: list[Trial] = []
+    excluded: dict[str, str] = {}
+    for row in rows:
+        key = (row["task"], row["attempt"])
+        if key in lost:
+            excluded[f"{run_dir.name}/{row['task']}#{row['attempt']}"] = lost[key]
             continue
         trials.append(Trial(row["task"], row["attempt"], 1.0 if row["passed"] else 0.0))
+    return SuiteRun(trials, excluded)
+
+
+def pool_suite(runs: Sequence[SuiteRun]) -> SuiteRun:
+    """Runs of one configuration as one, so a re-run of excluded attempts merges with the run
+    whose attempts it replaces. Attempts are renumbered per task in run order."""
+    counts: dict[str, int] = defaultdict(int)
+    trials: list[Trial] = []
+    excluded: dict[str, str] = {}
+    for run in runs:
+        for trial in run.trials:
+            counts[trial.task] += 1
+            trials.append(Trial(trial.task, counts[trial.task], trial.reward))
+        excluded.update(run.excluded)
     return SuiteRun(trials, excluded)
 
 
