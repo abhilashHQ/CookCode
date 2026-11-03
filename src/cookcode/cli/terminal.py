@@ -62,7 +62,9 @@ class Terminal:
         self._reader = reader
 
     def close(self) -> None:
-        if self._was_blocking is not None:
+        """Restores stdin's blocking flag. At EOF the pipe transport closes stdin itself, and
+        then there is no descriptor left to restore."""
+        if self._was_blocking is not None and not self._stdin.closed:
             os.set_blocking(self._stdin.fileno(), self._was_blocking)
 
     def paint(self, text: str, color: str) -> str:

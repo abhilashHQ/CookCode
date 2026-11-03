@@ -140,6 +140,30 @@ async def test_stdin_from_dev_null_reads_eof_without_a_selector_error() -> None:
         term.close()
 
 
+async def test_closing_after_a_piped_stdin_hits_eof_does_not_raise() -> None:
+    read_end, write_end = os.pipe()
+    os.write(write_end, b"y\n")
+    os.close(write_end)
+    with open(read_end) as pipe:
+        term = Terminal(out=io.StringIO(), stdin=pipe)
+        await term.start()
+        assert await term.readline("> ") == "y"
+        assert await term.readline("> ") is None
+        term.close()
+
+
+async def test_plan_review_maps_keys_to_modes_and_asks_for_feedback() -> None:
+    plan = ToolCall(id="c", provider_call_id="p", name="exit_plan", arguments={"plan": "1. x"})
+    term, out = terminal("a\n")
+    assert (await TerminalApprover(term).decide(plan, risk(), CancelToken())).action == (
+        "allow_always"
+    )
+    assert "1. x" in out.getvalue()
+    term, _ = terminal("n\nsmaller please\n")
+    decision = await TerminalApprover(term).decide(plan, risk(), CancelToken())
+    assert decision.action == "deny" and decision.reason == "smaller please"
+
+
 def test_provider_presets_fill_url_key_and_model(monkeypatch: pytest.MonkeyPatch) -> None:
     for name in ("COOKCODE_PROVIDER", "COOKCODE_MODEL", "COOKCODE_BASE_URL"):
         monkeypatch.delenv(name, raising=False)
