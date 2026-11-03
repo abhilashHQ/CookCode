@@ -1,6 +1,6 @@
 # 0052. A TUI renderer of its own
 
-Status: accepted (2026-11-03). Supersedes the rendering part of 0049.
+Status: superseded by 0053 (2026-11-03). It superseded the rendering part of 0049.
 Date: 2026-11-03
 
 ## Context
