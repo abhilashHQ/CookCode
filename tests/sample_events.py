@@ -10,6 +10,7 @@ from cookcode.core.events import (
     HookBlocked,
     Interrupted,
     ItemEvent,
+    ModeChanged,
     ModelRequestFinished,
     ModelRequestStarted,
     ProviderRetry,
@@ -63,6 +64,7 @@ def all_bodies() -> list[EventBody]:
             strategy="mask", from_seq=3, to_seq=40, tokens_before=90000, tokens_after=30000
         ),
         HookBlocked(hook="verify-first", point="stop", message="repro still fails"),
+        ModeChanged(mode="ask", previous="plan", source="exit_plan", call_id="c1"),
         Interrupted(phase="tool", killed=("bash:c1",)),
         Repaired(call_id="c1", status="unknown", reason="started, never finished"),
         BudgetExceeded(limit="turns", value=50),

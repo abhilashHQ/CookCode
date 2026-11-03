@@ -494,6 +494,59 @@
       "title": "Message",
       "type": "object"
     },
+    "ModeChanged": {
+      "description": "Plan mode was entered or left. A change at the start of a run becomes a note in the\nmodel's context. An approved exit_plan call reaches the model through its tool result\ninstead, because a note there would split a tool call from its result.",
+      "properties": {
+        "call_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Call Id"
+        },
+        "mode": {
+          "title": "Mode",
+          "type": "string"
+        },
+        "previous": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Previous"
+        },
+        "source": {
+          "enum": [
+            "run",
+            "exit_plan"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "type": {
+          "const": "mode_changed",
+          "default": "mode_changed",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode",
+        "source"
+      ],
+      "title": "ModeChanged",
+      "type": "object"
+    },
     "ModelRequestFinished": {
       "properties": {
         "raw_ref": {
@@ -1327,6 +1380,9 @@
         },
         {
           "$ref": "#/$defs/HookBlocked"
+        },
+        {
+          "$ref": "#/$defs/ModeChanged"
         },
         {
           "$ref": "#/$defs/Interrupted"

@@ -11,7 +11,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from cookcode.agent.approval import Approver
-from cookcode.agent.gate import Policy, Rule, parse_rule
+from cookcode.agent.gate import MODES, Policy, Rule, parse_rule
 from cookcode.agent.instructions import InstructionFile, load_instructions, render_system
 from cookcode.agent.loop import Agent, AgentConfig, RunOutcome
 from cookcode.agent.undo import undo
@@ -50,7 +50,7 @@ from cookcode.subagents import Spawner
 
 PRESETS = {
     "nim": (NIM_BASE_URL, "NVIDIA_API_KEY", "minimaxai/minimax-m3.1-flash"),
-    "openrouter": (OPENROUTER_BASE_URL, "OPENROUTER_API_KEY", "cohere/north-mini-code:free"),
+    "openrouter": (OPENROUTER_BASE_URL, "OPENROUTER_API_KEY", "nvidia/nemotron-3.5-super-vl:free"),
     "gemini": (GEMINI_BASE_URL, "GEMINI_API_KEY", "gemini-3.5-flash"),
 }
 
@@ -172,7 +172,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--model")
     parser.add_argument("--base-url")
     parser.add_argument("--api-key-env")
-    parser.add_argument("--mode", choices=("ask", "auto-edit", "yolo"))
+    parser.add_argument("--mode", choices=MODES)
     parser.add_argument("--max-turns", type=int)
     parser.add_argument(
         "--strategy",

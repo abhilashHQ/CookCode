@@ -11,6 +11,7 @@ from cookcode.core.events import (
     Event,
     HookBlocked,
     ItemEvent,
+    ModeChanged,
     ModelRequestStarted,
     SteerMessage,
     UserMessage,
@@ -24,6 +25,13 @@ SUMMARY_HEADER = "[summary of the earlier part of this session]"
 SUMMARIZE_VIEW = "summarize"
 MEMORY_VIEW = "memory"
 SIDE_VIEWS = frozenset({SUMMARIZE_VIEW, MEMORY_VIEW})
+PLAN_NOTE = (
+    "[plan mode] You are in plan mode. Investigate with read-only tools and read-only shell "
+    "commands. Edits, writes and other commands are denied. When you know what to change, call "
+    "exit_plan with a concrete plan: the files, the changes and how you will verify them. The "
+    "user approves it or replies with feedback."
+)
+PLAN_OFF_NOTE = "[mode] Plan mode is off. The mode is now {mode}."
 
 
 @dataclass(frozen=True)
@@ -60,6 +68,9 @@ def _entries(events: Sequence[Event]) -> list[_Entry]:
                 f"{', '.join(str(turn) for turn in turns)} are gone.",
             )
             entries.append(_Entry(event.seq, step, note))
+        elif isinstance(body, ModeChanged) and body.source == "run":
+            text = PLAN_NOTE if body.mode == "plan" else PLAN_OFF_NOTE.format(mode=body.mode)
+            entries.append(_Entry(event.seq, step, text_message("user", text)))
         elif isinstance(body, HookBlocked) and body.point == "stop":
             note = text_message("user", f"[{body.hook}] {body.message}")
             entries.append(_Entry(event.seq, step, note))

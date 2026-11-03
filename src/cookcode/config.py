@@ -73,7 +73,7 @@ class Settings(BaseModel):
     model: str | None = None
     base_url: str | None = None
     api_key_env: str | None = None
-    mode: Literal["ask", "auto-edit", "yolo"] | None = None
+    mode: Literal["plan", "ask", "auto-edit", "yolo"] | None = None
     max_turns: int | None = Field(default=None, ge=1)
     strategy: str | None = None
     features: str | None = None

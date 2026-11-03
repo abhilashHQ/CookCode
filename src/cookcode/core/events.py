@@ -196,6 +196,19 @@ class HookBlocked(_Body):
     call_id: str | None = None
 
 
+class ModeChanged(_Body):
+    """Plan mode was entered or left. A change at the start of a run becomes a note in the
+    model's context. An approved exit_plan call reaches the model through its tool result
+    instead, because a note there would split a tool call from its result."""
+
+    LAYER: ClassVar[Layer] = "model"
+    type: Literal["mode_changed"] = "mode_changed"
+    mode: str
+    previous: str | None = None
+    source: Literal["run", "exit_plan"]
+    call_id: str | None = None
+
+
 class Interrupted(_Body):
     type: Literal["interrupted"] = "interrupted"
     phase: Literal["streaming", "tool", "idle"]
@@ -239,7 +252,7 @@ EVENT_TYPES = frozenset({
     "item", "model_request_finished", "tool_call_started", "tool_call_finished",
     "approval_requested", "approval_resolved", "checkpoint_created", "checkpoint_restored",
     "compaction_applied", "interrupted", "repaired", "budget_exceeded", "error",
-    "session_finished", "provider_retry", "hook_blocked",
+    "session_finished", "provider_retry", "hook_blocked", "mode_changed",
 })
 
 EventBody = Annotated[
@@ -259,6 +272,7 @@ EventBody = Annotated[
     | Annotated[CheckpointRestored, Tag("checkpoint_restored")]
     | Annotated[CompactionApplied, Tag("compaction_applied")]
     | Annotated[HookBlocked, Tag("hook_blocked")]
+    | Annotated[ModeChanged, Tag("mode_changed")]
     | Annotated[Interrupted, Tag("interrupted")]
     | Annotated[Repaired, Tag("repaired")]
     | Annotated[BudgetExceeded, Tag("budget_exceeded")]
