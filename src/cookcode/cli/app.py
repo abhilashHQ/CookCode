@@ -186,7 +186,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="optional features to turn on, comma separated: jobs, verify_first, notes, facts, "
         "subagents, skills, hooks, mcp",
     )
-    parser.add_argument("--tui", action="store_true", help="full-screen interface")
     parser.add_argument("--once", action="store_true", help="exit after the first run")
     parser.add_argument("--resume", metavar="SESSION", help="continue an existing session")
     parser.add_argument(
@@ -463,6 +462,14 @@ async def run_cli(
     except ValueError as exc:
         print(f"cookcode: {exc}")
         return 1
+    if terminal is None and sys.stdin.isatty() and sys.stdout.isatty():
+        from cookcode.cli.inline import InlineApp
+
+        try:
+            return await InlineApp(args, provider, policy=policy).run()
+        except SESSION_ERRORS as exc:
+            print(f"cookcode: {session_error(args.resume, exc)}", file=sys.stderr)
+            return 1
     terminal = terminal or Terminal()
     try:
         session = Session(args, terminal, provider, policy)
@@ -513,19 +520,4 @@ def main(argv: list[str] | None = None) -> int:
     if args.json:
         print("cookcode: --json needs -p <prompt> or --continue", file=sys.stderr)
         return 1
-    if args.tui:
-        try:
-            from cookcode.cli.tui import run_tui
-        except ImportError:
-            print("cookcode: the TUI needs the tui extra (uv sync --extra tui)", file=sys.stderr)
-            return 1
-        try:
-            load_resumed(args)
-        except SESSION_ERRORS as exc:
-            print(f"cookcode: {session_error(args.resume, exc)}", file=sys.stderr)
-            return 1
-        if not os.environ.get(args.api_key_env):
-            print(f"cookcode: set {args.api_key_env} to an API key for {args.base_url}")
-            return 1
-        return asyncio.run(run_tui(args))
     return asyncio.run(run_cli(args))
