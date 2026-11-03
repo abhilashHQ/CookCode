@@ -190,7 +190,7 @@ src/cookcode/
   tools/       file tools, search, bash, jobs, verify-first, recall
   memory/      fact store and memory layer
   env/         local and Harbor environments behind one exec interface
-  cli/         plain CLI, headless mode, TUI, session commands
+  cli/         interactive client, line client, headless mode, session commands
   evals/       suite runner, stats, variance, counterfactual, repro judge
   export/      ATIF projection
   harbor/      Terminal-Bench agent adapter
@@ -199,7 +199,7 @@ src/cookcode/
   subagents.py, skills.py, userhooks.py, mcp.py, config.py, redact.py
 ```
 
-The agent package never imports concrete tools, and the tools see only a narrow contract. An import-boundary test enforces both. Every client (CLI, TUI, headless, Harbor) observes the same runtime.
+The agent package never imports concrete tools, and the tools see only a narrow contract. An import-boundary test enforces both. Every client (interactive, line, headless, Harbor) observes the same runtime.
 
 ## Documentation
 
