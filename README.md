@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/python-3.12%2B-3776ab" alt="Python 3.12+">
   <img src="https://img.shields.io/badge/types-pyright%20strict-2f6fdb" alt="pyright strict">
   <img src="https://img.shields.io/badge/lint-ruff-d7ff64" alt="ruff">
-  <img src="https://img.shields.io/badge/tests-1026-2ea44f" alt="1026 tests">
+  <img src="https://img.shields.io/badge/tests-1067-2ea44f" alt="1067 tests">
   <img src="https://img.shields.io/badge/Terminal--Bench%202.0-slice%200.80-f97316" alt="Terminal-Bench slice score 0.80">
 </p>
 
@@ -37,7 +37,7 @@ Most agent harnesses are hard to reason about after the fact: the prompt was ass
 - **The log is the source of truth.** Every model request, streamed item, tool call, approval and retry is an event in an append-only JSONL log. The context builder is a pure function of that log.
 - **Replay is exact.** `cookcode replay <session>` rebuilds every request from the log and checks its items hash. Suite cassettes replay whole agent runs offline in seconds.
 - **Crashes are boring.** A crash mid-tool-call is repaired on resume: read-only calls rerun, and mutating calls are reported as `unknown` so the model decides.
-- **Decisions are written down.** 50 decision records explain what was chosen, what was rejected, and what would change the call.
+- **Decisions are written down.** 52 decision records explain what was chosen, what was rejected, and what would change the call.
 
 ## Quickstart
 
@@ -65,7 +65,7 @@ uv run cookcode --once "fix the failing test in tests/test_dates.py"
 uv run cookcode -p "summarize this repo" --json   # headless, one JSON event per line
 ```
 
-Useful flags: `--model`, `--mode ask|auto-edit|yolo`, `--max-turns`, `--strategy`, `--features`.
+Useful flags: `--model`, `--mode plan|ask|auto-edit|yolo`, `--max-turns`, `--strategy`, `--features`.
 
 ## Features
 
@@ -73,7 +73,9 @@ Useful flags: `--model`, `--mode ask|auto-edit|yolo`, `--max-turns`, `--strategy
 |---|---|
 | **Event-sourced core** | Append-only log with torn-tail recovery, redaction at write time and additive schema evolution (`cookcode schema`). |
 | **Sessions** | `sessions`, `resume`, `fork --at SEQ`, `replay` and `export` (ATIF). Switch providers mid-session: reasoning that can't be replayed is dropped and counted. |
-| **Tools** | read, write, edit, glob, grep and bash, with snapshots and undo, a permission gate (`ask`, `auto-edit`, `yolo`) and allow and deny rules. |
+| **Tools** | read, write, edit, glob, grep and bash, with snapshots and undo, a permission gate (`plan`, `ask`, `auto-edit`, `yolo`) and allow and deny rules. |
+| **Plan mode** | The gate allows only read-only tools and an allowlist of read-only shell commands, checked by the bash lexer. `exit_plan` sends the plan for review: approve into `ask` or `auto-edit`, or reply with feedback. The mode change is a logged event. |
+| **TUI** | `--tui`: streamed Markdown, collapsible tool blocks with diffs, a plan review, approval dialogs that show the diff, Shift-Tab to change mode, and a session panel. |
 | **Providers** | NVIDIA NIM, OpenRouter (OpenAI-compatible) and native Gemini with thought-signature replay, on one streaming transport with logged retries and a 429 wait budget. |
 | **Context strategies** | `raw`, `mask`, `mask_batched`, `summarize`, `hybrid`. Masked outputs come back through `recall`, and summaries are logged so replay never calls a model. |
 | **Background jobs** | `job_start` and `job_check` for commands that outlive the bash timeout, locally or in a container. |

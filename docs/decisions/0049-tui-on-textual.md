@@ -1,6 +1,6 @@
 # 0049. A full-screen TUI on Textual, as another observer
 
-Status: accepted (M10 gate, 2026-10-27)
+Status: accepted (M10 gate, 2026-10-27). Rendering superseded by 0052.
 Date: 2026-10-27
 
 ## Context
