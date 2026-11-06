@@ -13,7 +13,8 @@ from cookcode.env.local import LocalEnvironment, _CappedBuffer
 def _is_dead(pid: int) -> bool:
     try:
         stat = Path(f"/proc/{pid}/stat").read_text()
-    except FileNotFoundError:
+    # A process reaped between the lookup and the read gives ESRCH, not ENOENT.
+    except (FileNotFoundError, ProcessLookupError):
         return True
     return stat.rsplit(")", 1)[1].split()[0] == "Z"
 
