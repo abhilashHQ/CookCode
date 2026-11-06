@@ -73,7 +73,9 @@ STYLE = Style.from_dict({
     "mode.plan": "#5fafd7 bold",
     "mode.edit": "#af87ff bold",
     "mode.yolo": "#ff5f5f bold",
+    "context.full": "#ffaf00 bold",
 })
+CONTEXT_WARNING = 0.8
 FEEDBACK = "feedback"
 Choice = Decision | Literal["feedback"]
 MenuSpec = tuple[RenderableType | None, str, list[tuple[str, Choice]]]
@@ -86,6 +88,20 @@ class Menu:
     options: list[tuple[str, Choice]]
     future: asyncio.Future[Choice]
     selected: int = 0
+
+
+def _tokens(count: int) -> str:
+    if count < 1000:
+        return str(count)
+    return f"{count / 1000:.1f}k" if count < 10_000 else f"{round(count / 1000)}k"
+
+
+def context_meter(used: int, window: int | None) -> tuple[str, str]:
+    """The estimated context against the model's window, warning once it is 80% full."""
+    if window is None:
+        return "class:dim", f"ctx ~{used}"
+    style = "class:context.full" if used >= CONTEXT_WARNING * window else "class:dim"
+    return style, f"ctx ~{_tokens(used)} / {_tokens(window)}"
 
 
 def rounded(body: Window, style: str = "class:frame") -> HSplit:
@@ -320,8 +336,12 @@ class InlineApp:
         usage = self.printer.live.usage
         context = self.printer.live.context_tokens
         cached = f" · {usage.cache_read} cached" if usage.cache_read else ""
-        return [("class:dim", f"{self.args.model} · {usage.total_input} in{cached} · "
-                              f"{usage.output} out · ctx ~{context}  ")]
+        return [
+            ("class:dim", f"{self.args.model} · {usage.total_input} in{cached} · "
+                          f"{usage.output} out · "),
+            context_meter(context, self.args.context_window),
+            ("class:dim", "  "),
+        ]
 
     # -- keys ---------------------------------------------------------------------------------
 

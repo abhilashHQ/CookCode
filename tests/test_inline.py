@@ -11,7 +11,7 @@ from prompt_toolkit.output import DummyOutput
 from agent_helpers import wait_until
 from cookcode.agent.tools import EXIT_PLAN
 from cookcode.cli.app import parse_args
-from cookcode.cli.inline import InlineApp
+from cookcode.cli.inline import InlineApp, context_meter
 from cookcode.cli.render import Printer, call_label, summarize
 from cookcode.core.items import ToolCall, ToolResult
 from cookcode.providers.fake import FakeProvider, FakeTurn, call, say
@@ -177,3 +177,18 @@ def test_summaries_count_lines_and_trim_denials() -> None:
     printer = Printer(lambda _: None, lambda: 80, color=False)
     assert printer.render(summarize(read, ok)[0]).strip() == "Read 2 lines"
     assert printer.render(summarize(read, denied)[0]).strip() == "Denied: plan mode: no."
+
+
+def test_context_meter_shows_use_against_the_window() -> None:
+    assert context_meter(3210, 4096) == ("class:dim", "ctx ~3.2k / 4.1k")
+    assert context_meter(41_000, 128_000) == ("class:dim", "ctx ~41k / 128k")
+    assert context_meter(950, 4096) == ("class:dim", "ctx ~950 / 4.1k")
+
+
+def test_context_meter_warns_at_eighty_percent() -> None:
+    assert context_meter(3277, 4096) == ("class:context.full", "ctx ~3.3k / 4.1k")
+    assert context_meter(3276, 4096)[0] == "class:dim"
+
+
+def test_context_meter_without_a_window_is_unchanged() -> None:
+    assert context_meter(1234, None) == ("class:dim", "ctx ~1234")
