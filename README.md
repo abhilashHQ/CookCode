@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/python-3.12%2B-3776ab" alt="Python 3.12+">
   <img src="https://img.shields.io/badge/types-pyright%20strict-2f6fdb" alt="pyright strict">
   <img src="https://img.shields.io/badge/lint-ruff-d7ff64" alt="ruff">
-  <img src="https://img.shields.io/badge/tests-1119-2ea44f" alt="1119 tests">
+  <img src="https://img.shields.io/badge/tests-1120-2ea44f" alt="1120 tests">
   <img src="https://img.shields.io/badge/Terminal--Bench%202.0-slice%200.80-f97316" alt="Terminal-Bench slice score 0.80">
 </p>
 
@@ -225,7 +225,7 @@ The agent package never imports concrete tools, and the tools see only a narrow 
 
 ```bash
 uv sync
-uv run pytest -q                 # 1119 tests, about 35 s
+uv run pytest -q                 # 1120 tests, about 35 s
 uv run pyright src tests         # strict
 uv run ruff check src tests
 ```

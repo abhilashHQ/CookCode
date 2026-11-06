@@ -145,14 +145,17 @@ async def test_grep_with_a_cancelled_token_reports_killed(
     assert out.status == "error"
 
 
-async def test_rg_lists_matches_in_path_order(tmp_path: Path) -> None:
+@BOTH
+async def test_grep_lists_matches_in_path_order(tmp_path: Path, prefer_rg: bool) -> None:
     for index in range(40):
         (tmp_path / f"d{index:02}").mkdir()
-        (tmp_path / f"d{index:02}" / "f.txt").write_text("foo\n")
+        (tmp_path / f"d{index:02}" / "f.txt").write_text("foo 2\nbar\nfoo 1\n")
     for _ in range(5):
-        out = await run_tool(grep_tool(), make_ctx(tmp_path), pattern="foo")
-        paths = [line.split(":", 1)[0] for line in out.content.splitlines()]
-        assert len(paths) == 40 and paths == sorted(paths)
+        out = await run_tool(grep_tool(prefer_rg=prefer_rg), make_ctx(tmp_path), pattern="foo")
+        lines = out.content.splitlines()
+        paths = [line.split(":", 1)[0] for line in lines]
+        assert len(paths) == 80 and paths == sorted(paths)
+        assert lines[:2] == ["d00/f.txt:1:foo 2", "d00/f.txt:3:foo 1"]
 
 
 @BOTH

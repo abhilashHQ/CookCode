@@ -19,7 +19,7 @@ Date: 2026-11-06
 
 ## Decision
 Fix the sources the harness owns:
-- `grep` runs rg with `--sort=path`, and `--glob=!.*/` after any user glob, so rg and the fallback search the same files in a stable order.
+- `grep` runs rg with `--sort=path`, and `--glob=!.*/` after any user glob, so rg and the fallback search the same files in a stable order. The fallback, used where rg is not installed, pipes `grep -r` through `LC_ALL=C sort -s -t: -k1,1` under `pipefail`, so it is stable too and still exits 1 on no matches. (Added after the first push: CI's runner has no rg, and the order test failed on the fallback.)
 - `LocalEnvironment` takes an `env` overlay. Suite runs pass `PYTHONDONTWRITEBYTECODE=1`, so no command writes bytecode that a later same-size edit could leave stale.
 - `prepare` pins the parent directory's mtime too, and `run_suite` removes each task's earlier attempt directories before it starts. Leftovers are removed per run, not in `prepare`, because attempts of one task can run at the same time.
 - A sequenced replay notes each difference once, at the first request that carries it, and reports every difference in a request instead of only the first. Strict replay still fails on the first.
@@ -29,6 +29,8 @@ Fix the sources the harness owns:
 - Full replay: 35 of 36 pass, and the one failure (memory-money-b) also failed when it was recorded. Drift entries fell from 436 to 101; they now count differences, not requests.
 - The drift that remains is in the cassettes or in program output: the stale cassettes, `..` mtimes and rg orders recorded before this change, and pytest durations. A re-record under this harness would remove the first group. memory-testenv-a picks up one entry because its cassette holds rg's unsorted order.
 - `rg --sort=path` searches on one thread. Fine for suite fixtures and normal repositories, slower on very large ones.
+- rg sorts by path component and the fallback by bytes of the whole path, so the two can order `a/b` and `a-b/c` differently. Each is stable on its own, but a replay on a machine without rg can drift from a cassette recorded with it.
+- CI installs ripgrep, so both backends run there. Before this, CI only ever exercised the fallback.
 - The stale-bytecode trap exists in interactive use too, with a fast model editing the same file twice in one second. Only suite runs set the variable for now.
 
 ## What would change it
