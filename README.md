@@ -216,7 +216,7 @@ The agent package never imports concrete tools, and the tools see only a narrow 
 ## Documentation
 
 - [Design spec](docs/specs/2026-10-22-flagship1-design.md) and [visual overview](docs/blueprint.html)
-- [Decision records](docs/decisions/): 0001 to 0054
+- [Decision records](docs/decisions/): 0001 to 0055
 - [Walkthroughs](docs/walkthroughs/): one per milestone (M0 to M12), each with cross-questions
 - [Third-party credit](THIRD_PARTY.md)
 - [Event schema](docs/schema/events-v1.json)
