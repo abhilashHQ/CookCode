@@ -1,5 +1,5 @@
 import json
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Iterator
 from pathlib import Path
 from typing import Any, cast
 
@@ -22,28 +22,26 @@ def _request_json(request: httpx.Request) -> JSON:
     return cast(JSON, json.loads(request.content or b"{}"))
 
 
-def first_difference(expected: Any, actual: Any, path: str = "$") -> str | None:
+def differences(expected: Any, actual: Any, path: str = "$") -> Iterator[str]:
     if type(expected) is not type(actual):
-        return f"{path}: expected {type(expected).__name__}, got {type(actual).__name__}"
+        yield f"{path}: expected {type(expected).__name__}, got {type(actual).__name__}"
+        return
     if isinstance(expected, dict):
         left, right = cast(JSON, expected), cast(JSON, actual)
         for key in sorted(set(left) | set(right)):
             if key not in left or key not in right:
                 side = "missing" if key not in right else "unexpected"
-                return f"{path}.{key}: {side}"
-            found = first_difference(left[key], right[key], f"{path}.{key}")
-            if found is not None:
-                return found
-        return None
+                yield f"{path}.{key}: {side}"
+            else:
+                yield from differences(left[key], right[key], f"{path}.{key}")
+        return
     if isinstance(expected, list):
         left_items, right_items = cast(list[Any], expected), cast(list[Any], actual)
         for index, (left, right) in enumerate(zip(left_items, right_items, strict=False)):
-            found = first_difference(left, right, f"{path}[{index}]")
-            if found is not None:
-                return found
+            yield from differences(left, right, f"{path}[{index}]")
         if len(left_items) != len(right_items):
-            return f"{path}: expected {len(left_items)} entries, got {len(right_items)}"
-        return None
+            yield f"{path}: expected {len(left_items)} entries, got {len(right_items)}"
+        return
     if isinstance(expected, str) and isinstance(actual, str) and expected != actual:
         at = next(
             (i for i, (a, b) in enumerate(zip(expected, actual, strict=False)) if a != b),
@@ -51,13 +49,17 @@ def first_difference(expected: Any, actual: Any, path: str = "$") -> str | None:
         )
         if at > DIFF_CONTEXT:
             start = at - DIFF_CONTEXT
-            return (
+            yield (
                 f"{path} at char {at}: expected ...{expected[start : at + 80]!r}, "
                 f"got ...{actual[start : at + 80]!r}"
             )
+            return
     if expected != actual:
-        return f"{path}: expected {expected!r:.200}, got {actual!r:.200}"
-    return None
+        yield f"{path}: expected {expected!r:.200}, got {actual!r:.200}"
+
+
+def first_difference(expected: Any, actual: Any, path: str = "$") -> str | None:
+    return next(differences(expected, actual, path), None)
 
 
 class Cassette:
@@ -145,13 +147,16 @@ class RecordingTransport(httpx.AsyncBaseTransport):
 
 class ReplayTransport(httpx.AsyncBaseTransport):
     """Serves recorded responses in order. Strict replay fails on any request that differs from
-    the tape; sequenced replay (strict=False) serves the response anyway and notes the drift."""
+    the tape; sequenced replay (strict=False) serves the response anyway and notes the drift.
+    Every request repeats the history before it, so each difference is noted once, at the first
+    request that carries it."""
 
     def __init__(self, cassette: Cassette, *, strict: bool = True) -> None:
         self._cassette = cassette
         self._strict = strict
         self.position = 0
         self.drift: list[str] = []
+        self._noted: set[str] = set()
 
     def _differs(self, message: str) -> None:
         if self._strict:
@@ -171,9 +176,10 @@ class ReplayTransport(httpx.AsyncBaseTransport):
                 f"request #{self.position}: expected {expected['method']} {expected['url']}, "
                 f"got {request.method} {request.url}"
             )
-        difference = first_difference(expected["json"], _request_json(request))
-        if difference is not None:
-            self._differs(f"request #{self.position} body differs at {difference}")
+        for difference in differences(expected["json"], _request_json(request)):
+            if difference not in self._noted:
+                self._noted.add(difference)
+                self._differs(f"request #{self.position} body differs at {difference}")
         response = recorded["response"]
         return httpx.Response(
             response["status"],

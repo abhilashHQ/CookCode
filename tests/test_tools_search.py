@@ -145,6 +145,31 @@ async def test_grep_with_a_cancelled_token_reports_killed(
     assert out.status == "error"
 
 
+async def test_rg_lists_matches_in_path_order(tmp_path: Path) -> None:
+    for index in range(40):
+        (tmp_path / f"d{index:02}").mkdir()
+        (tmp_path / f"d{index:02}" / "f.txt").write_text("foo\n")
+    for _ in range(5):
+        out = await run_tool(grep_tool(), make_ctx(tmp_path), pattern="foo")
+        paths = [line.split(":", 1)[0] for line in out.content.splitlines()]
+        assert len(paths) == 40 and paths == sorted(paths)
+
+
+@BOTH
+async def test_grep_with_a_glob_still_skips_hidden_directories(
+    tmp_path: Path, prefer_rg: bool
+) -> None:
+    _tree(tmp_path)
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".git" / "hook.py").write_text("foo in git\n")
+    (tmp_path / ".env").write_text("foo=1\n")
+    out = await run_tool(
+        grep_tool(prefer_rg=prefer_rg), make_ctx(tmp_path), pattern="foo", glob="*"
+    )
+    paths = {line.split(":", 1)[0] for line in out.content.splitlines()}
+    assert paths == {".env", "README.md", "src/a.py", "src/sub/b.py"}
+
+
 async def test_grep_fallback_gives_the_same_file_set_as_rg(tmp_path: Path) -> None:
     _tree(tmp_path)
     with_rg = await run_tool(grep_tool(), make_ctx(tmp_path), pattern="foo")

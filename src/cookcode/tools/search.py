@@ -62,7 +62,8 @@ class GrepArgs(BaseModel):
 
 def _grep_command(args: GrepArgs, prefer_rg: bool) -> str:
     quote = shlex.quote
-    rg = ["rg", "-n", "-H", "--no-heading", "--color", "never", "--no-config"]
+    # rg searches in parallel, so its output order changes from run to run unless sorted.
+    rg = ["rg", "-n", "-H", "--no-heading", "--color", "never", "--no-config", "--sort=path"]
     grep = ["grep", "-rnHIE", quote("--exclude-dir=.[!.]*")]
     if args.ignore_case:
         rg.append("-i")
@@ -70,6 +71,9 @@ def _grep_command(args: GrepArgs, prefer_rg: bool) -> str:
     if args.glob is not None:
         rg.append(quote(f"--glob={args.glob}"))
         grep.append(quote(f"--include={args.glob}"))
+    # A glob overrides rg's hidden-file skip and the last matching glob wins, so hidden
+    # directories are excluded after it, as the fallback's --exclude-dir does.
+    rg.append(quote("--glob=!.*/"))
     tail = ["-e", quote(args.pattern), "--", quote(args.path)]
     grep_command = " ".join([*grep, *tail])
     if not prefer_rg:
