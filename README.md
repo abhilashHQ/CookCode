@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/python-3.12%2B-3776ab" alt="Python 3.12+">
   <img src="https://img.shields.io/badge/types-pyright%20strict-2f6fdb" alt="pyright strict">
   <img src="https://img.shields.io/badge/lint-ruff-d7ff64" alt="ruff">
-  <img src="https://img.shields.io/badge/tests-1069-2ea44f" alt="1069 tests">
+  <img src="https://img.shields.io/badge/tests-1110-2ea44f" alt="1110 tests">
   <img src="https://img.shields.io/badge/Terminal--Bench%202.0-slice%200.80-f97316" alt="Terminal-Bench slice score 0.80">
 </p>
 
@@ -37,7 +37,7 @@ Most agent harnesses are hard to reason about after the fact: the prompt was ass
 - **The log is the source of truth.** Every model request, streamed item, tool call, approval and retry is an event in an append-only JSONL log. The context builder is a pure function of that log.
 - **Replay is exact.** `cookcode replay <session>` rebuilds every request from the log and checks its items hash. Suite cassettes replay whole agent runs offline in seconds.
 - **Crashes are boring.** A crash mid-tool-call is repaired on resume: read-only calls rerun, and mutating calls are reported as `unknown` so the model decides.
-- **Decisions are written down.** 53 decision records explain what was chosen, what was rejected, and what would change the call.
+- **Decisions are written down.** 54 decision records explain what was chosen, what was rejected, and what would change the call.
 
 ## Quickstart
 
@@ -64,7 +64,18 @@ uv run cookcode --once "fix the failing test in tests/test_dates.py"
 uv run cookcode -p "summarize this repo" --json   # headless, one JSON event per line
 ```
 
-Useful flags: `--model`, `--mode plan|ask|auto-edit|yolo`, `--max-turns`, `--strategy`, `--features`.
+Useful flags: `--model`, `--mode plan|ask|auto-edit|yolo`, `--max-turns`, `--strategy`, `--features`, `--context-window`.
+
+### A local model, no key
+
+Start an OpenAI-compatible server, then point CookCode at it. llama.cpp is the best fit, because it reports the context it actually loaded:
+
+```bash
+llama-server --jinja -c 16384 -m model.gguf          # --jinja turns on tool calls
+uv run cookcode --provider llamacpp --strategy hybrid
+```
+
+CookCode picks the model when the server serves one, reads the loaded window (`n_ctx` here, never the trained maximum) and summarizes at half of it. `ollama`, `lmstudio` and `vllm` work the same way. Ollama does not report its window, so start it with `OLLAMA_CONTEXT_LENGTH=32768 ollama serve` and pass `--context-window 32768` ([0054](docs/decisions/0054-provider-catalog-and-context-windows.md)).
 
 ## Features
 
@@ -75,7 +86,7 @@ Useful flags: `--model`, `--mode plan|ask|auto-edit|yolo`, `--max-turns`, `--str
 | **Tools** | read, write, edit, glob, grep and bash, with snapshots and undo, a permission gate (`plan`, `ask`, `auto-edit`, `yolo`) and allow and deny rules. |
 | **Plan mode** | The gate allows only read-only tools and an allowlist of read-only shell commands, checked by the bash lexer. `exit_plan` sends the plan for review: approve into `ask` or `auto-edit`, or reply with feedback. The mode change is a logged event. |
 | **Interactive client** | Prints into your terminal scrollback: Markdown answers, one line per tool call with a summary, inline diffs, and the plan under review. A live region below holds the streaming answer, a spinner, the input box and the mode line. Approvals are numbered menus; Shift-Tab changes the mode. |
-| **Providers** | NVIDIA NIM, OpenRouter (OpenAI-compatible) and native Gemini with thought-signature replay, on one streaming transport with logged retries and a 429 wait budget. |
+| **Providers** | NVIDIA NIM, OpenRouter (OpenAI-compatible) and native Gemini with thought-signature replay, plus local Ollama, llama.cpp, LM Studio and vLLM with no key. One streaming transport with logged retries and a 429 wait budget. Startup discovery picks the served model and reads the context window the server loaded, which sizes the summarize trigger. |
 | **Context strategies** | `raw`, `mask`, `mask_batched`, `summarize`, `hybrid`. Masked outputs come back through `recall`, and summaries are logged so replay never calls a model. |
 | **Background jobs** | `job_start` and `job_check` for commands that outlive the bash timeout, locally or in a container. |
 | **Verify-first** | A hard lock: register a failing reproduction before changing existing files, and the stop hook reruns it before the turn can end. |
@@ -134,6 +145,7 @@ provider = "nim"
 model = "minimaxai/minimax-m3.1-flash"
 mode = "auto-edit"
 max_turns = 40
+context_window = 32768       # tokens the model has loaded; asked from the server when it can tell
 strategy = "mask_batched:k6:b8"
 features = "jobs,verify_first,skills,hooks,mcp"
 allow = ["bash:pytest *"]
@@ -204,15 +216,16 @@ The agent package never imports concrete tools, and the tools see only a narrow 
 ## Documentation
 
 - [Design spec](docs/specs/2026-10-22-flagship1-design.md) and [visual overview](docs/blueprint.html)
-- [Decision records](docs/decisions/): 0001 to 0050
-- [Walkthroughs](docs/walkthroughs/): one per milestone (M0 to M10), each with cross-questions
+- [Decision records](docs/decisions/): 0001 to 0054
+- [Walkthroughs](docs/walkthroughs/): one per milestone (M0 to M12), each with cross-questions
+- [Third-party credit](THIRD_PARTY.md)
 - [Event schema](docs/schema/events-v1.json)
 
 ## Development
 
 ```bash
 uv sync
-uv run pytest -q                 # 1026 tests, about 30 s
+uv run pytest -q                 # 1110 tests, about 35 s
 uv run pyright src tests         # strict
 uv run ruff check src tests
 ```
