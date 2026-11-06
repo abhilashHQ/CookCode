@@ -245,3 +245,32 @@ def test_counterfactual_costs_compare_strategies_on_one_trajectory() -> None:
     assert raw.cacheable_share > batched.cacheable_share > masked.cacheable_share
     with pytest.raises(ValueError, match="needs model calls"):
         session_cost(events, Strategy.parse("summarize"))
+
+
+def test_for_window_derives_the_trigger_only_when_unset() -> None:
+    small = Strategy.parse("hybrid").for_window(16384)
+    assert small.trigger_tokens == 8192 and small.label == "hybrid:k6:b8:t8192"
+    assert Strategy.parse("hybrid:k6:b8:t40000").for_window(16384).trigger_tokens == 40000
+    cloud = Strategy.parse("hybrid").for_window(1_000_000)
+    assert cloud.label == Strategy.parse("hybrid").label == "hybrid:k6:b8:t48000"
+    assert small.for_window(1_000_000).trigger_tokens == 8192
+    for text in ("raw", "mask_batched:k6:b8"):
+        assert Strategy.parse(text).for_window(4096).label == text
+
+
+async def test_summary_fires_at_the_trigger_derived_from_the_window(rigs: RigFactory) -> None:
+    script = [
+        FakeTurn(items=(call("echo", text=LONG),)),
+        FakeTurn(items=(call("echo", text="second"),)),
+        FakeTurn(items=(say("a summary"),)),
+        FakeTurn(items=(say("done"),)),
+    ]
+    tight = rigs.make(script, [echo_tool()], strategy=Strategy.parse("summarize:k1").for_window(4))
+    assert (await tight.agent.run("go")).status == "done"
+    assert any(isinstance(e.body, CompactionApplied) for e in tight.events())
+    roomy = rigs.make(
+        [script[0], script[1], script[3]], [echo_tool()], log=rigs.open_log("s2"),
+        strategy=Strategy.parse("summarize:k1").for_window(1_000_000),
+    )
+    assert (await roomy.agent.run("go")).status == "done"
+    assert not any(isinstance(e.body, CompactionApplied) for e in roomy.events())

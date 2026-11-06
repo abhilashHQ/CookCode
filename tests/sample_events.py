@@ -35,7 +35,10 @@ def all_bodies() -> list[EventBody]:
             RunConfig(provider="fake", model="fake-1", harness_version="0.0.1")
         ),
         RunStarted.for_config(
-            RunConfig(provider="fake", model="fake-1", harness_version="0.0.1")
+            RunConfig(
+                provider="fake", model="fake-1", harness_version="0.0.1",
+                context_window=8192, context_source="server",
+            )
         ),
         UserMessage(text="fix the failing test"),
         SteerMessage(text="also run ruff"),

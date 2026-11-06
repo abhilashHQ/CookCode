@@ -49,6 +49,7 @@ from cookcode.core.events import (
     BudgetExceeded,
     CheckpointCreated,
     CompactionApplied,
+    ContextSource,
     ErrorEvent,
     Event,
     HookBlocked,
@@ -135,6 +136,8 @@ class AgentConfig(BaseModel):
     policy: Policy = Policy()
     strategy: Strategy = Strategy()
     max_stop_blocks: int = Field(default=3, ge=0)
+    context_window: int | None = None
+    context_source: ContextSource | None = None
 
 
 class RunOutcome(BaseModel):
@@ -365,6 +368,8 @@ class Agent:
             ),
             strategy=self._config.strategy,
             hooks=tuple(hook.name for hook in self._hooks),
+            context_window=self._config.context_window,
+            context_source=self._config.context_source,
         )
 
     def _hook_context(self, run: _RunState) -> HookContext:

@@ -22,6 +22,7 @@ from cookcode.core.usage import StopReason, Usage
 SCHEMA_VERSION = 1
 
 Layer = Literal["model", "internal"]
+ContextSource = Literal["flag", "settings", "server", "preset"]
 SideEffect = Literal["read_only", "mutating", "external"]
 
 
@@ -48,6 +49,8 @@ class RunConfig(_Frozen):
     policy: tuple[str, ...] = ()
     strategy: Strategy = Strategy()
     hooks: tuple[str, ...] = ()
+    context_window: int | None = None
+    context_source: ContextSource | None = None
 
 
 def compute_config_id(config: RunConfig) -> str:

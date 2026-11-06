@@ -8,6 +8,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
+import httpx
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from cookcode.agent.approval import Approver
@@ -25,14 +26,22 @@ from cookcode.cli.terminal import (
 )
 from cookcode.config import Settings, load_settings
 from cookcode.core.cancel import CancelToken
-from cookcode.core.events import Event, Limits, RunConfig, RunStarted, SessionStarted
+from cookcode.core.events import (
+    ContextSource,
+    Event,
+    Limits,
+    RunConfig,
+    RunStarted,
+    SessionStarted,
+)
 from cookcode.core.features import Features
 from cookcode.core.ids import new_id
 from cookcode.core.strategy import Strategy
 from cookcode.env.local import LocalEnvironment
 from cookcode.kit import Toolkit, toolkit
 from cookcode.providers.base import Provider, StreamEvent
-from cookcode.providers.catalog import PRESETS, needs_key
+from cookcode.providers.catalog import PRESETS, Preset, needs_key
+from cookcode.providers.discovery import Discovery, discover
 from cookcode.providers.gemini import GeminiProvider
 from cookcode.providers.openai_compat import OpenAICompatProvider
 from cookcode.redact import Redactor
@@ -64,6 +73,69 @@ def missing_key(args: argparse.Namespace) -> str | None:
     if not needs_key(PRESETS[args.provider], args.base_url) or api_key(args):
         return None
     return f"set {args.api_key_env} to an API key for {args.base_url}"
+
+
+SMALL_WINDOW = 32_768
+
+
+def resolve_window(
+    preset: Preset, *, flag: int | None, settings: int | None, discovered: int | None
+) -> tuple[int, ContextSource]:
+    if flag is not None:
+        return flag, "flag"
+    if settings is not None:
+        return settings, "settings"
+    if discovered is not None:
+        return discovered, "server"
+    return preset.context_window, "preset"
+
+
+async def prepare_endpoint(
+    args: argparse.Namespace,
+    *,
+    provider: Provider | None,
+    discovery: httpx.AsyncBaseTransport | None,
+) -> str | None:
+    """Picks the model a local server serves when none was named, resolves the context window
+    and sizes the strategy to it. Asks the server only when there is something to learn, and
+    never when a test injected a provider without a discovery transport. Returns why the run
+    cannot start, if it cannot."""
+    preset = PRESETS[args.provider]
+    found = Discovery()
+    wanted = preset.window_probe != "none" or args.model is None
+    if wanted and (provider is None or discovery is not None):
+        found = await discover(
+            preset, base_url=args.base_url, api_key=api_key(args), model=args.model,
+            transport=discovery,
+        )
+    if args.model is None:
+        if len(found.models) == 1:
+            args.model = found.models[0]
+        elif found.models:
+            return f"pick a model with --model; {args.base_url} serves: {', '.join(found.models)}"
+        else:
+            problem = f": {found.problem}" if found.problem else ""
+            return f"no model is loaded at {args.base_url}{problem}"
+    settings: Settings = args.settings
+    configured = settings.provider in (None, args.provider)
+    args.context_window, args.context_source = resolve_window(
+        preset,
+        flag=args.window_flag,
+        settings=settings.context_window if configured else None,
+        discovered=found.context_window,
+    )
+    args.strategy = args.strategy.for_window(args.context_window)
+    return None
+
+
+def window_notice(args: argparse.Namespace) -> str | None:
+    strategy: Strategy = args.strategy
+    if strategy.summarizes or args.context_window > SMALL_WINDOW:
+        return None
+    return (
+        f"the context window is {args.context_window} tokens and the {strategy.label} strategy "
+        "never summarizes; long runs will overflow. Try --strategy hybrid."
+    )
 
 
 SECRET_ENV = (
@@ -148,6 +220,13 @@ def merge_policies(first: Policy, second: Policy) -> Policy:
     return Policy(allow=(*first.allow, *second.allow), deny=(*first.deny, *second.deny))
 
 
+def _positive(text: str) -> int:
+    value = int(text)
+    if value < 1:
+        raise argparse.ArgumentTypeError("must be at least 1")
+    return value
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="cookcode",
@@ -175,6 +254,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--model")
     parser.add_argument("--base-url")
     parser.add_argument("--api-key-env")
+    parser.add_argument(
+        "--context-window",
+        dest="window_flag",
+        type=_positive,
+        help="tokens of context the model has loaded; asked from the server when it can tell",
+    )
     parser.add_argument("--mode", choices=MODES)
     parser.add_argument("--max-turns", type=int)
     parser.add_argument(
@@ -217,6 +302,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         key: value for key in OVERRIDABLE if (value := getattr(args, key)) is not None
     }
     apply_provider(args)
+    args.context_window = None
+    args.context_source = None
     return args
 
 
@@ -342,6 +429,8 @@ class Runtime:
             mode=self.args.mode,
             policy=self.policy,
             strategy=self.args.strategy,
+            context_window=self.args.context_window,
+            context_source=self.args.context_source,
         )
         return Agent(
             log=self.log,
@@ -452,6 +541,7 @@ async def run_cli(
     *,
     provider: Provider | None = None,
     terminal: Terminal | None = None,
+    discovery: httpx.AsyncBaseTransport | None = None,
 ) -> int:
     try:
         load_resumed(args)
@@ -461,6 +551,11 @@ async def run_cli(
     if provider is None and (message := missing_key(args)):
         print(f"cookcode: {message}")
         return 1
+    if message := await prepare_endpoint(args, provider=provider, discovery=discovery):
+        print(f"cookcode: {message}", file=sys.stderr)
+        return 1
+    if notice := window_notice(args):
+        print(f"cookcode: {notice}", file=sys.stderr)
     try:
         policy = load_policy(args.policy)
     except ValueError as exc:

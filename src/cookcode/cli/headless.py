@@ -5,6 +5,7 @@ import sys
 import threading
 from typing import Literal, TextIO
 
+import httpx
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from cookcode.agent.approval import Approver, Decision, PolicyOnlyApprover, Risk
@@ -16,7 +17,9 @@ from cookcode.cli.app import (
     load_policy,
     load_resumed,
     missing_key,
+    prepare_endpoint,
     session_error,
+    window_notice,
 )
 from cookcode.core.cancel import CancelToken
 from cookcode.core.events import Event, ItemEvent, RunStarted
@@ -103,6 +106,7 @@ async def run_headless(
     provider: Provider | None = None,
     stdin: TextIO | None = None,
     stdout: TextIO | None = None,
+    discovery: httpx.AsyncBaseTransport | None = None,
 ) -> int:
     out = stdout or sys.stdout
     try:
@@ -113,6 +117,11 @@ async def run_headless(
     if provider is None and (message := missing_key(args)):
         print(f"cookcode: {message}", file=sys.stderr)
         return 1
+    if message := await prepare_endpoint(args, provider=provider, discovery=discovery):
+        print(f"cookcode: {message}", file=sys.stderr)
+        return 1
+    if notice := window_notice(args):
+        print(f"cookcode: {notice}", file=sys.stderr)
     try:
         policy = load_policy(args.policy)
     except ValueError as exc:

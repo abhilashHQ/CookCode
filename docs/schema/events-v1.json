@@ -823,6 +823,36 @@
     },
     "RunConfig": {
       "properties": {
+        "context_source": {
+          "anyOf": [
+            {
+              "enum": [
+                "flag",
+                "settings",
+                "server",
+                "preset"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Context Source"
+        },
+        "context_window": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Context Window"
+        },
         "effort": {
           "anyOf": [
             {
