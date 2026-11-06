@@ -12,6 +12,7 @@ from cookcode.env.base import Environment
 from cookcode.providers.base import ToolSchema
 
 TOOL_SEARCH = "tool_search"
+EXIT_PLAN = "exit_plan"
 
 
 def loaded_tools(events: Sequence[Event]) -> frozenset[str]:
@@ -80,6 +81,7 @@ class Tool[A: BaseModel]:
     handler: Callable[[A, ToolContext], Awaitable[ToolOutput]]
     touches: Callable[[A], list[str]] | None = None
     deferred: bool = False
+    plan_only: bool = False
 
     def schema(self) -> ToolSchema:
         return ToolSchema(
@@ -100,12 +102,15 @@ class ToolRegistry:
     def get(self, name: str) -> Tool[Any] | None:
         return self._tools.get(name)
 
-    def schemas(self, loaded: Collection[str] = ()) -> tuple[ToolSchema, ...]:
-        """Every tool's schema, except deferred tools that have not been loaded."""
+    def schemas(
+        self, loaded: Collection[str] = (), *, plan: bool = False
+    ) -> tuple[ToolSchema, ...]:
+        """Every tool's schema, except deferred tools that have not been loaded and, outside
+        plan mode, plan-only tools."""
         return tuple(
             tool.schema()
             for tool in self._tools.values()
-            if not tool.deferred or tool.name in loaded
+            if (not tool.deferred or tool.name in loaded) and (plan or not tool.plan_only)
         )
 
     def names(self) -> tuple[str, ...]:

@@ -5,6 +5,7 @@ import shutil
 import signal
 import time
 from asyncio.subprocess import Process
+from collections.abc import Mapping
 from pathlib import Path
 
 from cookcode.core.cancel import CancelToken
@@ -62,8 +63,10 @@ def _fsync_dir(path: Path) -> None:
 
 
 class LocalEnvironment:
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, *, env: Mapping[str, str] | None = None) -> None:
+        """`env` is laid over the inherited environment for every command."""
         self._root = root.resolve()
+        self._env = dict(env or {})
 
     @property
     def root(self) -> str:
@@ -80,6 +83,7 @@ class LocalEnvironment:
                 "-c",
                 cmd,
                 cwd=self._resolve(cwd),
+                env={**os.environ, **self._env} if self._env else None,
                 stdin=asyncio.subprocess.DEVNULL,
                 stdout=stdout_fd,
                 stderr=asyncio.subprocess.STDOUT,

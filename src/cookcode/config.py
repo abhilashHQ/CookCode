@@ -73,8 +73,9 @@ class Settings(BaseModel):
     model: str | None = None
     base_url: str | None = None
     api_key_env: str | None = None
-    mode: Literal["ask", "auto-edit", "yolo"] | None = None
+    mode: Literal["plan", "ask", "auto-edit", "yolo"] | None = None
     max_turns: int | None = Field(default=None, ge=1)
+    context_window: int | None = Field(default=None, ge=1)
     strategy: str | None = None
     features: str | None = None
     allow: tuple[str, ...] = ()
@@ -87,7 +88,7 @@ class Settings(BaseModel):
         scalars = {
             key: getattr(self, key) if getattr(self, key) is not None else getattr(base, key)
             for key in ("provider", "model", "base_url", "api_key_env", "mode", "max_turns",
-                        "strategy", "features")
+                        "context_window", "strategy", "features")
         }
         return Settings(
             **scalars,

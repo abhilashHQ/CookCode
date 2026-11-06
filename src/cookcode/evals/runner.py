@@ -18,7 +18,7 @@ from cookcode import __version__
 from cookcode.agent.gate import Policy
 from cookcode.agent.instructions import load_instructions, render_system
 from cookcode.agent.loop import Agent, AgentConfig
-from cookcode.cli.app import BASE_PROMPT, PRESETS, SECRET_ENV, UNATTENDED, make_provider
+from cookcode.cli.app import BASE_PROMPT, SECRET_ENV, UNATTENDED, make_provider
 from cookcode.cli.headless import final_text
 from cookcode.config import REPO_SETTINGS, read_settings
 from cookcode.core.events import Limits
@@ -30,6 +30,7 @@ from cookcode.evals.suite import SuiteTask, chains, suite_sha256
 from cookcode.kit import toolkit
 from cookcode.providers.base import Provider
 from cookcode.providers.cassette import Cassette, RecordingTransport, ReplayTransport
+from cookcode.providers.catalog import PRESETS
 from cookcode.redact import Redactor
 from cookcode.store.checkpoints import FileCheckpointStore
 from cookcode.store.jsonl import JsonlSessionStore
@@ -48,6 +49,9 @@ GIT_IDENTITY = ("-c", "user.name=suite", "-c", "user.email=suite@localhost")
 NO_MAINTENANCE = ("-c", "maintenance.auto=false", "-c", "gc.auto=0")
 FIXTURE_EPOCH = 1_767_225_600  # 2026-01-01T00:00:00Z
 FIXTURE_DATE = f"@{FIXTURE_EPOCH} +0000"
+# Replay runs the agent's commands back to back, so two same-size edits can land within one
+# second, and Python then trusts bytecode cached for the first (it checks mtime seconds and size).
+TOOL_ENV = {"PYTHONDONTWRITEBYTECODE": "1"}
 
 
 class AttemptResult(BaseModel):
@@ -118,7 +122,7 @@ def prepare(task: SuiteTask, attempt: int) -> Path:
             capture_output=True,
             check=True,
         )
-    for path in [*work.rglob("*"), work]:
+    for path in [*work.rglob("*"), work, work.parent]:
         os.utime(path, (FIXTURE_EPOCH, FIXTURE_EPOCH), follow_symlinks=False)
     return work
 
@@ -167,7 +171,8 @@ class Run:
         self.mode: Mode = mode
         self.preset = preset
         self.model = model
-        self.base_url, self.key_env, _ = PRESETS[preset]
+        self.base_url = PRESETS[preset].base_url
+        self.key_env = PRESETS[preset].key_env or ""
         self.make = provider_factory or make_provider
         secrets = Redactor.from_env(SECRET_ENV, os.environ)
         self.store = JsonlSessionStore(out / "sessions", secrets)
@@ -213,7 +218,7 @@ class Run:
                 wall_s=time.monotonic() - started,
             )
         provider, cassette, replay = self.provider(task)
-        env = LocalEnvironment(work)
+        env = LocalEnvironment(work, env=TOOL_ENV)
         session_id = new_id()
         log = self.store.open(session_id, create=True)
         checkpoints = FileCheckpointStore(self.out / "checkpoints" / session_id)
@@ -295,6 +300,9 @@ async def run_suite(
         missing = [task.id for task in tasks if not task.cassette.exists()]
         if missing:
             raise ValueError(f"no cassette for: {', '.join(missing)}")
+    # Attempt directories left by an earlier run show up in `ls -la ..` as the parent's link count.
+    for task in tasks:
+        shutil.rmtree(WORK_ROOT / task.id, ignore_errors=True)
     out.mkdir(parents=True, exist_ok=True)
     manifest = RunManifest(
         suite_sha256=suite_sha256(tasks),

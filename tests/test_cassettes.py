@@ -21,6 +21,7 @@ from cookcode.providers.cassette import (
     CassetteMismatch,
     RecordingTransport,
     ReplayTransport,
+    differences,
     first_difference,
 )
 from cookcode.providers.gemini import FOREIGN_SIGNATURE, GEMINI_BASE_URL, GeminiProvider
@@ -114,6 +115,43 @@ def test_first_difference_names_the_path() -> None:
     assert first_difference({"a": 1}, {"a": 1, "c": 2}) == "$.c: unexpected"
     assert first_difference([1], [1, 2]) == "$: expected 1 entries, got 2"
     assert first_difference({"a": 1}, {"a": 1}) is None
+
+
+def test_differences_lists_every_path_not_just_the_first() -> None:
+    expected = {"a": [1, 2, 3], "b": "x", "c": 1}
+    actual = {"a": [1, 9, 3, 4], "b": "y", "d": 1}
+    assert list(differences(expected, actual)) == [
+        "$.a[1]: expected 2, got 9",
+        "$.a: expected 3 entries, got 4",
+        "$.b: expected 'x', got 'y'",
+        "$.c: missing",
+        "$.d: unexpected",
+    ]
+
+
+async def test_sequenced_replay_reports_each_difference_once() -> None:
+    def interaction(*contents: str) -> dict[str, object]:
+        messages = [{"role": "tool", "content": c} for c in contents]
+        return {
+            "request": {"method": "POST", "url": "https://x/v1", "json": {"messages": messages}},
+            "response": {"status": 200, "headers": {}, "body": ""},
+        }
+
+    def request(*contents: str) -> httpx.Request:
+        messages = [{"role": "tool", "content": c} for c in contents]
+        return httpx.Request("POST", "https://x/v1", json={"messages": messages})
+
+    replay = ReplayTransport(
+        Cassette([interaction("a"), interaction("a", "b"), interaction("a", "b", "c")]),
+        strict=False,
+    )
+    await replay.handle_async_request(request("A"))
+    await replay.handle_async_request(request("A", "b"))
+    await replay.handle_async_request(request("A", "b", "C"))
+    assert replay.drift == [
+        "request #1 body differs at $.messages[0].content: expected 'a', got 'A'",
+        "request #3 body differs at $.messages[2].content: expected 'c', got 'C'",
+    ]
 
 
 # --- recorded against OpenRouter, replayed offline ---------------------------------------

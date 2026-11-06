@@ -62,7 +62,8 @@ class GrepArgs(BaseModel):
 
 def _grep_command(args: GrepArgs, prefer_rg: bool) -> str:
     quote = shlex.quote
-    rg = ["rg", "-n", "-H", "--no-heading", "--color", "never", "--no-config"]
+    # rg searches in parallel, so its output order changes from run to run unless sorted.
+    rg = ["rg", "-n", "-H", "--no-heading", "--color", "never", "--no-config", "--sort=path"]
     grep = ["grep", "-rnHIE", quote("--exclude-dir=.[!.]*")]
     if args.ignore_case:
         rg.append("-i")
@@ -70,12 +71,20 @@ def _grep_command(args: GrepArgs, prefer_rg: bool) -> str:
     if args.glob is not None:
         rg.append(quote(f"--glob={args.glob}"))
         grep.append(quote(f"--include={args.glob}"))
+    # A glob overrides rg's hidden-file skip and the last matching glob wins, so hidden
+    # directories are excluded after it, as the fallback's --exclude-dir does.
+    rg.append(quote("--glob=!.*/"))
     tail = ["-e", quote(args.pattern), "--", quote(args.path)]
-    grep_command = " ".join([*grep, *tail])
+    # grep -r prints in directory order. A stable sort on the path keeps each file's lines in
+    # order, and pipefail keeps grep's exit status (1 means no matches).
+    grep_command = " ".join([*grep, *tail]) + " | LC_ALL=C sort -s -t: -k1,1"
     if not prefer_rg:
-        return grep_command
+        return f"set -o pipefail; {grep_command}"
     rg_command = " ".join([*rg, *tail])
-    return f"if command -v rg >/dev/null 2>&1; then {rg_command}; else {grep_command}; fi"
+    return (
+        "set -o pipefail; "
+        f"if command -v rg >/dev/null 2>&1; then {rg_command}; else {grep_command}; fi"
+    )
 
 
 def grep_tool(*, prefer_rg: bool = True) -> Tool[GrepArgs]:

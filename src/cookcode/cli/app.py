@@ -8,10 +8,11 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
+import httpx
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from cookcode.agent.approval import Approver
-from cookcode.agent.gate import Policy, Rule, parse_rule
+from cookcode.agent.gate import MODES, Policy, Rule, parse_rule
 from cookcode.agent.instructions import InstructionFile, load_instructions, render_system
 from cookcode.agent.loop import Agent, AgentConfig, RunOutcome
 from cookcode.agent.undo import undo
@@ -25,19 +26,24 @@ from cookcode.cli.terminal import (
 )
 from cookcode.config import Settings, load_settings
 from cookcode.core.cancel import CancelToken
-from cookcode.core.events import Event, Limits, RunConfig, RunStarted, SessionStarted
+from cookcode.core.events import (
+    ContextSource,
+    Event,
+    Limits,
+    RunConfig,
+    RunStarted,
+    SessionStarted,
+)
 from cookcode.core.features import Features
 from cookcode.core.ids import new_id
 from cookcode.core.strategy import Strategy
 from cookcode.env.local import LocalEnvironment
 from cookcode.kit import Toolkit, toolkit
 from cookcode.providers.base import Provider, StreamEvent
-from cookcode.providers.gemini import GEMINI_BASE_URL, GeminiProvider
-from cookcode.providers.openai_compat import (
-    NIM_BASE_URL,
-    OPENROUTER_BASE_URL,
-    OpenAICompatProvider,
-)
+from cookcode.providers.catalog import PRESETS, Preset, needs_key
+from cookcode.providers.discovery import Discovery, discover
+from cookcode.providers.gemini import GeminiProvider
+from cookcode.providers.openai_compat import OpenAICompatProvider
 from cookcode.redact import Redactor
 from cookcode.store.base import (
     SessionCorruptError,
@@ -48,19 +54,88 @@ from cookcode.store.checkpoints import FileCheckpointStore
 from cookcode.store.jsonl import JsonlSessionStore
 from cookcode.subagents import Spawner
 
-PRESETS = {
-    "nim": (NIM_BASE_URL, "NVIDIA_API_KEY", "minimaxai/minimax-m3.1-flash"),
-    "openrouter": (OPENROUTER_BASE_URL, "OPENROUTER_API_KEY", "cohere/north-mini-code:free"),
-    "gemini": (GEMINI_BASE_URL, "GEMINI_API_KEY", "gemini-3.5-flash"),
-}
-
 
 def make_provider(
     preset: str, *, api_key: str | None, base_url: str, **transport_policy: Any
 ) -> Provider:
-    if preset == "gemini":
+    transport_policy.setdefault("read_timeout_s", PRESETS[preset].read_timeout_s)
+    if PRESETS[preset].protocol == "gemini":
         return GeminiProvider(api_key=api_key, base_url=base_url, name=preset, **transport_policy)
     return OpenAICompatProvider(api_key=api_key, base_url=base_url, name=preset, **transport_policy)
+
+
+def api_key(args: argparse.Namespace) -> str | None:
+    return os.environ.get(args.api_key_env) if args.api_key_env else None
+
+
+def missing_key(args: argparse.Namespace) -> str | None:
+    """What to tell the user when the endpoint needs a key that is not set."""
+    if not needs_key(PRESETS[args.provider], args.base_url) or api_key(args):
+        return None
+    return f"set {args.api_key_env} to an API key for {args.base_url}"
+
+
+SMALL_WINDOW = 32_768
+
+
+def resolve_window(
+    preset: Preset, *, flag: int | None, settings: int | None, discovered: int | None
+) -> tuple[int, ContextSource]:
+    if flag is not None:
+        return flag, "flag"
+    if settings is not None:
+        return settings, "settings"
+    if discovered is not None:
+        return discovered, "server"
+    return preset.context_window, "preset"
+
+
+async def prepare_endpoint(
+    args: argparse.Namespace,
+    *,
+    provider: Provider | None,
+    discovery: httpx.AsyncBaseTransport | None,
+) -> str | None:
+    """Picks the model a local server serves when none was named, resolves the context window
+    and sizes the strategy to it. Asks the server only when there is something to learn, and
+    never when a test injected a provider without a discovery transport. Returns why the run
+    cannot start, if it cannot."""
+    preset = PRESETS[args.provider]
+    found = Discovery()
+    wanted = preset.window_probe != "none" or args.model is None
+    if wanted and (provider is None or discovery is not None):
+        found = await discover(
+            preset, base_url=args.base_url, api_key=api_key(args), model=args.model,
+            transport=discovery,
+        )
+    if args.model is None:
+        if len(found.models) == 1:
+            args.model = found.models[0]
+        elif found.models:
+            return f"pick a model with --model; {args.base_url} serves: {', '.join(found.models)}"
+        else:
+            problem = f": {found.problem}" if found.problem else ""
+            return f"no model is loaded at {args.base_url}{problem}"
+    settings: Settings = args.settings
+    configured = settings.provider in (None, args.provider)
+    args.context_window, args.context_source = resolve_window(
+        preset,
+        flag=args.window_flag,
+        settings=settings.context_window if configured else None,
+        discovered=found.context_window,
+    )
+    args.strategy = args.strategy.for_window(args.context_window)
+    return None
+
+
+def window_notice(args: argparse.Namespace) -> str | None:
+    strategy: Strategy = args.strategy
+    if strategy.summarizes or args.context_window > SMALL_WINDOW:
+        return None
+    return (
+        f"the context window is {args.context_window} tokens and the {strategy.label} strategy "
+        "never summarizes; long runs will overflow. Try --strategy hybrid."
+    )
 
 
 SECRET_ENV = (
@@ -145,6 +220,13 @@ def merge_policies(first: Policy, second: Policy) -> Policy:
     return Policy(allow=(*first.allow, *second.allow), deny=(*first.deny, *second.deny))
 
 
+def _positive(text: str) -> int:
+    value = int(text)
+    if value < 1:
+        raise argparse.ArgumentTypeError("must be at least 1")
+    return value
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="cookcode",
@@ -172,7 +254,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--model")
     parser.add_argument("--base-url")
     parser.add_argument("--api-key-env")
-    parser.add_argument("--mode", choices=("ask", "auto-edit", "yolo"))
+    parser.add_argument(
+        "--context-window",
+        dest="window_flag",
+        type=_positive,
+        help="tokens of context the model has loaded; asked from the server when it can tell",
+    )
+    parser.add_argument("--mode", choices=MODES)
     parser.add_argument("--max-turns", type=int)
     parser.add_argument(
         "--strategy",
@@ -186,7 +274,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="optional features to turn on, comma separated: jobs, verify_first, notes, facts, "
         "subagents, skills, hooks, mcp",
     )
-    parser.add_argument("--tui", action="store_true", help="full-screen interface")
     parser.add_argument("--once", action="store_true", help="exit after the first run")
     parser.add_argument("--resume", metavar="SESSION", help="continue an existing session")
     parser.add_argument(
@@ -215,6 +302,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         key: value for key in OVERRIDABLE if (value := getattr(args, key)) is not None
     }
     apply_provider(args)
+    args.context_window = None
+    args.context_source = None
     return args
 
 
@@ -229,14 +318,15 @@ def apply_provider(args: argparse.Namespace, recorded: RunConfig | None = None) 
         given.get("provider") or session or os.environ.get("COOKCODE_PROVIDER")
         or settings.provider or "nim"
     )
-    base_url, key_env, model = PRESETS[args.provider]
+    preset = PRESETS[args.provider]
     configured = settings.provider in (None, args.provider)
     args.base_url = (
         given.get("base_url") or os.environ.get("COOKCODE_BASE_URL")
-        or (settings.base_url if configured else None) or base_url
+        or (settings.base_url if configured else None) or preset.base_url
     )
     args.api_key_env = (
-        given.get("api_key_env") or (settings.api_key_env if configured else None) or key_env
+        given.get("api_key_env") or (settings.api_key_env if configured else None)
+        or preset.key_env
     )
     same = recorded is not None and given.get("provider", recorded.provider) == recorded.provider
     args.model = (
@@ -244,7 +334,7 @@ def apply_provider(args: argparse.Namespace, recorded: RunConfig | None = None) 
         or (recorded.model if recorded is not None and same else None)
         or os.environ.get("COOKCODE_MODEL")
         or (settings.model if configured else None)
-        or model
+        or preset.default_model
     )
 
 
@@ -314,7 +404,7 @@ class Runtime:
         )
         provider: Provider = self.provider or make_provider(
             self.args.provider,
-            api_key=os.environ.get(self.args.api_key_env),
+            api_key=api_key(self.args),
             base_url=self.args.base_url,
         )
         if stream_sink is not None:
@@ -339,6 +429,8 @@ class Runtime:
             mode=self.args.mode,
             policy=self.policy,
             strategy=self.args.strategy,
+            context_window=self.args.context_window,
+            context_source=self.args.context_source,
         )
         return Agent(
             log=self.log,
@@ -449,20 +541,34 @@ async def run_cli(
     *,
     provider: Provider | None = None,
     terminal: Terminal | None = None,
+    discovery: httpx.AsyncBaseTransport | None = None,
 ) -> int:
     try:
         load_resumed(args)
     except SESSION_ERRORS as exc:
         print(f"cookcode: {session_error(args.resume, exc)}", file=sys.stderr)
         return 1
-    if provider is None and not os.environ.get(args.api_key_env):
-        print(f"cookcode: set {args.api_key_env} to an API key for {args.base_url}")
+    if provider is None and (message := missing_key(args)):
+        print(f"cookcode: {message}")
         return 1
+    if message := await prepare_endpoint(args, provider=provider, discovery=discovery):
+        print(f"cookcode: {message}", file=sys.stderr)
+        return 1
+    if notice := window_notice(args):
+        print(f"cookcode: {notice}", file=sys.stderr)
     try:
         policy = load_policy(args.policy)
     except ValueError as exc:
         print(f"cookcode: {exc}")
         return 1
+    if terminal is None and sys.stdin.isatty() and sys.stdout.isatty():
+        from cookcode.cli.inline import InlineApp
+
+        try:
+            return await InlineApp(args, provider, policy=policy).run()
+        except SESSION_ERRORS as exc:
+            print(f"cookcode: {session_error(args.resume, exc)}", file=sys.stderr)
+            return 1
     terminal = terminal or Terminal()
     try:
         session = Session(args, terminal, provider, policy)
@@ -513,19 +619,4 @@ def main(argv: list[str] | None = None) -> int:
     if args.json:
         print("cookcode: --json needs -p <prompt> or --continue", file=sys.stderr)
         return 1
-    if args.tui:
-        try:
-            from cookcode.cli.tui import run_tui
-        except ImportError:
-            print("cookcode: the TUI needs the tui extra (uv sync --extra tui)", file=sys.stderr)
-            return 1
-        try:
-            load_resumed(args)
-        except SESSION_ERRORS as exc:
-            print(f"cookcode: {session_error(args.resume, exc)}", file=sys.stderr)
-            return 1
-        if not os.environ.get(args.api_key_env):
-            print(f"cookcode: set {args.api_key_env} to an API key for {args.base_url}")
-            return 1
-        return asyncio.run(run_tui(args))
     return asyncio.run(run_cli(args))

@@ -10,7 +10,7 @@ import pytest
 from agent_helpers import bodies, kinds, results
 from cookcode.agent.approval import PolicyOnlyApprover
 from cookcode.agent.repair import MUTATING_LOST, NOT_EXECUTED, READ_ONLY_LOST
-from cookcode.cli.app import PRESETS, Runtime, main, parse_args, run_cli
+from cookcode.cli.app import Runtime, main, parse_args, run_cli
 from cookcode.cli.headless import run_headless
 from cookcode.cli.terminal import Terminal
 from cookcode.core.cancel import CancelToken
@@ -25,6 +25,7 @@ from cookcode.core.events import (
     UserMessage,
 )
 from cookcode.core.items import Message
+from cookcode.providers.catalog import PRESETS
 from cookcode.providers.fake import FakeProvider, FakeTurn, call, say
 from cookcode.providers.openai_compat import OPENROUTER_BASE_URL
 from session_helpers import (
@@ -195,7 +196,7 @@ async def test_provider_defaults_to_the_session_and_flags_override(
     assert await headless(["-p", "one", "--provider", "openrouter", "--model", "or-1"], first) == 0
     session = only_session(tmp_path)
     args = parse_args(["--resume", session, "-p", "two"])
-    assert (args.provider, args.model) == ("nim", PRESETS["nim"][2])
+    assert (args.provider, args.model) == ("nim", PRESETS["nim"].default_model)
     fake = OpenRouterFake([FakeTurn(items=(say("b"),))])
     assert await run_headless(args, provider=fake, stdout=io.StringIO()) == 0
     assert (args.provider, args.model, args.base_url) == ("openrouter", "or-1", OPENROUTER_BASE_URL)
@@ -203,7 +204,7 @@ async def test_provider_defaults_to_the_session_and_flags_override(
     override = parse_args(["--resume", session, "-p", "three", "--provider", "nim"])
     fake = OpenRouterFake([FakeTurn(items=(say("c"),))])
     assert await run_headless(override, provider=fake, stdout=io.StringIO()) == 0
-    assert (override.provider, override.model) == ("nim", PRESETS["nim"][2])
+    assert (override.provider, override.model) == ("nim", PRESETS["nim"].default_model)
 
 
 async def test_interactive_resume_continues_the_same_log(workspace: Path, tmp_path: Path) -> None:

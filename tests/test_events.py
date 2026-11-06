@@ -71,6 +71,12 @@ def test_config_id_is_stable_and_sensitive_to_changes() -> None:
     assert SessionStarted.for_config(a).config_id == compute_config_id(a)
 
 
+def test_a_config_from_before_context_windows_loads_without_them() -> None:
+    old = {"provider": "nim", "model": "m", "harness_version": "0.0.1", "strategy": {"name": "raw"}}
+    config = RunConfig.model_validate(old)
+    assert config.context_window is None and config.context_source is None
+
+
 def test_negative_seq_is_rejected() -> None:
     with pytest.raises(ValidationError):
         make_event(-1, UserMessage(text="hi"))

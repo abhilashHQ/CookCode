@@ -18,7 +18,7 @@ from cookcode.agent.gate import Policy
 from cookcode.agent.instructions import load_instructions, render_system
 from cookcode.agent.loop import Agent, AgentConfig
 from cookcode.agent.tools import ToolRegistry
-from cookcode.cli.app import BASE_PROMPT, PRESETS, SECRET_ENV, UNATTENDED, make_provider
+from cookcode.cli.app import BASE_PROMPT, SECRET_ENV, UNATTENDED, make_provider
 from cookcode.core.events import Event, Limits, ModelRequestFinished, SessionFinished
 from cookcode.core.features import Features
 from cookcode.core.ids import new_id
@@ -28,6 +28,7 @@ from cookcode.env.harbor import HarborEnvironment
 from cookcode.export.atif import AGENT_NAME, to_atif
 from cookcode.kit import toolkit
 from cookcode.providers.base import Provider
+from cookcode.providers.catalog import CLOUD_PRESETS, PRESETS
 from cookcode.redact import Redactor
 from cookcode.store.checkpoints import FileCheckpointStore
 from cookcode.store.jsonl import JsonlSessionStore
@@ -39,9 +40,9 @@ PROMPT = BASE_PROMPT.replace("in a local repository", "inside a task container")
 def split_model(model_name: str | None) -> tuple[str, str]:
     """`nim/minimaxai/minimax-m3.1-flash` names the preset first; a bare model uses nim."""
     if not model_name:
-        return "nim", PRESETS["nim"][2]
+        return "nim", PRESETS["nim"].default_model or ""
     preset, sep, model = model_name.partition("/")
-    if sep and preset in PRESETS:
+    if sep and preset in CLOUD_PRESETS:
         return preset, model
     return "nim", model_name
 
@@ -90,7 +91,7 @@ class CookCodeAgent(BaseAgent):
         self, instruction: str, environment: BaseEnvironment, context: AgentContext
     ) -> None:
         preset, model = split_model(self.model_name)
-        base_url, key_env, _ = PRESETS[preset]
+        base_url, key_env = PRESETS[preset].base_url, PRESETS[preset].key_env or ""
         workdir = await environment.exec("pwd")
         env = HarborEnvironment(environment, (workdir.stdout or "/").strip() or "/")
         secrets = {**os.environ, **self._extra_env}

@@ -77,6 +77,6 @@ The pairs do not separate the arms on pass rate. Every B task except money passe
 
 **Smoke runs, live:** skills (loaded before acting, format followed exactly), hooks (a write blocked before approval, then routed around) and MCP (`tool_search` loaded the schema, then the call returned 42).
 
-**Known issue: replay drift.** Replay of all 36 tasks passes 34. Most cassettes, including those recorded on 2026-10-27, show drift on some requests, and two recorded passes (memory-money-a, memory-money-b) replay as failures. Drift on a fresh cassette means something in the request still varies between record and replay. Finding it is the first job after this milestone, before any cassette is trusted as a regression gate.
+**Known issue: replay drift.** Replay of all 36 tasks passes 34. Most cassettes, including those recorded on 2026-10-27, show drift on some requests, and memory-money-a, a recorded pass, replays as a failure on some runs. Drift on a fresh cassette means something in the request still varies between record and replay. Finding it is the first job after this milestone, before any cassette is trusted as a regression gate. (Corrected 2026-11-06: this note first listed memory-money-b as a recorded pass too. Its recording ended `budget_exceeded` and failed its check with `Total: $17.95`, so its replay failure is faithful. The causes and the fix are in 0055.)
 
 Batch totals from `cookcode stats`: 300 sessions, 2,449 requests and 2,673 logged retries, all on the free tier.

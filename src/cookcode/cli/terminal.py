@@ -7,6 +7,7 @@ import sys
 from typing import Any, TextIO
 
 from cookcode.agent.approval import Decision, Risk
+from cookcode.agent.tools import EXIT_PLAN
 from cookcode.core.cancel import CancelToken
 from cookcode.core.events import (
     BudgetExceeded,
@@ -61,7 +62,9 @@ class Terminal:
         self._reader = reader
 
     def close(self) -> None:
-        if self._was_blocking is not None:
+        """Restores stdin's blocking flag. At EOF the pipe transport closes stdin itself, and
+        then there is no descriptor left to restore."""
+        if self._was_blocking is not None and not self._stdin.closed:
             os.set_blocking(self._stdin.fileno(), self._was_blocking)
 
     def paint(self, text: str, color: str) -> str:
@@ -218,6 +221,8 @@ class TerminalApprover:
         self._t = terminal
 
     async def decide(self, call: ToolCall, risk: Risk, cancel: CancelToken) -> Decision:
+        if call.name == EXIT_PLAN:
+            return await self._review_plan(call)
         t = self._t
         t.line(f"? approval needed: {risk.reason}", CYAN)
         label = "runs" if call.name == "bash" else "touches"
@@ -237,3 +242,23 @@ class TerminalApprover:
             if answer in ("n", "no"):
                 reason = await t.readline("  reason for the model (optional): ")
                 return Decision(action="deny", reason=(reason or "").strip() or "the user said no")
+
+    async def _review_plan(self, call: ToolCall) -> Decision:
+        t = self._t
+        t.line("? the agent proposes this plan:", CYAN)
+        plan = call.arguments.get("plan")
+        for line in (plan if isinstance(plan, str) else "").splitlines():
+            t.line(f"  {line}")
+        choices = "[y]es (ask before edits), [a]uto-edit, [n]o (keep planning)"
+        while True:
+            answer = await t.readline(f"  approve? {choices}: ")
+            if answer is None:
+                return Decision(action="deny", reason="no answer: input closed")
+            answer = answer.strip().lower()
+            if answer in ("y", "yes"):
+                return Decision(action="allow")
+            if answer in ("a", "auto", "auto-edit"):
+                return Decision(action="allow_always")
+            if answer in ("n", "no"):
+                feedback = (await t.readline("  feedback for the model: ") or "").strip()
+                return Decision(action="deny", reason=feedback or "the user said no")
