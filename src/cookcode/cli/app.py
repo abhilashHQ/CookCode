@@ -32,12 +32,9 @@ from cookcode.core.strategy import Strategy
 from cookcode.env.local import LocalEnvironment
 from cookcode.kit import Toolkit, toolkit
 from cookcode.providers.base import Provider, StreamEvent
-from cookcode.providers.gemini import GEMINI_BASE_URL, GeminiProvider
-from cookcode.providers.openai_compat import (
-    NIM_BASE_URL,
-    OPENROUTER_BASE_URL,
-    OpenAICompatProvider,
-)
+from cookcode.providers.catalog import PRESETS, needs_key
+from cookcode.providers.gemini import GeminiProvider
+from cookcode.providers.openai_compat import OpenAICompatProvider
 from cookcode.redact import Redactor
 from cookcode.store.base import (
     SessionCorruptError,
@@ -48,19 +45,25 @@ from cookcode.store.checkpoints import FileCheckpointStore
 from cookcode.store.jsonl import JsonlSessionStore
 from cookcode.subagents import Spawner
 
-PRESETS = {
-    "nim": (NIM_BASE_URL, "NVIDIA_API_KEY", "minimaxai/minimax-m3.1-flash"),
-    "openrouter": (OPENROUTER_BASE_URL, "OPENROUTER_API_KEY", "nvidia/nemotron-3.5-super-vl:free"),
-    "gemini": (GEMINI_BASE_URL, "GEMINI_API_KEY", "gemini-3.5-flash"),
-}
-
 
 def make_provider(
     preset: str, *, api_key: str | None, base_url: str, **transport_policy: Any
 ) -> Provider:
-    if preset == "gemini":
+    transport_policy.setdefault("read_timeout_s", PRESETS[preset].read_timeout_s)
+    if PRESETS[preset].protocol == "gemini":
         return GeminiProvider(api_key=api_key, base_url=base_url, name=preset, **transport_policy)
     return OpenAICompatProvider(api_key=api_key, base_url=base_url, name=preset, **transport_policy)
+
+
+def api_key(args: argparse.Namespace) -> str | None:
+    return os.environ.get(args.api_key_env) if args.api_key_env else None
+
+
+def missing_key(args: argparse.Namespace) -> str | None:
+    """What to tell the user when the endpoint needs a key that is not set."""
+    if not needs_key(PRESETS[args.provider], args.base_url) or api_key(args):
+        return None
+    return f"set {args.api_key_env} to an API key for {args.base_url}"
 
 
 SECRET_ENV = (
@@ -228,14 +231,15 @@ def apply_provider(args: argparse.Namespace, recorded: RunConfig | None = None) 
         given.get("provider") or session or os.environ.get("COOKCODE_PROVIDER")
         or settings.provider or "nim"
     )
-    base_url, key_env, model = PRESETS[args.provider]
+    preset = PRESETS[args.provider]
     configured = settings.provider in (None, args.provider)
     args.base_url = (
         given.get("base_url") or os.environ.get("COOKCODE_BASE_URL")
-        or (settings.base_url if configured else None) or base_url
+        or (settings.base_url if configured else None) or preset.base_url
     )
     args.api_key_env = (
-        given.get("api_key_env") or (settings.api_key_env if configured else None) or key_env
+        given.get("api_key_env") or (settings.api_key_env if configured else None)
+        or preset.key_env
     )
     same = recorded is not None and given.get("provider", recorded.provider) == recorded.provider
     args.model = (
@@ -243,7 +247,7 @@ def apply_provider(args: argparse.Namespace, recorded: RunConfig | None = None) 
         or (recorded.model if recorded is not None and same else None)
         or os.environ.get("COOKCODE_MODEL")
         or (settings.model if configured else None)
-        or model
+        or preset.default_model
     )
 
 
@@ -313,7 +317,7 @@ class Runtime:
         )
         provider: Provider = self.provider or make_provider(
             self.args.provider,
-            api_key=os.environ.get(self.args.api_key_env),
+            api_key=api_key(self.args),
             base_url=self.args.base_url,
         )
         if stream_sink is not None:
@@ -454,8 +458,8 @@ async def run_cli(
     except SESSION_ERRORS as exc:
         print(f"cookcode: {session_error(args.resume, exc)}", file=sys.stderr)
         return 1
-    if provider is None and not os.environ.get(args.api_key_env):
-        print(f"cookcode: set {args.api_key_env} to an API key for {args.base_url}")
+    if provider is None and (message := missing_key(args)):
+        print(f"cookcode: {message}")
         return 1
     try:
         policy = load_policy(args.policy)

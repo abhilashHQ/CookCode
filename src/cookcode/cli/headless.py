@@ -1,6 +1,5 @@
 import argparse
 import asyncio
-import os
 import signal
 import sys
 import threading
@@ -16,6 +15,7 @@ from cookcode.cli.app import (
     Runtime,
     load_policy,
     load_resumed,
+    missing_key,
     session_error,
 )
 from cookcode.core.cancel import CancelToken
@@ -110,10 +110,8 @@ async def run_headless(
     except SESSION_ERRORS as exc:
         print(f"cookcode: {session_error(args.resume, exc)}", file=sys.stderr)
         return 1
-    if provider is None and not os.environ.get(args.api_key_env):
-        print(
-            f"cookcode: set {args.api_key_env} to an API key for {args.base_url}", file=sys.stderr
-        )
+    if provider is None and (message := missing_key(args)):
+        print(f"cookcode: {message}", file=sys.stderr)
         return 1
     try:
         policy = load_policy(args.policy)

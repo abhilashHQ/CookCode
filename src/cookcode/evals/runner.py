@@ -18,7 +18,7 @@ from cookcode import __version__
 from cookcode.agent.gate import Policy
 from cookcode.agent.instructions import load_instructions, render_system
 from cookcode.agent.loop import Agent, AgentConfig
-from cookcode.cli.app import BASE_PROMPT, PRESETS, SECRET_ENV, UNATTENDED, make_provider
+from cookcode.cli.app import BASE_PROMPT, SECRET_ENV, UNATTENDED, make_provider
 from cookcode.cli.headless import final_text
 from cookcode.config import REPO_SETTINGS, read_settings
 from cookcode.core.events import Limits
@@ -30,6 +30,7 @@ from cookcode.evals.suite import SuiteTask, chains, suite_sha256
 from cookcode.kit import toolkit
 from cookcode.providers.base import Provider
 from cookcode.providers.cassette import Cassette, RecordingTransport, ReplayTransport
+from cookcode.providers.catalog import PRESETS
 from cookcode.redact import Redactor
 from cookcode.store.checkpoints import FileCheckpointStore
 from cookcode.store.jsonl import JsonlSessionStore
@@ -167,7 +168,8 @@ class Run:
         self.mode: Mode = mode
         self.preset = preset
         self.model = model
-        self.base_url, self.key_env, _ = PRESETS[preset]
+        self.base_url = PRESETS[preset].base_url
+        self.key_env = PRESETS[preset].key_env or ""
         self.make = provider_factory or make_provider
         secrets = Redactor.from_env(SECRET_ENV, os.environ)
         self.store = JsonlSessionStore(out / "sessions", secrets)

@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from cookcode.agent.approval import Risk
-from cookcode.cli.app import parse_args, run_cli
+from cookcode.cli.app import missing_key, parse_args, run_cli
 from cookcode.cli.observe import ObservedLog
 from cookcode.cli.terminal import (
     Terminal,
@@ -174,6 +174,21 @@ def test_provider_presets_fill_url_key_and_model(monkeypatch: pytest.MonkeyPatch
     assert nim.base_url == "https://integrate.api.nvidia.com/v1"
     router = parse_args(["--provider", "openrouter", "--model", "x/y"])
     assert (router.api_key_env, router.model) == ("OPENROUTER_API_KEY", "x/y")
+    local = parse_args(["--provider", "llamacpp"])
+    assert (local.base_url, local.api_key_env, local.model) == (
+        "http://localhost:8080/v1", None, None
+    )
+
+
+def test_local_endpoints_need_no_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in ("COOKCODE_PROVIDER", "COOKCODE_MODEL", "COOKCODE_BASE_URL", "NVIDIA_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    assert missing_key(parse_args(["--provider", "llamacpp", "--model", "m"])) is None
+    assert missing_key(parse_args(["--base-url", "http://localhost:8000/v1"])) is None
+    message = missing_key(parse_args([]))
+    assert message == "set NVIDIA_API_KEY to an API key for https://integrate.api.nvidia.com/v1"
+    monkeypatch.setenv("NVIDIA_API_KEY", "k")
+    assert missing_key(parse_args([])) is None
 
 
 def test_always_rule_needs_a_single_subject() -> None:
