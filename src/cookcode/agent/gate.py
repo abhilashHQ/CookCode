@@ -8,9 +8,17 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from cookcode.agent.tools import Tool, workspace_path
-from cookcode.core.events import ApprovalResolved, Event
+from cookcode.core.events import (
+    ApprovalResolved,
+    Event,
+    ModeChanged,
+    RunStarted,
+    SessionStarted,
+)
 
-Mode = Literal["ask", "auto-edit", "yolo"]
+Mode = Literal["plan", "ask", "auto-edit", "yolo"]
+MODES: tuple[Mode, ...] = ("plan", "ask", "auto-edit", "yolo")
+PLAN_RULE = "mode:plan"
 
 
 class Rule(BaseModel):
@@ -615,6 +623,7 @@ class _Analysis:
     commands: list[_Command] | None
     texts: list[str]
     opaque: bool
+    nested: list[_Command] = field(default_factory=list[_Command])
 
 
 def _fragments(text: str) -> list[str]:
@@ -634,7 +643,7 @@ def _analyze(text: str, depth: int, budget: _Budget) -> _Analysis:
         more, more_opaque = _forms(command.words, depth, budget)
         texts.extend(more)
         opaque = opaque or more_opaque
-    return _Analysis(None if lexer.unanalyzable else commands, texts, opaque)
+    return _Analysis(None if lexer.unanalyzable else commands, texts, opaque, lexer.nested)
 
 
 def _text_forms(text: str, depth: int, budget: _Budget) -> tuple[list[str], bool]:
@@ -642,6 +651,89 @@ def _text_forms(text: str, depth: int, budget: _Budget) -> tuple[list[str], bool
         return [text], True
     analysis = _analyze(text, depth, budget)
     return analysis.texts, analysis.opaque
+
+
+_PLAN_SAFE = _frozen(
+    "cat head tail wc ls pwd echo stat du df which basename dirname realpath readlink diff cmp "
+    "grep egrep fgrep cut tr nl tac jq cd true false"
+)
+_PLAN_FORBIDDEN = {
+    **dict.fromkeys(_PLAN_SAFE, frozenset[str]()),
+    "sort": _frozen("-o --output"),
+    "tree": _frozen("-o"),
+    "rg": _frozen("--pre"),
+    "fd": _frozen("-x -X --exec --exec-batch"),
+    "find": _frozen("-exec -execdir -ok -okdir -delete -fprint -fprint0 -fprintf -fls"),
+}
+_GIT_READ = _frozen(
+    "status log diff show ls-files ls-tree blame rev-parse grep shortlog describe cat-file"
+)
+_GIT_FORBIDDEN = _frozen("-O --open-files-in-pager --ext-diff --output")
+
+
+def _forbidden_flag(arg: str, forbidden: frozenset[str]) -> bool:
+    if arg in forbidden or arg.partition("=")[0] in forbidden:
+        return True
+    short = {flag[1] for flag in forbidden if len(flag) == 2}
+    return arg.startswith("-") and not arg.startswith("--") and bool(short & set(arg[1:]))
+
+
+def _plan_git(args: list[str]) -> str | None:
+    i = 0
+    while i < len(args) and args[i] in ("-C", "--no-pager", "-P"):
+        i += 2 if args[i] == "-C" else 1
+    if i >= len(args) or args[i] not in _GIT_READ:
+        sub = args[i] if i < len(args) else "with no subcommand"
+        return f"git {sub} is not on the read-only list"
+    flag = next((a for a in args[i + 1 :] if _forbidden_flag(a, _GIT_FORBIDDEN)), None)
+    return None if flag is None else f"git {args[i]} {flag} can write files or run programs"
+
+
+def _plan_command(name: str, args: list[str]) -> str | None:
+    if name == "git":
+        return _plan_git(args)
+    forbidden = _PLAN_FORBIDDEN.get(name)
+    if forbidden is None:
+        return f"{name} is not on the read-only list"
+    flag = next((a for a in args if _forbidden_flag(a, forbidden)), None)
+    return None if flag is None else f"{name} {flag} can write files or run programs"
+
+
+def _plan_bash(analysis: _Analysis) -> str | None:
+    """Why plan mode refuses this command, or None when every command in it, nested ones
+    included, is a known read-only program with no flag that writes or executes."""
+    if analysis.commands is None:
+        return "it uses substitution, a here-document or unbalanced quoting"
+    if analysis.opaque:
+        return "it runs code the gate cannot inspect"
+    if not analysis.commands:
+        return "the command is empty"
+    for command in [*analysis.commands, *analysis.nested]:
+        if command.unsafe_redirect:
+            return f"{command.raw!r} redirects output to a file"
+        start = _command_start(command.words)
+        if start == len(command.words):
+            continue
+        if any(_ASSIGNMENT.match(word.value) for word in command.words[:start]):
+            return f"{command.raw!r} sets a variable"
+        head = command.words[start]
+        if head.dynamic:
+            return f"{command.raw!r} runs a program named by an expansion"
+        reason = _plan_command(head.value, [word.value for word in command.words[start + 1 :]])
+        if reason is not None:
+            return reason
+    return None
+
+
+def _plan_deny(what: str) -> GateDecision:
+    return GateDecision(
+        action="deny",
+        rule=PLAN_RULE,
+        reason=(
+            f"plan mode: {what}. Nothing that changes state runs until the user approves a "
+            "plan. Keep reading and searching, then call exit_plan with the plan."
+        ),
+    )
 
 
 def _deny(rule: Rule) -> GateDecision:
@@ -692,6 +784,11 @@ def _decide_bash(
     for rule in deny:
         if any(rule.matches(text) for text in analysis.texts):
             return _deny(rule)
+    if mode == "plan":
+        refused = _plan_bash(analysis)
+        if refused is None:
+            return _by_mode(mode, "allow", "plan mode allows read-only commands")
+        return _plan_deny(f"bash is limited to read-only commands, and {refused}")
     if mode == "yolo":
         return _by_mode(mode, "allow", "yolo mode allows every call no deny rule matches")
     outcome = _bash_allow(analysis, allow, bool(deny))
@@ -727,6 +824,8 @@ def _decide_tool(
     for rule in deny:
         if any(rule.matches(form) for form in deny_forms):
             return _deny(rule)
+    if mode == "plan" and tool.side_effect != "read_only":
+        return _plan_deny(f"{tool.name} is a {tool.side_effect} tool")
     if mode == "yolo":
         return _by_mode(mode, "allow", "yolo mode allows every call no deny rule matches")
     matched = [next((r for r in allow if r.matches(s)), None) for s in subjects]
@@ -783,6 +882,20 @@ def covers(
         session_allow=(rule,),
     )
     return decision.action == "allow" and decision.rule == rule.display
+
+
+def mode_at(events: Sequence[Event]) -> Mode | None:
+    """The mode in force at the end of the log: the latest run's mode, or a later change."""
+    for event in reversed(events):
+        body = event.body
+        if isinstance(body, ModeChanged):
+            mode = body.mode
+        elif isinstance(body, RunStarted | SessionStarted):
+            mode = body.config.mode
+        else:
+            continue
+        return next((m for m in MODES if m == mode), None)
+    return None
 
 
 def session_rules(events: Sequence[Event]) -> list[Rule]:

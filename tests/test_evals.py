@@ -250,9 +250,10 @@ def work_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 MOON = 'NAME = "moon"\n'
 
 
-def scripted(cassette: Cassette) -> Any:
+def scripted(cassette: Cassette, before: tuple[bytes, ...] = ()) -> Any:
     script = Script(
         [
+            *(ok(stream) for stream in before),
             ok(tool_stream("write", json.dumps({"path": "greet.py", "content": MOON}))),
             ok(text_stream("Set NAME to moon.")),
         ]
@@ -336,6 +337,34 @@ def test_prepared_fixtures_are_byte_and_time_identical(tmp_path: Path) -> None:
                             for p in work.rglob("*"))
 
     assert snapshot() == snapshot()
+
+
+def test_prepare_pins_the_parent_directory_mtime(tmp_path: Path) -> None:
+    [task] = load_suite(make_suite(tmp_path))
+    work = runner.prepare(task, 1)
+    assert work.parent.stat().st_mtime == runner.FIXTURE_EPOCH
+
+
+async def test_a_run_clears_attempts_left_over_from_an_earlier_run(tmp_path: Path) -> None:
+    tasks = load_suite(make_suite(tmp_path))
+    leftover = runner.work_dir(tasks[0], 2)
+    leftover.mkdir(parents=True)
+    await run_suite(tasks, tmp_path / "run", mode="oracle", preset="nim", model="m")
+    assert not leftover.exists()
+    assert runner.work_dir(tasks[0], 1).is_dir()
+
+
+async def test_suite_tools_never_write_python_bytecode(tmp_path: Path) -> None:
+    import shlex
+    import sys
+
+    tasks = load_suite(make_suite(tmp_path))
+    command = f"{shlex.quote(sys.executable)} -c 'import greet'"
+    probe = tool_stream("bash", json.dumps({"command": command}), call_id="call_0")
+    [result] = await run_suite(tasks, tmp_path / "live", mode="live", preset="nim", model="m",
+                               provider_factory=scripted(Cassette(), (probe,)))
+    assert (result.passed, result.turns) == (True, 3)
+    assert not (runner.work_dir(tasks[0], 1) / "__pycache__").exists()
 
 
 def test_drift_in_a_long_string_shows_where_it_starts() -> None:

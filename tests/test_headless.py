@@ -5,10 +5,11 @@ import os
 import signal
 from pathlib import Path
 
+import httpx
 import pytest
 
 from cookcode.agent.approval import Risk
-from cookcode.cli.app import main, parse_args
+from cookcode.cli.app import main, parse_args, resolve_window
 from cookcode.cli.headless import LineReader, StdinApprover, run_headless
 from cookcode.core.cancel import CancelToken
 from cookcode.core.events import (
@@ -16,12 +17,15 @@ from cookcode.core.events import (
     ApprovalResolved,
     Event,
     ItemEvent,
+    RunConfig,
+    RunStarted,
     SessionFinished,
     event_schema,
     from_json_line,
 )
 from cookcode.core.items import ToolCall, ToolResult
 from cookcode.core.usage import Usage
+from cookcode.providers.catalog import PRESETS
 from cookcode.providers.fake import FakeProvider, FakeTurn, call, say
 from cookcode.store.jsonl import JsonlSessionStore
 
@@ -212,3 +216,101 @@ def test_schema_and_flag_errors_from_main(capsys: pytest.CaptureFixture[str]) ->
     assert main(["schema"]) == 0
     assert json.loads(capsys.readouterr().out)["$id"] == "cookcode-events-v1"
     assert main(["--json", "hi"]) == 1
+
+
+def llamacpp(models: list[str], n_ctx: int | None = 4096) -> httpx.MockTransport:
+    def serve(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v1/models":
+            return httpx.Response(200, json={"data": [{"id": m} for m in models]})
+        settings = {"n_ctx": n_ctx} if n_ctx is not None else {}
+        return httpx.Response(200, json={"default_generation_settings": settings})
+
+    return httpx.MockTransport(serve)
+
+
+def down() -> httpx.MockTransport:
+    def refuse(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused", request=request)
+
+    return httpx.MockTransport(refuse)
+
+
+def run_config(tmp_path: Path) -> RunConfig:
+    return next(e.body.config for e in stored(tmp_path) if isinstance(e.body, RunStarted))
+
+
+async def local(argv: list[str], discovery: httpx.MockTransport) -> int:
+    fake = FakeProvider([FakeTurn(items=(say("ok"),))])
+    return await run_headless(
+        parse_args(["-p", "hi", *argv]), provider=fake, stdout=io.StringIO(), discovery=discovery
+    )
+
+
+def test_window_precedence() -> None:
+    preset = PRESETS["llamacpp"]
+    assert resolve_window(preset, flag=1000, settings=2000, discovered=3000) == (1000, "flag")
+    assert resolve_window(preset, flag=None, settings=2000, discovered=3000) == (2000, "settings")
+    assert resolve_window(preset, flag=None, settings=None, discovered=3000) == (3000, "server")
+    assert resolve_window(preset, flag=None, settings=None, discovered=None) == (4096, "preset")
+
+
+async def test_cloud_run_config_is_unchanged_but_for_provenance(
+    workspace: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fake = FakeProvider([FakeTurn(items=(say("ok"),))])
+    assert (await headless(["-p", "hi", "--strategy", "hybrid"], fake))[0] == 0
+    config = run_config(tmp_path)
+    assert config.strategy.label == "hybrid:k6:b8:t48000"
+    assert (config.context_window, config.context_source) == (128_000, "preset")
+    assert capsys.readouterr().err == ""
+
+
+async def test_local_model_is_picked_when_one_is_served(workspace: Path, tmp_path: Path) -> None:
+    assert await local(["--provider", "llamacpp", "--strategy", "hybrid"], llamacpp(["m"])) == 0
+    config = run_config(tmp_path)
+    assert config.model == "m"
+    assert (config.context_window, config.context_source) == (4096, "server")
+    assert config.strategy.trigger_tokens == 2048
+
+
+async def test_flag_beats_the_server(workspace: Path, tmp_path: Path) -> None:
+    argv = ["--provider", "llamacpp", "--model", "m", "--context-window", "9000"]
+    assert await local(argv, llamacpp(["m"])) == 0
+    config = run_config(tmp_path)
+    assert (config.context_window, config.context_source) == (9000, "flag")
+
+
+async def test_several_models_ask_for_one(
+    workspace: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert await local(["--provider", "llamacpp"], llamacpp(["a", "b"])) == 1
+    assert capsys.readouterr().err.strip() == (
+        "cookcode: pick a model with --model; http://localhost:8080/v1 serves: a, b"
+    )
+
+
+async def test_server_down_without_model_fails_clearly(
+    workspace: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert await local(["--provider", "ollama"], down()) == 1
+    err = capsys.readouterr().err.strip()
+    assert err.startswith("cookcode: no model is loaded at http://localhost:11434/v1: cannot reach")
+
+
+async def test_server_down_with_a_model_falls_back_to_the_preset(
+    workspace: Path, tmp_path: Path
+) -> None:
+    assert await local(["--provider", "llamacpp", "--model", "m"], down()) == 0
+    config = run_config(tmp_path)
+    assert (config.context_window, config.context_source) == (4096, "preset")
+
+
+async def test_small_window_notice(workspace: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert await local(["--provider", "llamacpp", "--model", "m"], llamacpp(["m"])) == 0
+    assert capsys.readouterr().err.strip() == (
+        "cookcode: the context window is 4096 tokens and the raw strategy never summarizes; "
+        "long runs will overflow. Try --strategy hybrid."
+    )
+    argv = ["--provider", "llamacpp", "--model", "m", "--strategy", "hybrid"]
+    assert await local(argv, llamacpp(["m"])) == 0
+    assert capsys.readouterr().err == ""

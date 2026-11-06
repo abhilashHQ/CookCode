@@ -21,10 +21,12 @@ from cookcode.agent.context import (
     transcript,
 )
 from cookcode.agent.gate import (
+    PLAN_RULE,
     Mode,
     Policy,
     covers,
     decide,
+    mode_at,
     parse_rule,
     session_rules,
     subject,
@@ -32,6 +34,7 @@ from cookcode.agent.gate import (
 from cookcode.agent.hooks import Hook, HookContext
 from cookcode.agent.repair import NOT_EXECUTED, RepairAction, plan_repairs, repair_bodies
 from cookcode.agent.tools import (
+    EXIT_PLAN,
     Tool,
     ToolContext,
     ToolOutput,
@@ -46,12 +49,14 @@ from cookcode.core.events import (
     BudgetExceeded,
     CheckpointCreated,
     CompactionApplied,
+    ContextSource,
     ErrorEvent,
     Event,
     HookBlocked,
     Interrupted,
     ItemEvent,
     Limits,
+    ModeChanged,
     ModelRequestFinished,
     ModelRequestStarted,
     ProviderRetry,
@@ -102,6 +107,11 @@ KILLED_MUTATING = (
     "so inspect before retrying.]"
 )
 NO_REASON = "the approver gave no reason"
+PLAN_REVIEW = "the agent asks to leave plan mode and carry out this plan"
+PLAN_REJECTED = (
+    "plan not approved: {reason}. You are still in plan mode. Revise the plan and call "
+    "exit_plan again."
+)
 CWD_MOVED = (
     "not run: the working directory changed to {cwd} after this call was gated, "
     "so its paths now resolve differently. Issue the call again."
@@ -126,6 +136,8 @@ class AgentConfig(BaseModel):
     policy: Policy = Policy()
     strategy: Strategy = Strategy()
     max_stop_blocks: int = Field(default=3, ge=0)
+    context_window: int | None = None
+    context_source: ContextSource | None = None
 
 
 class RunOutcome(BaseModel):
@@ -264,6 +276,17 @@ class Agent:
         self._hooks = tuple(hooks)
         self._steering: deque[str] = deque()
         self._active = False
+        self._mode: Mode = config.mode
+
+    @property
+    def mode(self) -> Mode:
+        return self._mode
+
+    def set_mode(self, mode: Mode) -> None:
+        """Takes effect at the next run, which logs it."""
+        if self._active:
+            raise RuntimeError("the mode cannot change while Agent.run() is active")
+        self._mode = mode
 
     def steer(self, text: str) -> None:
         self._steering.append(text)
@@ -319,11 +342,14 @@ class Agent:
 
     def _prologue(self, prompt: str | None) -> None:
         events = self._log.read()
+        previous = mode_at(events)
         if not events:
             self._log.append(SessionStarted.for_config(self._run_config()))
         self._log.append(RunStarted.for_config(self._run_config()))
         for body in repair_bodies(self._repair_planner(events)):
             self._log.append(body)
+        if (previous == "plan") != (self._mode == "plan"):
+            self._log.append(ModeChanged(mode=self._mode, previous=previous, source="run"))
         if prompt is not None:
             self._log.append(UserMessage(text=prompt))
 
@@ -335,13 +361,15 @@ class Agent:
             system_prompt_sha256=hashlib.sha256(self._config.system_prompt.encode()).hexdigest(),
             harness_version=self._harness_version,
             limits=self._config.limits,
-            mode=self._config.mode,
+            mode=self._mode,
             policy=(
                 *(f"allow {rule.display}" for rule in self._config.policy.allow),
                 *(f"deny {rule.display}" for rule in self._config.policy.deny),
             ),
             strategy=self._config.strategy,
             hooks=tuple(hook.name for hook in self._hooks),
+            context_window=self._config.context_window,
+            context_source=self._config.context_source,
         )
 
     def _hook_context(self, run: _RunState) -> HookContext:
@@ -429,7 +457,7 @@ class Agent:
             events,
             model=self._config.model,
             system=self._config.system_prompt,
-            tools=self._tools.schemas(loaded_tools(events)),
+            tools=self._tools.schemas(loaded_tools(events), plan=mode_at(events) == "plan"),
             provider=self._provider.name,
             strategy=self._config.strategy,
         )
@@ -642,12 +670,14 @@ class Agent:
 
     async def _gate(self, run: _RunState, dispatch: _Dispatch, cwd: str) -> bool | None:
         tool, tool_call = dispatch.tool, dispatch.call
+        if tool.name == EXIT_PLAN:
+            return await self._gate_exit_plan(run, dispatch, cwd)
         decision = decide(
             tool=tool,
             arguments=tool_call.arguments,
             cwd=cwd,
             root=self._env.root,
-            mode=self._config.mode,
+            mode=self._mode,
             policy=self._config.policy,
             session_allow=session_rules(self._log.read()),
         )
@@ -692,6 +722,51 @@ class Agent:
         if answer.action == "deny":
             self._append_result(tool_call.id, "denied", f"denied: {answer.reason or NO_REASON}")
             return False
+        return True
+
+    async def _gate_exit_plan(self, run: _RunState, dispatch: _Dispatch, cwd: str) -> bool | None:
+        """The user reviews the plan. Allow leaves plan mode for ask, allow_always for
+        auto-edit, and a denial's reason goes back to the model as feedback."""
+        tool_call = dispatch.call
+        if self._mode != "plan":
+            message = f"not in plan mode: the mode is {self._mode}"
+            self._append_result(tool_call.id, "error", message)
+            return False
+        self._log.append(
+            ApprovalRequested(call_id=tool_call.id, risk=dispatch.tool.side_effect, rule=PLAN_RULE)
+        )
+        risk = Risk(
+            side_effect=dispatch.tool.side_effect,
+            rule=PLAN_RULE,
+            reason=PLAN_REVIEW,
+            cwd=cwd,
+            subjects=(),
+        )
+        answer = await self._ask(run, tool_call, risk)
+        if answer is None:
+            return None
+        if answer.action == "deny":
+            self._log.append(
+                ApprovalResolved(
+                    call_id=tool_call.id, decision="deny", reason=answer.reason, rule=PLAN_RULE
+                )
+            )
+            reason = PLAN_REJECTED.format(reason=answer.reason or NO_REASON)
+            self._append_result(tool_call.id, "denied", reason)
+            return False
+        mode: Mode = "auto-edit" if answer.action == "allow_always" else "ask"
+        self._log.append(
+            ApprovalResolved(
+                call_id=tool_call.id,
+                decision="allow",
+                reason=f"plan approved into {mode} mode",
+                rule=PLAN_RULE,
+            )
+        )
+        self._log.append(
+            ModeChanged(mode=mode, previous="plan", source="exit_plan", call_id=tool_call.id)
+        )
+        self._mode = mode
         return True
 
     def _narrow(self, dispatch: _Dispatch, answer: Decision, cwd: str) -> Decision:

@@ -13,7 +13,8 @@ from cookcode.env.local import LocalEnvironment, _CappedBuffer
 def _is_dead(pid: int) -> bool:
     try:
         stat = Path(f"/proc/{pid}/stat").read_text()
-    except FileNotFoundError:
+    # A process reaped between the lookup and the read gives ESRCH, not ENOENT.
+    except (FileNotFoundError, ProcessLookupError):
         return True
     return stat.rsplit(")", 1)[1].split()[0] == "Z"
 
@@ -30,6 +31,26 @@ async def _wait_dead(pid: int, timeout_s: float = 3.0) -> bool:
 def test_local_environment_satisfies_the_protocol(tmp_path: Path) -> None:
     env: Environment = LocalEnvironment(tmp_path)
     assert env is not None
+
+
+async def test_env_overlay_reaches_commands_on_top_of_the_inherited_environment(
+    tmp_path: Path,
+) -> None:
+    env = LocalEnvironment(tmp_path, env={"COOKCODE_PROBE": "on"})
+    result = await env.exec(
+        'printf %s "$COOKCODE_PROBE" && command -v bash >/dev/null',
+        timeout_s=10,
+        max_output_bytes=1000,
+        cancel=CancelToken(),
+    )
+    assert (result.exit_code, result.output) == (0, "on")
+    plain = await LocalEnvironment(tmp_path).exec(
+        'printf %s "${COOKCODE_PROBE-unset}"',
+        timeout_s=10,
+        max_output_bytes=1000,
+        cancel=CancelToken(),
+    )
+    assert plain.output == "unset"
 
 
 def test_capped_buffer_keeps_head_and_tail() -> None:

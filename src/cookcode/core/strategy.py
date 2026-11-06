@@ -3,6 +3,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 StrategyName = Literal["raw", "mask", "mask_batched", "summarize", "hybrid"]
+DEFAULT_TRIGGER = 48_000
 
 
 class Strategy(BaseModel):
@@ -14,7 +15,7 @@ class Strategy(BaseModel):
     name: StrategyName = "raw"
     keep_steps: int = Field(default=6, ge=1)
     batch_steps: int = Field(default=8, ge=1)
-    trigger_tokens: int = Field(default=48_000, ge=1)
+    trigger_tokens: int = Field(default=DEFAULT_TRIGGER, ge=1)
 
     @property
     def masks(self) -> bool:
@@ -38,6 +39,13 @@ class Strategy(BaseModel):
         if self.summarizes:
             parts.append(f"t{self.trigger_tokens}")
         return ":".join(parts)
+
+    def for_window(self, window: int) -> "Strategy":
+        """A summarizing strategy without an explicit trigger summarizes at half the context
+        window, capped at the default so cloud runs keep the trigger they were measured with."""
+        if not self.summarizes or "trigger_tokens" in self.model_fields_set:
+            return self
+        return self.model_copy(update={"trigger_tokens": min(DEFAULT_TRIGGER, window // 2)})
 
     @classmethod
     def parse(cls, text: str) -> "Strategy":

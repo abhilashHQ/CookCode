@@ -16,6 +16,7 @@ from cookcode.memory.layer import memory_parts
 from cookcode.skills import load_skills, skill_tool, skills_profile
 from cookcode.subagents import Spawner, task_tool
 from cookcode.tools import default_tools
+from cookcode.tools.plan import exit_plan_tool
 from cookcode.tools.verify import repro_tool, verify_first_hook
 from cookcode.userhooks import user_hooks
 
@@ -48,7 +49,7 @@ async def toolkit(
     """`home` holds user-level skills; evals point it at an empty directory so nothing from the
     machine leaks into a run. `settings` are the merged settings files. `spawner` is required
     with sub-agents."""
-    tools = default_tools(recall=strategy.masks, jobs=features.jobs)
+    tools = [*default_tools(recall=strategy.masks, jobs=features.jobs), exit_plan_tool()]
     hooks: list[Hook] = []
     if features.verify_first:
         tools.append(repro_tool())

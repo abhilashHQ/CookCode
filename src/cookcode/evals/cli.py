@@ -8,7 +8,7 @@ from pathlib import Path
 
 from pydantic import TypeAdapter, ValidationError
 
-from cookcode.cli.app import PRESETS, data_dir
+from cookcode.cli.app import data_dir
 from cookcode.core.features import Features
 from cookcode.core.strategy import Strategy
 from cookcode.evals.context import ContextCost, session_cost
@@ -27,6 +27,7 @@ from cookcode.evals.stats import (
 from cookcode.evals.suite import load_suite, suite_sha256
 from cookcode.evals.variance import harbor_trials, pool_suite, suite_trials, summarize
 from cookcode.evals.variance import render as render_summary
+from cookcode.providers.catalog import CLOUD_PRESETS, PRESETS
 from cookcode.store.base import SessionNotFoundError
 
 PRICES = TypeAdapter(dict[str, Price])
@@ -87,7 +88,8 @@ def _run(args: argparse.Namespace) -> int:
         return 1
     mode: Mode = args.mode
     preset = args.provider
-    base_url, key_env, default_model = PRESETS[preset]
+    base_url = PRESETS[preset].base_url
+    key_env, default_model = PRESETS[preset].key_env or "", PRESETS[preset].default_model or ""
     if mode in ("live", "record") and not os.environ.get(key_env):
         print(f"cookcode: set {key_env} to an API key for {base_url}", file=sys.stderr)
         return 1
@@ -240,7 +242,7 @@ def eval_command(argv: list[str]) -> int:
     )
     run.add_argument("--attempts", type=int, default=1)
     run.add_argument("--concurrency", type=int, default=1)
-    run.add_argument("--provider", choices=tuple(PRESETS), default="nim")
+    run.add_argument("--provider", choices=CLOUD_PRESETS, default="nim")
     run.add_argument("--model")
     run.add_argument("--strategy", type=Strategy.parse, default=Strategy())
     run.add_argument("--features", type=Features.parse, default=Features())
